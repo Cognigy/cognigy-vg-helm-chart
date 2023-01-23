@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-create
+  namespace: {{ $.Release.Namespace | quote }}
+  annotations:
+    {{- if .Values.dbCreate.hookEnabled }}
+    # This is what defines this resource as a hook. Without these lines, the
+    # resource is considered part of the release.
+    "helm.sh/hook": {{ .Values.dbCreate.hook | quote }}
+    "helm.sh/hook-weight": "-1"
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded,hook-failed"
+    {{- end }}
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      name: db-create
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: db-init
+          # build an image to our repo
+          image: jambonz/db-create:0.7.7
+          imagePullPolicy: Always
+          env:
+            - name: JAMBONES_MYSQL_HOST
+              value: {{ .Values.mysql.host }}
+            - name: JAMBONES_MYSQL_DATABASE
+              value: {{ .Values.mysql.database.name | quote }}
+            - name: JAMBONES_MYSQL_USER
+              value: {{ .Values.mysql.auth.username | quote }}
+            - name: JAMBONES_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-mysql-password
+                  key: mysql-password
+            - name: JAMBONES_REDIS_HOST
+              value: {{ .Values.redis.host }}
+            - name: JAMBONES_REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: JAMBONES_TIME_SERIES_HOST
+              value: {{ .Values.influxdb.host }}

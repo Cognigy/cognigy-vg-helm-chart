@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: redis
+spec:
+  serviceName: redis
+  replicas: {{ .Values.redis.replicaCount }}
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      name: redis
+      labels:
+        app: redis
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: redis 
+          image: {{ .Values.redis.image }}
+          imagePullPolicy: {{ .Values.redis.imagePullPolicy }}
+          resources: {}
+          ports:
+            - name: redis
+              containerPort: {{ .Values.redis.port }}
+              protocol: TCP

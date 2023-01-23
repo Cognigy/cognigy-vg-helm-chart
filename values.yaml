@@ -1,0 +1,680 @@
+###########
+# General #
+###########
+
+global:
+  ## Indication that is a Kubernetes deployment
+  k8s: true
+  ## Node environment
+  nodeEnv:
+  ## Default local host IP
+  localhost: 127.0.0.1
+  ## Collect stats variables
+  ## Tracking call counts by entity level configuration
+  track:
+    accountCalls: true
+    applicationCalls: true
+    serviceProviderCalls: true
+
+## Credentials for pulling image from private image registry.
+## Ref.: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+imageCredentials:
+  registry: ""
+  username: ""
+  password: ""
+  ## Alternatively specify an array of imagePullSecrets.
+  ## Secrets must be manually created in the proper namespace beforehand.
+  ## Example:
+  ## pullSecrets:
+  ##   - cognigyRegistrySecretName
+  ##
+  ## Note: When registry, username and password are set, the pullSecrets are ignored.
+  pullSecrets: []
+
+## We support the 3 major cloud providers: aws, azure, gcp
+cloud: ""
+
+aws: 
+  ## Set to true, if using IMDSv2
+  useIMDSv2: true
+  grafana:
+    storageClassName: "grafana"
+    provisionerName: "ebs.csi.aws.com"
+    awsEBSVolumeType: "gp3"
+  influxdb:
+    storageClassName: "influxdb"
+    provisionerName: "ebs.csi.aws.com"
+    awsEBSVolumeType: "gp3"
+  mysql:
+    storageClassName: "mysql"
+    provisionerName: "ebs.csi.aws.com"
+    awsEBSVolumeType: "gp3"
+  postgresql:
+    storageClassName: "postgres"
+    provisionerName: "ebs.csi.aws.com"
+    awsEBSVolumeType: "gp3"
+
+azure:
+  grafana:
+    storageClassName: "grafana"
+    provisionerName: "disk.csi.azure.com"
+    azureStorageAccountType: "StandardSSD_LRS"
+  influxdb:
+    storageClassName: "influxdb"
+    provisionerName: "disk.csi.azure.com"
+    azureStorageAccountType: "StandardSSD_LRS"
+  mysql:
+    storageClassName: "mysql"
+    provisionerName: "disk.csi.azure.com"
+    azureStorageAccountType: "StandardSSD_LRS"
+  postgresql:
+    storageClassName: "postgres"
+    provisionerName: "disk.csi.azure.com"
+    azureStorageAccountType: "StandardSSD_LRS"
+
+gcp:
+  grafana:
+    storageClassName: "grafana"
+    provisionerName: "pd.csi.storage.gke.io"
+    pdType: "pd-balanced"
+  influxdb:
+    storageClassName: "influxdb"
+    provisionerName: "pd.csi.storage.gke.io"
+    pdType: "pd-balanced"
+  mysql:
+    storageClassName: "mysql"
+    provisionerName: "pd.csi.storage.gke.io"
+    pdType: "pd-balanced"
+  postgresql:
+    storageClassName: "postgres"
+    provisionerName: "pd.csi.storage.gke.io"
+    pdType: "pd-balanced"
+
+stats:
+    ## Metrics will be generate
+    enabled: true
+    ## Connection type
+    protocol: tcp
+    ## Metrics will be generated in Telegraf format
+    telegraf: true
+    sampleRate: true
+
+#######
+# TLS #
+#######
+
+## Traefik TLS certificate for the hostname defined at ingress.<service_name>.host
+## NOTE: If you provide "tls.enable: true" and "traefik.enabled: true", either tls.crt and tls.key or tls.existingSecret must be provided.
+tls:
+  ## Enable traefik tls
+  ## NOTE: If traefik is enabled ("traefik.enabled: true"), and you provide "tls.enable: false", then the auto redirection of http to https
+  ## also must be disabled by setting traefik.ports.web.redirectTo: null
+  enabled: true
+  ## Add Custom CA certificate. A tls type secret named "cognigy-traefik" will be created based on the values of tls.crt and tls.key
+  ## Careful with the indentation
+  ## For more information, see https://helm.sh/docs/chart_template_guide/yaml_techniques/#strings-in-yaml
+  ##
+  ## Custom CA certificate in plaintext, not base64 encoded.
+  ## Example:
+  ##   crt: |
+  ##     -----BEGIN CERTIFICATE-----
+  ##     -----END CERTIFICATE-----
+  crt: ""
+  ## CA certificate private key in plaintext, not base64 encoded.
+  ## Example:
+  ## key: |
+  ##   -----BEGIN PRIVATE KEY-----
+  ##   -----END PRIVATE KEY-----
+  key: ""
+  ## Existing secret with TLS certificates. The secret must have the following two keys:
+  ## "tls.crt": Containing the CA certificate
+  ## "tls.key": Containing the certificate key
+  ## NOTE: When tls.existingSecret is set, clear text certificate passed in the previous parameters "tls.crt" and "tls.key" are ignored.
+  existingSecret: ""
+
+###########
+# Ingress #
+###########
+
+## If ingress is not required to deploy then you can set "ingress.enabled" to false.
+## By default it is always enabled.
+ingress:
+  enabled: true
+  api:
+    host: ""
+    ipWhiteListMiddleware: 
+      enabled: false
+      ipWhiteList:
+        sourceRange:
+          - 0.0.0.0/0
+        ipStrategy:
+          depth: 0
+  billingApp:
+    host: ""
+    ipWhiteListMiddleware: 
+      enabled: false
+      ipWhiteList:
+        sourceRange:
+          - 0.0.0.0/0
+        ipStrategy:
+          depth: 0
+  testCallManager:
+    host: ""
+    ipWhiteListMiddleware: 
+      enabled: false
+      ipWhiteList:
+        sourceRange:
+          - 0.0.0.0/0
+        ipStrategy:
+          depth: 0
+  webapp:
+    host: ""
+    ipWhiteListMiddleware: 
+      enabled: false
+      ipWhiteList:
+        sourceRange:
+          - 0.0.0.0/0
+        ipStrategy:
+          depth: 0
+
+#############
+# SIP & RTP #
+#############
+
+## These values route which nodepool the SBC SIP and RTP pods will be placed in.
+## The pods have to be in special nodepools that use host network binding due to the nature
+## of sip signaling and the current lack of support for the SIP Protocol in Tngress Controllers.
+##
+## Note: If you want to put SIP and RTP into a single nodepool (e.g.: to save cost on a smaller deployment),
+## then set both labels below to the same value and both tolerations below to the same value,
+## and use those values when creating your single edge-facing nodepool when you spin up the cluster.
+##
+# Remark: For production deployments, separate nodepools are recommended for SIP and RTP.
+sbc:
+  sip:
+    ## Tag for EIP group role, we have two at the moment:
+    ## vg-dev-sip-node -> fleet-non-prod
+    ## vg-prod-sip-node -> fleet-prod
+    nodeSelector:
+      label: voip-environment
+      value: edge
+    toleration: voip-edge
+    serviceName: sbc-sip
+    logLevel: info
+    sofiaLoglevel: "3"
+    ports:
+      tcp: 5060
+      tls: 5061
+      udp: 5060
+      wss: 8443
+  rtp:
+    nodeSelector:
+      label: media-environment
+      value: edge
+    toleration: media-edge
+    serviceName: sbc-rtp
+    port: 22222
+  ## EC2 Static EIP Allocator
+  ec2EipAllocator:
+    ## Only for AWS
+    enabled: false
+    image: cognigy.azurecr.io/ec2-eip-allocator:1.1.1
+    ## Tag for the EIP Node Pool
+    eipGroupRole: ""
+    ## User to reallocate static EIPs
+    vgOperatorUser: ""
+
+#############
+# Databases #
+#############
+
+dbCreate:
+  hookEnabled: false
+  hook: post-install,pre-upgrade
+
+influxdb:
+  image: influxdb:1.8.10-alpine
+  imagePullPolicy: IfNotPresent
+  replicaCount: 1
+  storage: 20Gi
+  storageClassName: influxdb
+  logLevel: info
+  database:
+    name: call_counts
+  host: influxdb
+  port: 8086
+
+## Bitnami Chart, image info: bitnami/mysql:8.0.32-debian-11-r0
+mysql:
+  enabled: true
+  fullnameOverride: mysql
+  auth:
+    createDatabase: true
+    database: jambones
+    username: jambones
+    existingSecret: voicegateway-mysql-password
+  primary:
+    persistence:
+      storageClass: "mysql"
+      size: "10Gi"
+  database:
+    name: jambones
+  host: mysql
+  port: 3306
+
+## Bitnami Chart, image info: bitnami/postgresql:14.6.0-debian-11-r26
+## Used only internally by heplify-server and homer to store sip captures
+postgresql:
+  enabled: true
+  fullnameOverride: postgres
+  auth:
+    postgresUsername: postgres
+    postgresPassword: homer7Seven
+  image:
+    registry: docker.io
+    repository: bitnami/postgresql
+    tag: 14.6.0-debian-11-r26
+    pullPolicy: IfNotPresent
+  primary:
+    persistence:
+      storageClass: "postgres"
+      size: "30Gi"
+  host: postgres
+  port: 5432
+
+redis:
+  image: redis:7.0.7-alpine3.17
+  imagePullPolicy: IfNotPresent
+  replicaCount: 1
+  host: redis
+  port: 6379
+
+##############
+# Monitoring #
+##############
+
+grafana: 
+  image: grafana/grafana:9.1.8
+  imagePullPolicy: IfNotPresent
+  replicaCount: 1
+  storageClassName: influxdb
+  storage: 2Gi
+  port: 3000
+
+heplifyServer: 
+  ## The "latest" tag is the only one available
+  image: sipcapture/heplify-server:latest
+  imagePullPolicy: IfNotPresent
+  replicaCount: 1
+  serviceName: heplify-server
+  ports:
+    tcp: 9096
+    udp: 9060
+
+homer: 
+  ## The "latest" tag is the only one available
+  image: sipcapture/webapp:latest
+  imagePullPolicy: IfNotPresent
+  replicaCount: 1
+  serviceName: homer
+  urlPrefixServiceConnection: http://
+  ## Default credentials
+  auth:
+    username: admin
+    password: sipcapture
+  port: 80
+
+jaeger: 
+  image: jaegertracing/all-in-one:1.40.0
+  imagePullPolicy: IfNotPresent
+  replicaCount: 1
+  ports:
+    tcp: 16686
+    udp:
+      compact: 6831
+      collector: 6832
+
+metrics:
+  port: 8002
+  sidecarPort: 8003
+
+telegraf: 
+  image: telegraf:1.25.0-alpine
+  imagePullPolicy: IfNotPresent
+  replicaCount: 1
+  serviceName: telegraf
+  port: 8125
+
+## You can enable the pod monitor if any prometheus instance is ruinning on your cluster.
+podMonitors:
+  enabled: false
+  ## The namespace for the pod-monitor should be the same namespace where your prometheus instance is running
+  namespace: "monitoring"
+
+###########################
+# VoiceGateway Components #
+###########################
+
+api:
+  image: cognigy.azurecr.io/jambonz-api-server:release-71519d9cf43223c17a15cbfd68b3ee60ea425140-1672301038
+  imagePullPolicy: IfNotPresent
+  replicaCount: 1
+  logLevel: info
+  port: 3000
+  ## Prefix used to create some endpoint values [http | https]
+  protocol: https
+  resources:
+    requests:
+      cpu: "0.5"
+      memory: 500Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+apiBan:
+  enabled: true
+  image: cognigy.azurecr.io/api-ban:release-768a9801ab53b11a4fb83d394866f8f819aeaa09-1672675489
+  imagePullPolicy: IfNotPresent
+  endpoint: https://apiban.org/api
+  redisSetKey: apiban:ips
+  refreshInterval: 3600
+  apiKey:
+    key: ""
+    ## For existing API Key, the secret must have the following key:
+    ## "apiKey": Containing API Key of API Ban
+    ## NOTE: When apiKey.existingKey is set, the values in the previous parameter "apiKey.key" is ignored.
+    existingKey: ""
+  ## Add a list of known CIDRs to be banned, e.g.: "192.255.255.255/12, 168.255.255.255/24"
+  bannedIpsList: ""
+  cronjobSchedule: "0 * * * *"
+
+billingApp:
+  image: cognigy.azurecr.io/voicegateway-billing-app:release-e2f29fbdc28ea269692ca25101ff15a76c1484bd-1672675630
+  imagePullPolicy: IfNotPresent
+  replicasCount: 1
+  port: 9000
+  updateCallHistoryEndpoint: ""
+  resources:
+    requests:
+      cpu: "0.5"
+      memory: 500Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+drachtio:
+  image: cognigy.azurecr.io/drachtio-server:release-642f71febe9fdd2a47de73d344b858476e3d97b1-1673262375
+  imagePullPolicy: IfNotPresent
+  port: 9022
+  homerId: 10
+  resources:
+    requests:
+      cpu: "2"
+      memory: 2Gi
+    limits:
+      cpu: "4"
+      memory: 4Gi
+
+featureServer:
+  image: cognigy.azurecr.io/jambonz-feature-server:release-3148327b49bc48f7cd55a81e4c781ff05005356e-1673631073
+  imagePullPolicy: Always
+  replicaCount: 2
+  logLevel: debug
+  serviceName: feature-server
+  freeswitchConnection: "127.0.0.1:8021:JambonzR0ck$"
+  ports: 
+    tcp: 3000
+    udp: 5060
+  resources:
+    requests:
+      cpu: "0.5"
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  
+freeswitch:
+  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:release-4758eed2c6245efc1007893103848f8367ca8c94-1670945743
+  imagePullPolicy: IfNotPresent
+  ## Argument "--codec-answer-generous" is commented because we are looking into a DTMF recognition issue using Firefox, in the Interaction Panel Call,
+  ## and until we don't have a solution we will force a specific codec for it. Once we have defintiive solution, we uncomment this.
+  args:
+    - freeswitch
+    # - --codec-answer-generous
+    - --username 
+    - Cognigy
+  port: 8081
+  resources:
+    requests:
+      cpu: "1"
+      memory: 1.5Gi
+    limits:
+      cpu: "2"
+      memory: 3Gi
+
+rtpEngine:
+  image: cognigy.azurecr.io/docker-rtpengine:release-b20d289193faf6bc4dc69ca9d61b2a9f11c11eda-1670945746
+  imagePullPolicy: IfNotPresent
+  replicaCount: 1
+  logLevel: 5
+  port: 22222
+  homerId: 11
+  resources:
+    requests:
+      cpu: "2"
+      memory: 2Gi
+    limits:
+      cpu: "4"
+      memory: 4Gi
+  
+rtpEngineSidecar:
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:release-0df16b3119524b4258393f4c55ba9be0dfc3eef0-1672760985
+  imagePullPolicy: IfNotPresent
+  replicaCount: 1
+  logLevel: info
+  ports:
+    dtmf: 22223
+  resources:
+    requests:
+      cpu: "0.250"
+      memory: 500Mi
+    limits:
+      cpu: "0.5"
+      memory: 1Gi
+
+sbcCallRouter:
+  image: cognigy.azurecr.io/sbc-call-router:release-51b5d33af42035dcefc71b553d607bf58e154c2c-1672237826
+  imagePullPolicy: IfNotPresent
+  replicaCount: 2
+  logLevel: info
+  port: 3000
+  resources:
+    requests:
+      cpu: "0.5"
+      memory: 200Mi
+    limits:
+      cpu: "1"
+      memory: 400Mi
+
+sbcInbound:
+  image: cognigy.azurecr.io/sbc-inbound:release-2ceec9e330365991d241285140c9014995023fba-1672760966
+  imagePullPolicy: IfNotPresent
+  replicaCount: 2
+  logLevel: debug
+  ports: 
+    tcp: 4000
+    dtmf: 22224
+  serviceName: sbc-inbound
+  resources:
+    requests:
+      cpu: "1"
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+sbcOutbound:
+  image: cognigy.azurecr.io/sbc-outbound:release-9fa82495f097c9b25cabb8ffab40b692bdeb8d32-1672760955
+  imagePullPolicy: IfNotPresent
+  replicaCount: 2
+  logLevel: info
+  ports: 
+    tcp: 4000
+    dtmf: 22225
+  serviceName: sbc-outbound
+  resources:
+    requests:
+      cpu: "1"
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+sbcSipSidecar:
+  image: cognigy.azurecr.io/sbc-sip-sidecar:release-69cd6e937dc504e5fa0183348ab136e448c4d98a-1672760981
+  imagePullPolicy: IfNotPresent
+  replicaCount: 1
+  logLevel: info
+  resources:
+    requests:
+      cpu: "0.5"
+      memory: 200Mi
+    limits:
+      cpu: "1"
+      memory: 400Mi
+
+testCallManager:
+  enabled: false
+  image: cognigy.azurecr.io/voicegateway-test-call-manager:release-c99d1b0d3c52d58c8982cb2687ff6884fbdac9de-1672675645
+  imagePullPolicy: IfNotPresent
+  replicaCount: 1
+  port: 3000
+  authEndpoint: ""
+  cleanUpEndpoint: ""
+  cleanUpThreshold:
+    garbageCollection: 1800000 # 30 minutes
+    recentCalls: 600000 # 10 minutes
+  interactionPanelServiceProvider:
+    id: ""
+    apiKey: ""
+    ## For existing service provider info, the secret must have the following two keys:
+    ## "id": Containing the ID of the Service Provider
+    ## "apiKey": Containing API Key of the above Service Provider
+    ## NOTE: When interactionPanelServiceProvider.existingCredentials is set, the values in the previous parameters 
+    ## "interactionPanelServiceProvider.id" and "interactionPanelServiceProvider.apiKey" are ignored.
+    existingCredentials: ""
+  resources:
+    requests:
+      cpu: "0.5"
+      memory: 500Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+webapp:
+  image: cognigy.azurecr.io/jambonz-webapp:release-9c1c8059087f58126ce19203b0d36886d80c73a9-1672301068
+  imagePullPolicy: IfNotPresent
+  replicaCount: 1
+  port: 3001
+  enableAccountLimits: true
+  resources:
+    requests:
+      cpu: "0.1"
+      memory: 200Mi
+    limits:
+      cpu: "0.2"
+      memory: 400Mi
+
+###########
+# Traefik #
+###########
+
+# The values below are used for Traefik Helm Chart
+# For more information, see: https://github.com/traefik/traefik-helm-chart
+traefik:
+  enabled: true
+  fullnameOverride: traefik
+  image:
+    name: cognigy.azurecr.io/traefik
+    tag: "2.6.3"
+    pullPolicy: IfNotPresent
+  deployment:
+    ## Specify imagePullSecrets to pull the image from private repository
+    ## Based on the information provided in "imageCredentials" parameter previously, this should be either "cognigy-registry-token" or predefined secrets
+    ## Note: Can be ignored if traefik is not enabled
+    imagePullSecrets:
+      - name: cognigy-registry-token
+    replicas: 3
+  logs:
+    general:
+      level: INFO
+    access:
+      enabled: true
+      filters: {}
+      fields:
+        general:
+          defaultmode: keep
+          names: {}
+        headers:
+          defaultmode: drop
+          names: {}
+  ingressClass:
+    enabled: true
+    isDefaultClass: true
+    fallbackApiVersion: ""
+  globalArguments: []
+  additionalArguments:
+    - "--api.insecure=true"
+    - "--entryPoints.web.forwardedHeaders.insecure"
+    - "--entryPoints.websecure.forwardedHeaders.insecure"
+    - "--entryPoints.web.proxyProtocol.insecure"
+    - "--entryPoints.websecure.proxyProtocol.insecure"
+  ports:
+    traefik:
+      port: 9000
+      expose: false
+      exposedPort: 9000
+      protocol: TCP
+    web:
+      port: 8000
+      expose: true
+      exposedPort: 80
+      protocol: TCP
+      ## Note: If traefik is enabled, and tls not, then the auto redirection of http to https also must be disabled
+      ## Do that by setting traefik.ports.web.redirectTo: null
+      redirectTo: websecure
+    websecure:
+      port: 8443
+      expose: true
+      exposedPort: 443
+      protocol: TCP
+      tls:
+        enabled: true
+        options: ""
+        certResolver: ""
+        domains: []
+    metrics:
+      port: 9100
+      expose: false
+      exposedPort: 9100
+      protocol: TCP
+  service:
+    enabled: true
+    type: LoadBalancer
+    annotations: {}
+    annotationsTCP: {}
+    annotationsUDP: {}
+    labels: {}
+    spec: {}
+    loadBalancerSourceRanges: []
+    externalIPs: []
+  tlsOptions:
+    default:
+      minVersion: VersionTLS12
+      cipherSuites:
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+## For the securityContext config of traefik, please refer to the official values.yaml file of the traefik
+## This is the link for chart v10.19.4 for example
+## https://github.com/traefik/traefik-helm-chart/blob/f24ac3c53579e0889b53a29f23a76d359ad54803/traefik/values.yaml#L490-L501

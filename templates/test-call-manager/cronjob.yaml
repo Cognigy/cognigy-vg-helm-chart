@@ -1,0 +1,30 @@
+{{- if .Values.testCallManager.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: clean-up-test-call-manager
+spec:
+  schedule: "*/15 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: clean-up
+            image: alpine:3.17.0
+            imagePullPolicy: IfNotPresent
+            env:
+              - name: URL
+                value: {{ .Values.testCallManager.cleanUpEndpoint }}
+              - name: API_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: test-call-manager-api-secret
+                    key: secret 
+            args:
+              - /bin/sh
+              - -c
+              - "apk --update add curl \
+              && curl -X DELETE $URL -H 'x-api-key: '$API_KEY'' -H 'Content-Type: application/json' -d '{\"timestamp\": '$(date +%s000)'}'"
+          restartPolicy: Never
+{{- end }}

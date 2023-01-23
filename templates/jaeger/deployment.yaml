@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: jaeger
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: jaeger
+spec:
+  serviceName: jaeger
+  replicas: {{ .Values.jaeger.replicaCount }}
+  selector:
+    matchLabels:
+      app: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+    spec:
+      containers:
+        - name: jaeger
+          image: {{ .Values.jaeger.image }}
+          imagePullPolicy: {{ .Values.jaeger.imagePullPolicy }}
+          resources: {}
+          ports:
+            - name: collector
+              containerPort: {{ .Values.jaeger.ports.udp.collector }}
+              protocol: UDP
+            - name: compact
+              containerPort: {{ .Values.jaeger.ports.udp.compact }}
+              protocol: UDP
+            - name: ui
+              containerPort: {{ .Values.jaeger.ports.tcp }}
+              protocol: TCP

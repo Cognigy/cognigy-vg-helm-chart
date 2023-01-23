@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sbc-outbound
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: sbc-outbound
+spec:
+  replicas: {{ .Values.sbcInbound.replicaCount }}
+  selector:
+    matchLabels:
+      app: sbc-outbound
+  template:
+    metadata:
+      labels:
+        app: sbc-outbound
+    spec:
+    {{- include "image.pullSecrets" $ | nindent 6 }}
+      terminationGracePeriodSeconds: 900
+      containers:
+        - name: sbc-outbound
+          image: {{ .Values.sbcOutbound.image }}
+          imagePullPolicy: {{ .Values.sbcOutbound.imagePullPolicy }}
+          resources: {{- toYaml .Values.sbcOutbound.resources | nindent 12 }}
+          ports:
+            - name: dtmf
+              containerPort: {{ .Values.sbcOutbound.ports.dtmf}}
+              protocol: UDP
+            - name: health
+              containerPort: 3000
+              protocol: UDP
+            - name: drachtio
+              containerPort: {{ .Values.sbcOutbound.ports.tcp }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "/opt/app/bin/k8s-pre-stop-hook.js"]
+          livenessProbe:
+            httpGet:
+              path: /system-health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          startupProbe:
+            httpGet:
+              path: /system-health
+              port: 3000
+            failureThreshold: 40
+            periodSeconds: 10
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv }}
+            - name: K8S 
+              value: {{ .Values.global.k8s | quote }}
+            - name: K8S_RTPENGINE_SERVICE_NAME 
+              value: {{ .Values.sbc.rtp.serviceName }}:{{ .Values.sbc.rtp.port }}
+            - name: DRACHTIO_PORT
+              value: {{ .Values.sbcOutbound.ports.tcp | quote }}
+            - name: DTMF_LISTEN_PORT
+              value: {{ .Values.sbcOutbound.ports.dtmf | quote }}
+            - name: JAMBONES_LOGLEVEL
+              value: {{ .Values.sbcOutbound.logLevel }}
+            - name: JAMBONES_TRACK_ACCOUNT_CALLS
+              value: {{ .Values.global.track.accountCalls | quote }}
+            - name: JAMBONES_TRACK_APP_CALLS
+              value: {{ .Values.global.track.applicationCalls | quote }}
+            - name: JAMBONES_TRACK_SP_CALLS
+              value: {{ .Values.global.track.serviceProviderCalls | quote }}
+            - name: ENABLE_METRICS
+              value: {{ .Values.stats.enabled | quote }}
+            - name: STATS_PROTOCOL
+              value: {{ .Values.stats.protocol }}
+            - name: STATS_TELEGRAF
+              value: {{ .Values.stats.telegraf | quote }}
+            - name: STATS_HOST
+              value: {{ .Values.telegraf.serviceName }}
+            - name: STATS_PORT
+              value: {{ .Values.telegraf.port | quote }}
+            - name: STATS_SAMPLE_RATE
+              value:  {{ .Values.stats.sampleRate | quote }}
+            - name: DRACHTIO_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-drachtio-secret
+                  key: secret
+            - name: JAMBONES_MYSQL_HOST
+              value: {{ .Values.mysql.host }}
+            - name: JAMBONES_MYSQL_DATABASE
+              value: {{ .Values.mysql.database.name | quote }}
+            - name: JAMBONES_MYSQL_USER
+              value: {{ .Values.mysql.auth.username | quote }}
+            - name: JAMBONES_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-mysql-password
+                  key: mysql-password
+            - name: JAMBONES_REDIS_HOST
+              value: {{ .Values.redis.host }}
+            - name: JAMBONES_REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: JAMBONES_TIME_SERIES_HOST
+              value: {{ .Values.influxdb.host }}

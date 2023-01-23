@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homer
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: homer
+spec:
+  replicas: {{ .Values.homer.replicaCount }}
+  selector:
+    matchLabels:
+      app: homer
+  template:
+    metadata:
+      labels:
+        app: homer
+    spec:
+      containers:
+        - name: homer
+          image: {{ .Values.homer.image }}
+          imagePullPolicy: {{ .Values.homer.imagePullPolicy }}
+          resources: {}
+          ports:
+            - name: homer
+              containerPort: {{ .Values.homer.port }}
+              protocol: TCP
+          env:
+            - name: DB_HOST
+              value: {{ .Values.postgresql.host }}
+            - name: DB_USER
+              value: {{ .Values.postgresql.auth.postgresUsername | quote }}
+            - name: DB_PASS
+              value: {{ .Values.postgresql.auth.postgresPassword | quote }}
+          volumeMounts:
+            - name: homer-config
+              mountPath: /usr/local/homer/etc/webapp_config.json
+              subPath: webapp_config.json
+            - name: homer-config
+              mountPath: /homer-semaphore/.bootstrapped
+              subPath: bootstrapped
+      volumes:
+      - name: homer-config
+        configMap:
+          name: homer
+          items:
+          - key: webapp_config.json
+            path: webapp_config.json          
+          - key: bootstrapped
+            path: bootstrapped

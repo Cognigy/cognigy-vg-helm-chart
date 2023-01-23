@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: telegraf
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: telegraf
+spec:
+  serviceName: telegraf
+  replicas: {{ .Values.telegraf.replicaCount }}
+  selector:
+    matchLabels:
+      app: telegraf
+  template:
+    metadata:
+      name: telegraf
+      labels:
+        app: telegraf
+    spec:
+      containers:
+        - name: telegraf
+          image: {{ .Values.telegraf.image }}
+          imagePullPolicy: {{ .Values.telegraf.imagePullPolicy }}
+          resources: {}
+          ports:
+            - name: telegraf
+              containerPort: {{ .Values.telegraf.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: telegraf-config
+              mountPath: /etc/telegraf/telegraf.conf
+              subPath: telegraf.conf
+      restartPolicy: Always
+      volumes:
+      - name: telegraf-config
+        configMap:
+          name: telegraf
+          items:
+          - key: telegraf.conf
+            path: telegraf.conf

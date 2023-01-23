@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: billing-app
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: billing-app
+spec:
+  replicas: {{ .Values.billingApp.replicasCount }}
+  selector:
+    matchLabels:
+      app: billing-app
+  template:
+    metadata:
+      labels:
+        app: billing-app
+    spec:
+    {{- include "image.pullSecrets" $ | nindent 6 }}
+      restartPolicy: Always
+      containers:
+        - name: billing-app
+          image: {{ .Values.billingApp.image }}
+          imagePullPolicy: {{ .Values.billingApp.imagePullPolicy }}
+          resources: {{- toYaml .Values.billingApp.resources | nindent 12 }}
+          ports:
+            - name: billing-app
+              containerPort: {{ .Values.billingApp.port }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv }}
+            - name: PORT
+              value: {{ .Values.billingApp.port | quote }}
+            - name: VOICE_BILLING_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: billing-app-api-secret
+                  key: secret
+            - name: INFLUXDB_HOST
+              value: {{ .Values.influxdb.host | quote }}
+            - name: INFLUXDB_PORT
+              value: {{ .Values.influxdb.port | quote }}
+            - name: MYSQL_HOST
+              value: {{ .Values.mysql.host | quote }}
+            - name: MYSQL_PORT
+              value: {{ .Values.mysql.port | quote }}
+            - name: MYSQL_DATABASE
+              value: {{ .Values.mysql.database.name | quote }}
+            - name: MYSQL_USER
+              value: {{ .Values.mysql.auth.username | quote }}
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-mysql-password
+                  key: mysql-password
+                  

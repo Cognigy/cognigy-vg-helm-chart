@@ -1,0 +1,28 @@
+apiVersion: v2
+name: voicegateway
+description: A Helm Chart for Cognigy VoiceGateway
+version: "4.43.0"
+appVersion: "0.7.8-5"
+kubeVersion: ">=v1.19.0-0,<v1.24.0-0"
+home: https://cognigy.com
+icon: https://www.cognigy.com/hubfs/Cognigy.svg
+maintainers:
+  - name: VoiceGateway Team
+    email: voicegateway@cognigy.com
+sources:
+  - https://github.com/Cognigy/cognigy-ai-helm-chart
+dependencies:
+  - name: traefik
+    version: "10.19.4"
+    repository: "https://helm.traefik.io/traefik"
+    condition: traefik.enabled
+  - name: postgresql
+    version: "11.9.13"
+    # Because of the issue https://github.com/bitnami/charts/issues/10539 we can't use the regular url "https://charts.bitnami.com/bitnami/postgresql"
+    repository: "https://raw.githubusercontent.com/bitnami/charts/archive-full-index/bitnami"
+    condition: postgresql.enabled
+  - name: mysql
+    version: "9.4.8"
+    # Because of the issue https://github.com/bitnami/charts/issues/10539 we can't use the regular url "https://charts.bitnami.com/bitnami/mysql"
+    repository: "https://raw.githubusercontent.com/bitnami/charts/archive-full-index/bitnami"
+    condition: mysql.enabled

@@ -1,0 +1,202 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: sbc-sip
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: sbc-sip
+spec:
+  selector:
+    matchLabels:
+      app: sbc-sip
+  template:
+    metadata:
+      labels:
+        app: sbc-sip
+    spec:
+    {{- include "image.pullSecrets" $ | nindent 6 }}
+      nodeSelector:
+        {{ .Values.sbc.sip.nodeSelector.label }}: {{.Values.sbc.sip.nodeSelector.value | quote }}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      tolerations:
+        - key: {{ .Values.sbc.sip.toleration | quote }}
+          operator: "Exists"
+          effect: "NoSchedule"
+      initContainers:
+        {{- if and (.Values.sbc.ec2EipAllocator.enabled) (eq .Values.cloud "aws") }}
+        - image: {{ .Values.sbc.ec2EipAllocator.image }}
+          name: ec2-eip-allocator
+          env:
+            - name: AWS_EIP_NODE_GROUP_ROLE
+              value: {{ .Values.sbc.ec2EipAllocator.eipGroupRole }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  key: awsKeyId
+                  name: {{ .Values.sbc.ec2EipAllocator.vgOperatorUser }}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: awsSecretKey
+                  name: {{ .Values.sbc.ec2EipAllocator.vgOperatorUser }}
+        {{- end }}
+        - image: kanisterio/mysql-sidecar:0.40.0
+          name: db-create-wait
+          env:
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-mysql-password
+                  key: mysql-password
+          command:
+            - sh 
+            - -c 
+            - |
+              until mysql -u {{ .Values.mysql.auth.username }} -D {{ .Values.mysql.database.name }} -h mysql -p${PASSWORD} --protocol=tcp -e "select count(*) from accounts";
+              do 
+                sleep 5
+              done
+      restartPolicy: Always
+      containers:
+        - name: drachtio
+          image: {{ .Values.drachtio.image }}
+          imagePullPolicy: {{ .Values.drachtio.imagePullPolicy }}
+          resources: {{- toYaml .Values.drachtio.resources | nindent 12 }}
+          ports:
+            - name: drachtio
+              containerPort: {{ .Values.drachtio.port }}
+              protocol: TCP
+            - name: sip-udp
+              containerPort: {{ .Values.sbc.sip.ports.udp }}
+              protocol: UDP
+            - name: sip-tcp
+              containerPort: {{ .Values.sbc.sip.ports.tcp }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+          args: 
+            - drachtio
+            - --loglevel
+            - {{ .Values.sbc.sip.logLevel }}
+            - --cloud-deployment
+            - --sofia-loglevel
+            - {{ .Values.sbc.sip.sofiaLoglevel | quote }}
+            - --homer
+            - {{ .Values.heplifyServer.serviceName }}:{{ .Values.heplifyServer.ports.udp }}
+            - --homer-id
+            - {{ .Values.drachtio.homerId | quote }}
+          {{- if .Values.apiBan.enabled }}
+            - --blacklist-redis-address
+            - {{ .Values.redis.host | quote }}
+            - --blacklist-redis-port
+            - {{ .Values.redis.port | quote }}
+            - --blacklist-refresh-secs
+            - {{ .Values.apiBan.refreshInterval | quote }}
+            - --blacklist-redis-key
+            - {{ .Values.apiBan.redisSetKey | quote }}
+          {{- end }}
+          env:
+            - name: CLOUD 
+              value: {{ .Values.cloud | quote }}
+            {{- if eq .Values.cloud "aws" }}
+            - name: IMDSv2 
+              value: {{ .Values.aws.useIMDSv2 | quote }}
+            {{- end }}
+            - name: DRACHTIO_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-drachtio-secret
+                  key: secret
+            - name: DRACHTIO_TLS_CERT_FILE
+              value: /etc/letsencrypt/tls.crt
+            - name: DRACHTIO_TLS_KEY_FILE
+              value: /etc/letsencrypt/tls.key
+            - name: DRACHTIO_TLS_CHAIN_FILE
+              value: /etc/letsencrypt/tls.crt
+            - name: TLS_PORT
+              value: {{ .Values.sbc.sip.ports.tls | quote }}
+            - name: WSS_PORT
+              value: {{ .Values.sbc.sip.ports.wss | quote }}
+            - name: SOFIA_SEARCH_DOMAINS
+              value: "1"
+            - name: SOFIA_SRES_NO_CACHE
+              value: "1"            
+          volumeMounts:
+            - mountPath: /etc/letsencrypt/
+              name: drachtio-certs
+            - mountPath: /etc/drachtio.conf.xml
+              name: sbc-sip-config
+              subPath: drachtio.conf.xml
+        - name: sbc-sip-sidecar
+          image: {{ .Values.sbcSipSidecar.image }}
+          imagePullPolicy: {{ .Values.sbcSipSidecar.imagePullPolicy }}
+          resources: {{- toYaml .Values.sbcSipSidecar.resources | nindent 12 }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.sidecarPort }}
+              protocol: TCP
+          env:
+            - name: K8S 
+              value: {{ .Values.global.k8s | quote }}
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv }}
+            - name: DRACHTIO_HOST
+              value: 127.0.0.1
+            - name: DRACHTIO_PORT 
+              value: {{ .Values.drachtio.port | quote }}
+            - name: DRACHTIO_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-drachtio-secret
+                  key: secret
+            - name: ENABLE_METRICS
+              value: {{ .Values.stats.enabled  | quote }}
+            - name: STATS_PROTOCOL
+              value: {{ .Values.stats.protocol }}
+            - name: STATS_TELEGRAF
+              value: {{ .Values.stats.telegraf | quote }}
+            - name: STATS_HOST
+              value: {{ .Values.telegraf.serviceName }}
+            - name: STATS_PORT
+              value: {{ .Values.telegraf.port  | quote }}
+            - name: STATS_SAMPLE_RATE
+              value:  {{ .Values.stats.sampleRate | quote }}
+            - name: JAMBONES_LOGLEVEL
+              value: {{ .Values.sbcSipSidecar.logLevel }}
+            - name: JAMBONES_MYSQL_HOST
+              value: {{ .Values.mysql.host }}
+            - name: JAMBONES_MYSQL_DATABASE
+              value: {{ .Values.mysql.database.name | quote }}
+            - name: JAMBONES_MYSQL_USER
+              value: {{ .Values.mysql.auth.username | quote }}
+            - name: JAMBONES_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-mysql-password
+                  key: mysql-password
+            - name: JAMBONES_REDIS_HOST
+              value: {{ .Values.redis.host }}
+            - name: JAMBONES_REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: JAMBONES_REGBOT_CONTACT_USE_IP
+              value: "1"
+            - name: JAMBONES_TIME_SERIES_HOST
+              value: {{ .Values.influxdb.host }}
+      volumes:
+      - name: drachtio-certs
+        secret:
+          secretName: cognigy-traefik
+          items:
+            - key: tls.crt
+              path: tls.crt
+            - key: tls.key
+              path: tls.key
+          defaultMode: 420
+      - name: sbc-sip-config
+        configMap:
+          name: sbc-sip
+          items:
+          - key: drachtio.conf.xml
+            path: drachtio.conf.xml

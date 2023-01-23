@@ -1,0 +1,13 @@
+{{- if and (.Values.ingress.enabled) (.Values.traefik.enabled) (.Values.ingress.api.ipWhiteListMiddleware.enabled) }}
+{{- with .Values.ingress.api.ipWhiteListMiddleware }}
+---
+# Whitelisting Based on `X-Forwarded-For` with `depth=0`
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: ipwhitelistapiserver
+  namespace: {{ $.Release.Namespace | quote }}
+spec:
+  ipWhiteList: {{- toYaml .ipWhiteList | nindent 4 }}
+{{- end }}
+{{- end }}

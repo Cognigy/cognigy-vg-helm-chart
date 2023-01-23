@@ -1,0 +1,33 @@
+global:
+  # Node environment
+  nodeEnv: production
+
+# set to aws, azure or gcp
+cloud: ""
+
+# set to Azure Container Registry (ACR) credentials received from Cognigy
+imageCredentials:
+  registry: ""
+  username: ""
+  password: ""
+
+# Ingress
+ingress:
+  api:
+    host: ""
+  testCallManager:
+    host: ""
+  webapp:
+    host: ""
+
+# TLS certificate set crt, key values or alternatively point to an existing secret, see values.yaml for details
+tls:
+  # Careful with the indentation
+  # For more information, see https://helm.sh/docs/chart_template_guide/yaml_techniques/#strings-in-yaml
+  crt: |
+    -----BEGIN CERTIFICATE-----
+    -----END CERTIFICATE-----
+  key: |
+    -----BEGIN PRIVATE KEY-----
+    -----END PRIVATE KEY-----
+    

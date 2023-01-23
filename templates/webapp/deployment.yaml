@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  namespace: {{ $.Release.Namespace | quote }}
+spec:
+  selector:
+    matchLabels:
+      app: webapp
+  replicas: {{ .Values.webapp.replicaCount }}
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+    {{- include "image.pullSecrets" $ | nindent 6 }}
+      containers:
+        - name: webapp
+          image: {{ .Values.webapp.image }}
+          imagePullPolicy: {{ .Values.webapp.imagePullPolicy }}
+          resources: {{- toYaml .Values.webapp.resources | nindent 12 }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv | quote }}
+            - name: REACT_APP_API_BASE_URL
+              value: {{ .Values.api.protocol }}://{{ .Values.ingress.api.host }}/v1
+            - name: REACT_APP_ENABLE_ACCOUNT_LIMITS_ALL
+              value: {{ .Values.webapp.enableAccountLimits | quote }}

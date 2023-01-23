@@ -1,0 +1,16 @@
+global:
+  # Node environment
+  nodeEnv: development
+
+aws:
+  # Set to "true", if using IMDSv2
+  useIMDSv2: true
+
+# Ingress
+ingress:
+  api:
+    host: ""
+  testCallManager:
+    host: ""
+  webapp:
+    host: ""

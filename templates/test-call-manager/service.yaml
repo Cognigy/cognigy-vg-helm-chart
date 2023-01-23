@@ -1,0 +1,17 @@
+{{- if .Values.testCallManager.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-call-manager
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: test-call-manager
+spec:
+  selector:
+    app: test-call-manager
+  ports:
+    - name: test-call-manager
+      port: {{ .Values.testCallManager.port }}
+      targetPort: {{ .Values.testCallManager.port }}
+      protocol: TCP
+{{- end }}

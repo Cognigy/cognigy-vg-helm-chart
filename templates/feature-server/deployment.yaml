@@ -1,0 +1,212 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: feature-server
+  namespace: {{ $.Release.Namespace | quote }}
+spec:
+  selector:
+    matchLabels:
+      app: feature-server
+  replicas: {{ .Values.featureServer.replicaCount }}
+  template:
+    metadata:
+      labels:
+        app: feature-server
+    spec:
+    {{- include "image.pullSecrets" $ | nindent 6 }}
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 900
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: feature-server    
+      initContainers:
+        - image: kanisterio/mysql-sidecar:0.40.0
+          name: db-create-wait
+          env:
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-mysql-password
+                  key: mysql-password
+          command:
+            - sh 
+            - -c 
+            - |
+              until mysql -u {{ .Values.mysql.auth.username }} -D {{ .Values.mysql.database.name }} -h mysql -p${PASSWORD} --protocol=tcp -e "select count(*) from accounts";
+              do 
+                sleep 5
+              done
+      containers:
+        - name: drachtio
+          image: {{ .Values.drachtio.image }}
+          imagePullPolicy: {{ .Values.drachtio.imagePullPolicy }}
+          resources: {{- toYaml .Values.api.resources | nindent 12 }}
+          ports:
+            - name: drachtio
+              containerPort: {{ .Values.drachtio.port }}
+              protocol: TCP
+          env: 
+            - name: CLOUD 
+              value: {{ .Values.cloud | quote }}
+            - name: IMDSv2 
+              value: {{ .Values.aws.useIMDSv2 | quote }}
+            - name: DRACHTIO_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-drachtio-secret
+                  key: secret
+            - name: SOFIA_SEARCH_DOMAINS
+              value: "1"
+            - name: SOFIA_SRES_NO_CACHE
+              value: "1"
+          lifecycle:
+            preStop:
+              exec:
+                command: [
+                  "/bin/sh",
+                  "-c",
+                  "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
+                ]
+          args: ['drachtio', '--contact', 'sip:*:5060;transport=udp', '--loglevel', 'info', 'sofia-loglevel', '3']
+        - name: freeswitch
+          image: {{ .Values.freeswitch.image }}
+          imagePullPolicy: {{ .Values.freeswitch.imagePullPolicy }}
+          resources: {{- toYaml .Values.freeswitch.resources | nindent 12 }}
+          ports:
+            - name: freeswitch
+              containerPort: {{ .Values.freeswitch.port }}
+              protocol: TCP
+          args:
+          {{- range .Values.freeswitch.args }}
+            - {{ . }}
+          {{- end }}
+          env: 
+            - name: MOD_AUDIO_FORK_SUBPROTOCOL_NAME
+              value: audio.jambonz.org
+            - name: MOD_AUDIO_FORK_SERVICE_THREADS
+              value: "1"
+            - name: MOD_AUDIO_FORK_BUFFER_SECS
+              value: "3"
+          lifecycle:
+            preStop:
+              exec:
+                command: [
+                  "/bin/sh",
+                  "-c",
+                  "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
+                ]
+          volumeMounts:
+            - mountPath: /tmp 
+              name: temp-audio-volume
+        - name: feature-server 
+          image: {{ .Values.featureServer.image }}
+          imagePullPolicy: {{ .Values.featureServer.imagePullPolicy }}
+          resources: {{- toYaml .Values.featureServer.resources | nindent 12 }}
+          ports:
+            - name: feature-server
+              containerPort: {{ .Values.featureServer.ports.tcp }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.featureServer.ports.tcp }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "/opt/app/bin/k8s-pre-stop-hook.js"]
+          volumeMounts:
+            - mountPath: /tmp 
+              name: temp-audio-volume
+            - mountPath: /etc/voicemail-phraselist.json
+              name: voicemail-phraselist
+              subPath:  voicemail-phraselist.json
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv | quote }}
+            - name: HTTP_PORT
+              value: {{ .Values.featureServer.ports.tcp | quote }}
+            - name: K8S 
+              value: {{ .Values.global.k8s | quote }}
+            - name: K8S_SBC_SIP_SERVICE_NAME 
+              value: {{ .Values.sbc.sip.serviceName }}
+            - name: JAMBONZ_GATHER_EARLY_HINTS_MATCH
+              value: "true"
+            - name: JAMBONES_INJECT_CONTENT
+              value: "true"
+            - name: JAMBONZ_CLEANUP_INTERVAL_MINS
+              value: "60"
+            - name: JAMBONES_API_BASE_URL
+              value: {{ .Values.ingress.api.host }}/v1
+            - name: JAMBONES_FREESWITCH
+              value: {{ .Values.featureServer.freeswitchConnection | quote }}
+            - name: ENABLE_METRICS
+              value: {{ .Values.stats.enabled  | quote }}
+            - name: STATS_PROTOCOL
+              value: {{ .Values.stats.protocol }}
+            - name: STATS_TELEGRAF
+              value: {{ .Values.stats.telegraf | quote }}
+            - name: STATS_HOST
+              value: {{ .Values.telegraf.serviceName }}
+            - name: STATS_PORT
+              value: {{ .Values.telegraf.port  | quote }}
+            - name: STATS_SAMPLE_RATE
+              value:  {{ .Values.stats.sampleRate | quote }}
+            - name: DRACHTIO_HOST
+              value: {{ .Values.global.localhost }}
+            - name: DRACHTIO_PORT 
+              value: {{ .Values.drachtio.port | quote }}
+            - name: DRACHTIO_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-drachtio-secret
+                  key: secret
+            - name: JAMBONES_LOGLEVEL
+              value: {{ .Values.featureServer.logLevel }}
+            - name: JAMBONES_MYSQL_HOST
+              value: {{ .Values.mysql.host }}
+            - name: JAMBONES_MYSQL_DATABASE
+              value: {{ .Values.mysql.database.name | quote }}
+            - name: JAMBONES_MYSQL_USER
+              value: {{ .Values.mysql.auth.username | quote }}
+            - name: JAMBONES_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-mysql-password
+                  key: mysql-password
+            - name: JAMBONES_REDIS_HOST
+              value: {{ .Values.redis.host }}
+            - name: JAMBONES_REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: JAMBONES_TIME_SERIES_HOST
+              value: {{ .Values.influxdb.host }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-jwt
+                  key: jwt
+            - name: VMD_HINTS_FILE
+              value: /etc/voicemail-phraselist.json
+            - name: JAMBONES_OTEL_ENABLED
+              value: "1" 
+            - name: OTEL_EXPORTER_JAEGER_AGENT_HOST
+              value: jaeger
+            - name: OTEL_TRACES_SAMPLER
+              value: parentbased_traceidratio
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: {{ default "1.0" .Values.featureServer.otelSampleRate | quote }}
+      volumes:
+        - name: temp-audio-volume
+          emptyDir: {}
+        - name: voicemail-phraselist
+          configMap:
+            name: voicemail-phraselist
+            items:
+              - key: voicemail-phraselist.json
+                path: voicemail-phraselist.json

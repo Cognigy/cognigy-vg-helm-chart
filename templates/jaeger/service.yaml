@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: jaeger
+spec:
+  clusterIP: None
+  selector:
+    app: jaeger
+  ports:
+    - name: collector
+      port: {{ .Values.jaeger.ports.udp.collector }}
+      targetPort: {{ .Values.jaeger.ports.udp.collector }}
+      protocol: UDP
+    - name: ui
+      port: {{ .Values.jaeger.ports.tcp }}
+      targetPort: {{ .Values.jaeger.ports.tcp }}
+      protocol: TCP

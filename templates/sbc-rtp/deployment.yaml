@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: sbc-rtp
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: sbc-rtp
+  annotations:
+    "cluster-autoscaler.kubernetes.io/safe-to-evict": "true"
+spec:
+  selector:
+    matchLabels:
+      app: sbc-rtp
+  template:
+    metadata:
+      labels:
+        app: sbc-rtp
+    spec:
+    {{- include "image.pullSecrets" $ | nindent 6 }}
+      nodeSelector:
+        {{ .Values.sbc.rtp.nodeSelector.label }}: {{.Values.sbc.rtp.nodeSelector.value | quote }}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      tolerations:
+        - key: {{ .Values.sbc.rtp.toleration | quote }}
+          operator: "Exists"
+          effect: "NoSchedule"
+      restartPolicy: Always
+      initContainers:
+        - image: kanisterio/mysql-sidecar:0.40.0
+          name: db-create-wait
+          env:
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-mysql-password
+                  key: mysql-password
+          command:
+            - sh 
+            - -c 
+            - |
+              until mysql -u {{ .Values.mysql.auth.username }} -D {{ .Values.mysql.database.name }} -h mysql -p${PASSWORD} --protocol=tcp -e "select count(*) from accounts";
+              do 
+                sleep 5
+              done
+      containers:
+        - name: rtp-engine-sidecar
+          image: {{ .Values.rtpEngineSidecar.image }}
+          imagePullPolicy:  {{ .Values.rtpEngineSidecar.imagePullPolicy }}
+          resources: {{- toYaml .Values.rtpEngineSidecar.resources | nindent 12 }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.sidecarPort }}
+              protocol: TCP
+          env:
+            - name: K8S 
+              value: {{ .Values.global.k8s | quote }}
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv }}
+            - name: JAMBONES_LOGLEVEL
+              value: {{ .Values.rtpEngineSidecar.logLevel }}
+            - name: JAMBONES_REDIS_HOST
+              value: {{ .Values.redis.host }}
+            - name: JAMBONES_REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: RTPENGINE_DTMF_LOG_PORT
+              value: {{ .Values.rtpEngineSidecar.ports.dtmf | quote }}
+        - name: rtp-engine 
+          image: {{ .Values.rtpEngine.image }}
+          imagePullPolicy: {{ .Values.rtpEngine.imagePullPolicy }}
+          resources: {{- toYaml .Values.rtpEngine.resources | nindent 12 }}
+          ports:
+            - name: rtp-engine
+              containerPort: {{ .Values.rtpEngine.port }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+          args: 
+            - rtpengine
+            - --listen-udp=22222
+            - --listen-http=22222
+            - --homer
+            - {{ .Values.heplifyServer.serviceName }}:{{ .Values.heplifyServer.ports.udp }}
+            - --homer-protocol
+            - udp
+            - --homer-id
+            - {{ .Values.rtpEngine.homerId | quote }}
+            - --log-level
+            - {{ .Values.rtpEngine.logLevel | quote }}
+          env:
+            - name: CLOUD 
+              value: {{ .Values.cloud | quote }}
+            - name: IMDSv2
+              value: {{ .Values.aws.useIMDSv2 | quote }}
+            - name: DRACHTIO_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-drachtio-secret
+                  key: secret

@@ -1,0 +1,62 @@
+{{- if .Values.testCallManager.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-call-manager
+  namespace: {{ $.Release.Namespace | quote }}
+spec:
+  selector:
+    matchLabels:
+      app: test-call-manager
+  replicas: {{ .Values.testCallManager.replicaCount }}
+  template:
+    metadata:
+      labels:
+        app: test-call-manager
+    spec:
+    {{- include "image.pullSecrets" $ | nindent 6 }}
+      containers:
+        - name: test-call-manager
+          image: {{ .Values.testCallManager.image }}
+          imagePullPolicy: {{ .Values.testCallManager.imagePullPolicy }}
+          resources: {{- toYaml .Values.testCallManager.resources | nindent 12 }}
+          ports:
+            - name: call-manager
+              containerPort: {{ .Values.testCallManager.port }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv | quote }}
+            - name: PORT
+              value: {{ .Values.testCallManager.port | quote }}
+            - name: VOICE_TEST_CALL_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: test-call-manager-api-secret
+                  key: secret
+            - name: CLEAN_UP_THRESHOLD_TIME_GARBAGE_COLLECTION
+              value: {{ .Values.testCallManager.cleanUpThreshold.garbageCollection | quote }}
+            - name: CLEAN_UP_THRESHOLD_TIME_RECENT_CALLS
+              value: {{ .Values.testCallManager.cleanUpThreshold.recentCalls | quote }}
+            - name: AUTH_ENDPOINT
+              value: {{ .Values.testCallManager.authEndpoint }}
+            - name: REDIS_HOST
+              value: {{ .Values.redis.host }}
+            - name: REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: VG_ENDPOINT
+              value: {{ .Values.api.protocol }}://{{ .Values.ingress.api.host }}/v1
+            - name: VG_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{- include "interactionPanelServiceProvider" $ | indent 1 }}
+                  key: apiKey
+            - name: VG_TEST_CALL_MANAGER_SERVICE_PROVIDER_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{- include "interactionPanelServiceProvider" $ | indent 1 }}
+                  key: id
+{{- end }}

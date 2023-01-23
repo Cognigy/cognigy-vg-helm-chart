@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: heplify-server
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: heplify-server
+spec:
+  serviceName: heplify-server
+  replicas: {{ .Values.heplifyServer.replicaCount }}
+  selector:
+    matchLabels:
+      app: heplify-server
+  template:
+    metadata:
+      labels:
+        app: heplify-server
+    spec:
+      containers:
+        - name: heplify-server
+          image: {{ .Values.heplifyServer.image }}
+          imagePullPolicy: {{ .Values.heplifyServer.imagePullPolicy }}
+          resources: {}
+          ports:
+            - name: heplify-server
+              containerPort: {{ .Values.heplifyServer.ports.udp }}
+              protocol: UDP
+            - name: stats-scraper
+              containerPort: {{ .Values.heplifyServer.ports.tcp }}
+              protocol: TCP  
+          env:
+            - name: HEPLIFYSERVER_DBUSER
+              value: {{ .Values.postgresql.auth.postgresUsername | quote }}
+            - name: HEPLIFYSERVER_DBPASS
+              value: {{ .Values.postgresql.auth.postgresPassword | quote }}
+          args: ['./heplify-server', '-config', '/etc/heplify-server.toml']
+          volumeMounts:
+            - name: heplify-server-config
+              mountPath: /etc/heplify-server.toml
+              subPath: heplify-server.toml
+      volumes:
+      - name: heplify-server-config
+        configMap:
+          name: heplify-server
+          items:
+          - key: heplify-server.toml
+            path: heplify-server.toml

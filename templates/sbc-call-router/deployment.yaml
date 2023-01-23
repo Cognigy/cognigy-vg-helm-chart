@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sbc-call-router
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: sbc-call-router
+spec:
+  selector:
+    matchLabels:
+      app: sbc-call-router
+  replicas: {{ .Values.sbcCallRouter.replicaCount }}
+  template:
+    metadata:
+      labels:
+        app: sbc-call-router 
+    spec:
+    {{- include "image.pullSecrets" $ | nindent 6 }}
+      containers:
+        - name: sbc-call-router
+          image: {{ .Values.sbcCallRouter.image }}
+          imagePullPolicy: {{ .Values.sbcCallRouter.imagePullPolicy }}
+          resources: {{- toYaml .Values.sbcCallRouter.resources | nindent 12 }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv }}
+            - name: HTTP_PORT
+              value: {{ .Values.sbcCallRouter.port | quote }}
+            - name: JAMBONES_LOGLEVEL
+              value: {{ .Values.sbcCallRouter.logLevel }}
+            - name: K8S 
+              value: {{ .Values.global.k8s | quote }}
+            - name: K8S_SBC_INBOUND_SERVICE_NAME
+              value: {{ .Values.sbcInbound.serviceName }}:{{ .Values.sbcInbound.ports.tcp }}
+            - name: K8S_SBC_OUTBOUND_SERVICE_NAME
+              value: {{ .Values.sbcOutbound.serviceName }}:{{ .Values.sbcOutbound.ports.tcp }}
+  

@@ -1,0 +1,12 @@
+{{- if and (.Values.mysql.enabled) (eq .Values.cloud "gcp") -}}
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: {{ .Values.gcp.mysql.storageClassName | quote }}
+provisioner: {{ .Values.gcp.mysql.provisionerName | quote }}
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: {{ .Values.gcp.mysql.pdType | default "pd-balanced" | quote }}
+{{- end -}}

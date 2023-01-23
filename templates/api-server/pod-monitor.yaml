@@ -1,0 +1,20 @@
+{{- if (.Values.podMonitors.enabled) }}
+{{- with .Values.podMonitors }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: prom-cognigy-monitor-cognigy-vg-api-server
+  namespace: {{ .namespace }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ $.Release.Namespace }}
+  podMetricsEndpoints:
+    - path: /metrics
+      port: metrics
+  selector:
+    matchLabels:
+      app: api-server
+{{- end }}
+{{- end }}

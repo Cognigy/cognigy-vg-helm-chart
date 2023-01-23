@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: telegraf
+  name: telegraf
+  namespace: {{ $.Release.Namespace | quote }}
+spec:
+  selector:
+    app: telegraf
+  ports:
+    - name: telegraf
+      port: {{ .Values.telegraf.port }}
+      targetPort: {{ .Values.telegraf.port }}
+      protocol: TCP

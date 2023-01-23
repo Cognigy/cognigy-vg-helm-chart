@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: feature-server
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: feature-server
+spec:
+  selector:
+    app: feature-server
+  ports:
+    - name: sip
+      port: {{ .Values.featureServer.ports.udp }}
+      targetPort: {{ .Values.featureServer.ports.udp }}
+      protocol: UDP
+    - name: http
+      port: {{ .Values.featureServer.ports.tcp }}
+      targetPort: {{ .Values.featureServer.ports.tcp }}
+      protocol: TCP

@@ -1,0 +1,12 @@
+{{- if eq .Values.cloud "gcp" -}}
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: {{ .Values.gcp.grafana.storageClassName | quote }}
+provisioner: {{ .Values.gcp.grafana.provisionerName | quote }}
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: {{ .Values.gcp.grafana.pdType | default "pd-balanced" | quote }}
+{{- end -}}

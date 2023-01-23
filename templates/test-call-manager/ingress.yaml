@@ -1,0 +1,30 @@
+{{- if and (.Values.ingress.enabled) (.Values.testCallManager.enabled) }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: test-call-manager
+  namespace: {{ $.Release.Namespace | quote }}
+  annotations:
+    {{- if .Values.tls.enabled }}
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    {{- else }}
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    {{- end }}
+    {{- if .Values.ingress.testCallManager.ipWhiteListMiddleware.enabled }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-ipwhitelisttestcallmanager@kubernetescrd
+    {{- end }}
+spec:
+  ingressClassName: traefik
+  {{- include "tlsCertificate.secretName.render" $ | nindent 2 }}
+  rules:
+    - host: {{ .Values.ingress.testCallManager.host }}
+      http:
+        paths:
+          - backend:
+              service:
+                name: test-call-manager
+                port:
+                  number: {{ .Values.testCallManager.port }}
+            path: /
+            pathType: Prefix
+{{- end }}

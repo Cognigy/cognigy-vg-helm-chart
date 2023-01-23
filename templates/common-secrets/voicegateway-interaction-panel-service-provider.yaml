@@ -1,0 +1,13 @@
+{{- if and (.Values.testCallManager.enabled) (not .Values.testCallManager.interactionPanelServiceProvider.existingCredentials) }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: voicegateway-interaction-panel-service-provider
+  namespace: {{ $.Release.Namespace | quote }}
+type: Opaque
+data:
+  # service provider api key base64 encoded
+  apiKey: {{ .Values.testCallManager.interactionPanelServiceProvider.apiKey | b64enc | quote }}
+  # service provider id base64 encoded
+  id: {{ .Values.testCallManager.interactionPanelServiceProvider.id | b64enc | quote }}
+{{- end }}

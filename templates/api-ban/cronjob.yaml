@@ -1,0 +1,33 @@
+{{- if .Values.apiBan.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: update-api-ban-list
+spec:
+  schedule: {{ .Values.apiBan.cronjobSchedule }}
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: api-ban
+              image: {{ .Values.apiBan.image }}
+              imagePullPolicy: {{ .Values.apiBan.imagePullPolicy }}
+              env:
+                - name: API_BAN_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: voicegateway-api-ban-key-secret
+                      key: apiKey
+                - name: API_BAN_URL
+                  value: {{ .Values.apiBan.endpoint }}
+                - name: API_BAN_BANNED_RANGES
+                  value: {{ .Values.apiBan.bannedIpsList }}
+                - name: REDIS_HOST
+                  value: {{ .Values.redis.host }}
+                - name: REDIS_PORT
+                  value: {{ .Values.redis.port | quote }}
+          restartPolicy: Never
+          imagePullSecrets:
+            - name: cognigy-registry-token
+{{- end }}

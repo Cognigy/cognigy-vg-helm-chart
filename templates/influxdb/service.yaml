@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: influxdb
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: influxdb
+spec:
+  selector:
+    app: influxdb
+  ports:
+    - name: influxdb
+      port: {{ .Values.influxdb.port }}
+      targetPort: {{ .Values.influxdb.port }}
+      protocol: TCP

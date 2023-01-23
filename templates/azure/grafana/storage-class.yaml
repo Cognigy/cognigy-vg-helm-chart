@@ -1,0 +1,17 @@
+{{- if eq .Values.cloud "azure" -}}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.azure.grafana.storageClassName | quote }}
+  labels:
+    addonmanager.kubernetes.io/mode: EnsureExists
+    kubernetes.io/cluster-service: "true"
+provisioner: {{ .Values.azure.grafana.provisionerName | default "disk.csi.azure.com" | quote }}
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+parameters:
+  cachingmode: ReadOnly
+  kind: Managed
+  storageaccounttype: {{ .Values.azure.grafana.azureStorageAccountType | default "StandardSSD_LRS" | quote }}
+{{- end -}}

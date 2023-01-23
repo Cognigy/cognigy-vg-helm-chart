@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-server
+  namespace: {{ $.Release.Namespace | quote }}
+spec:
+  selector:
+    matchLabels:
+      app: api-server
+  replicas: {{ .Values.api.replicaCount }}
+  template:
+    metadata:
+      labels:
+        app: api-server
+    spec:
+    {{- include "image.pullSecrets" $ | nindent 6 }}
+      restartPolicy: Always
+      initContainers:
+        - image: kanisterio/mysql-sidecar:0.40.0
+          name: db-create-wait
+          env:
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-mysql-password
+                  key: mysql-password
+          command:
+            - sh 
+            - -c 
+            - |
+              until mysql -u {{ .Values.mysql.auth.username }} -D {{ .Values.mysql.database.name }} -h {{ .Values.mysql.host }} -p${PASSWORD} --protocol=tcp -e "select count(*) from accounts";
+              do 
+                sleep 5
+              done
+      containers:
+        - name: api-server
+          image: {{ .Values.api.image }}
+          imagePullPolicy: {{ .Values.api.imagePullPolicy }}
+          resources: {{- toYaml .Values.api.resources | nindent 12 }}
+          ports:
+            - name: api-server
+              containerPort: {{ .Values.api.port }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+          env:
+            - name: HTTP_PORT
+              value: {{ .Values.api.port | quote }}
+            - name: K8S 
+              value: {{ .Values.global.k8s | quote }}
+            - name: K8S_FEATURE_SERVER_SERVICE_NAME 
+              value: {{ .Values.featureServer.serviceName }}
+            - name: HOMER_BASE_URL 
+              value: {{ .Values.homer.urlPrefixServiceConnection }}{{ .Values.homer.serviceName }}
+            - name: HOMER_USERNAME
+              value: {{ .Values.homer.auth.username | quote }}
+            - name: HOMER_PASSWORD
+              value: {{ .Values.homer.auth.password | quote }}
+            - name: JAMBONES_LOGLEVEL
+              value: {{ .Values.api.logLevel }}
+            - name: JAMBONES_MYSQL_HOST
+              value: {{ .Values.mysql.host }}
+            - name: JAMBONES_MYSQL_DATABASE
+              value: {{ .Values.mysql.database.name | quote }}
+            - name: JAMBONES_MYSQL_USER
+              value: {{ .Values.mysql.auth.username | quote }}
+            - name: JAMBONES_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-mysql-password
+                  key: mysql-password
+            - name: JAMBONES_REDIS_HOST
+              value: {{ .Values.redis.host }}
+            - name: JAMBONES_REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: JAMBONES_TIME_SERIES_HOST
+              value: {{ .Values.influxdb.host }}
+            - name: JAMBONES_TRUST_PROXY
+              value: "2"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-jwt
+                  key: jwt

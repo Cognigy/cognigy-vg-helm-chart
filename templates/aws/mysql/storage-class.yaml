@@ -1,0 +1,14 @@
+{{- if and (.Values.mysql.enabled) (eq .Values.cloud "aws") -}}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.aws.mysql.storageClassName | quote }}
+provisioner: {{ .Values.aws.mysql.provisionerName | default "kubernetes.io/aws-ebs" | quote }}
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+parameters:
+  type: {{ .Values.aws.mysql.awsEBSVolumeType | default "gp2" | quote }}
+  fsType: ext4
+  encrypted: "true"
+{{- end -}}

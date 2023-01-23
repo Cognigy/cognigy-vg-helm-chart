@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: sbc-sip
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: sbc-sip
+spec:
+  selector:
+    app: sbc-sip
+  ports:
+    - name: sip-tcp
+      port: {{ .Values.sbc.sip.ports.tcp }}
+      targetPort: {{ .Values.sbc.sip.ports.tcp }}
+      protocol: TCP
+    - name: sip-tls
+      port: {{ .Values.sbc.sip.ports.tls }}
+      targetPort: {{ .Values.sbc.sip.ports.tls }}
+    - name: sip-udp
+      port: {{ .Values.sbc.sip.ports.udp }}
+      targetPort: {{ .Values.sbc.sip.ports.udp }}
+      protocol: UDP
+    - name: sip-wss
+      port: {{ .Values.sbc.sip.ports.wss }}
+      targetPort: {{ .Values.sbc.sip.ports.wss }}
