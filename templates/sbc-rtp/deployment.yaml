@@ -29,7 +29,7 @@ spec:
       initContainers:
         - image: kanisterio/mysql-sidecar:0.40.0
           name: db-create-wait
-          env:
+          env:            
             - name: PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -50,13 +50,13 @@ spec:
           resources: {{- toYaml .Values.rtpEngineSidecar.resources | nindent 12 }}
           ports:
             - name: metrics
-              containerPort: {{ .Values.metrics.sidecarPort }}
+              containerPort: {{ .Values.metrics.port }}
               protocol: TCP
           env:
             - name: K8S 
               value: {{ .Values.global.k8s | quote }}
             - name: NODE_ENV
-              value: {{ .Values.global.nodeEnv }}
+              value: {{ .Values.global.nodeEnv | quote }}
             - name: JAMBONES_LOGLEVEL
               value: {{ .Values.rtpEngineSidecar.logLevel }}
             - name: JAMBONES_REDIS_HOST
@@ -72,10 +72,7 @@ spec:
           ports:
             - name: rtp-engine
               containerPort: {{ .Values.rtpEngine.port }}
-              protocol: TCP
-            - name: metrics
-              containerPort: {{ .Values.metrics.port }}
-              protocol: TCP
+              protocol: TCP            
           args: 
             - rtpengine
             - --listen-udp=22222
@@ -89,6 +86,8 @@ spec:
             - --log-level
             - {{ .Values.rtpEngine.logLevel | quote }}
           env:
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv | quote }}
             - name: CLOUD 
               value: {{ .Values.cloud | quote }}
             - name: IMDSv2

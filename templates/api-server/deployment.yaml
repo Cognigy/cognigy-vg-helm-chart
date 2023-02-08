@@ -45,6 +45,8 @@ spec:
               containerPort: {{ .Values.metrics.port }}
               protocol: TCP
           env:
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv | quote }}
             - name: HTTP_PORT
               value: {{ .Values.api.port | quote }}
             - name: K8S 
