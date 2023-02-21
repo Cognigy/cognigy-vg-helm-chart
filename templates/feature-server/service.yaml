@@ -1,18 +1,30 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: feature-server
+  {{- if .Values.featureServer.useStatefulSet }}
+  name: {{ .Values.featureServer.headlessServiceName | quote }}
+  {{- else}}
+  name: {{ .Values.featureServer.serviceName | quote }}
+  {{- end }}
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: feature-server
 spec:
   selector:
     app: feature-server
+  {{- if .Values.featureServer.useStatefulSet }}
+  type: ClusterIP
+  clusterIP: None
+  {{- end }}
   ports:
     - name: sip
       port: {{ .Values.featureServer.ports.udp }}
       targetPort: {{ .Values.featureServer.ports.udp }}
+      {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
+      protocol: TCP
+      {{- else }}
       protocol: UDP
+      {{- end }}
     - name: http
       port: {{ .Values.featureServer.ports.tcp }}
       targetPort: {{ .Values.featureServer.ports.tcp }}
