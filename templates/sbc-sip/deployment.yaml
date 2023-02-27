@@ -72,12 +72,13 @@ spec:
               protocol: UDP
             - name: sip-tcp
               containerPort: {{ .Values.sbc.sip.ports.tcp }}
-              protocol: TCP
-            - name: metrics
-              containerPort: {{ .Values.metrics.port }}
-              protocol: TCP
+              protocol: TCP            
           args: 
             - drachtio
+            {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
+            - --contact
+            - "sip:*:5062;transport=tcp"
+            {{- end }}
             - --loglevel
             - {{ .Values.sbc.sip.logLevel }}
             - --cloud-deployment
@@ -98,11 +99,17 @@ spec:
             - {{ .Values.apiBan.redisSetKey | quote }}
           {{- end }}
           env:
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv | quote }}
             - name: CLOUD 
               value: {{ .Values.cloud | quote }}
             {{- if eq .Values.cloud "aws" }}
-            - name: IMDSv2 
+            - name: IMDSv2
               value: {{ .Values.aws.useIMDSv2 | quote }}
+            {{- end }}
+            {{- if and (eq .Values.cloud "azure") (.Values.azure.useLoadBalancerIMDS) }}
+            - name: LB_IMDS
+              value: {{ .Values.azure.useLoadBalancerIMDS | quote }}
             {{- end }}
             - name: DRACHTIO_SECRET
               valueFrom:
@@ -135,13 +142,13 @@ spec:
           resources: {{- toYaml .Values.sbcSipSidecar.resources | nindent 12 }}
           ports:
             - name: metrics
-              containerPort: {{ .Values.metrics.sidecarPort }}
+              containerPort: {{ .Values.metrics.port }}
               protocol: TCP
           env:
             - name: K8S 
               value: {{ .Values.global.k8s | quote }}
             - name: NODE_ENV
-              value: {{ .Values.global.nodeEnv }}
+              value: {{ .Values.global.nodeEnv | quote }}
             - name: DRACHTIO_HOST
               value: 127.0.0.1
             - name: DRACHTIO_PORT 
