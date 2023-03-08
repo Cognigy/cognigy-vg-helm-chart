@@ -53,7 +53,7 @@ spec:
             periodSeconds: 10
           env:
             - name: NODE_ENV
-              value: {{ .Values.global.nodeEnv }}
+              value: {{ .Values.global.nodeEnv | quote }}
             - name: K8S 
               value: {{ .Values.global.k8s | quote }}
             - name: K8S_RTPENGINE_SERVICE_NAME 

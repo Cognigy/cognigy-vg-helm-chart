@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: {{ if .Values.featureServer.useStatefulSet }}StatefulSet{{- else }}Deployment{{- end }}
 metadata:
   name: feature-server
   namespace: {{ $.Release.Namespace | quote }}
@@ -8,6 +8,9 @@ spec:
     matchLabels:
       app: feature-server
   replicas: {{ .Values.featureServer.replicaCount }}
+  {{- if .Values.featureServer.useStatefulSet }}
+  serviceName: feature-server-headless
+  {{- end }}
   template:
     metadata:
       labels:
@@ -22,7 +25,7 @@ spec:
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
-              app: feature-server    
+              app: feature-server
       initContainers:
         - image: kanisterio/mysql-sidecar:0.40.0
           name: db-create-wait
@@ -52,8 +55,14 @@ spec:
           env: 
             - name: CLOUD 
               value: {{ .Values.cloud | quote }}
-            - name: IMDSv2 
+            {{- if eq .Values.cloud "aws" }}
+            - name: IMDSv2
               value: {{ .Values.aws.useIMDSv2 | quote }}
+            {{- end }}
+            {{- if and (eq .Values.cloud "azure") (.Values.azure.useLoadBalancerIMDS) }}
+            - name: LB_IMDS
+              value: {{ .Values.azure.useLoadBalancerIMDS | quote }}
+            {{- end }}
             - name: DRACHTIO_SECRET
               valueFrom:
                 secretKeyRef:
@@ -71,7 +80,11 @@ spec:
                   "-c",
                   "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
                 ]
-          args: ['drachtio', '--contact', 'sip:*:5060;transport=udp', '--loglevel', 'info', 'sofia-loglevel', '3']
+          {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
+          args: ['drachtio', '--contact', 'sip:*:5060;transport=udp,tcp', '--loglevel', 'info', 'sofia-loglevel', '3']
+          {{- else }}
+          args: ['drachtio', '--contact', 'sip:*:5060;transport=udp', '--mtu', '4096', '--loglevel', 'info', 'sofia-loglevel', '3']          
+          {{- end }}
         - name: freeswitch
           image: {{ .Values.freeswitch.image }}
           imagePullPolicy: {{ .Values.freeswitch.imagePullPolicy }}
@@ -201,6 +214,26 @@ spec:
               value: parentbased_traceidratio
             - name: OTEL_TRACES_SAMPLER_ARG
               value: {{ default "1.0" .Values.featureServer.otelSampleRate | quote }}
+            - name: COGNIGY_INSIGHTS_COLLECT_ANALYTICS_DATA
+              value: {{ .Values.cognigyInsights.enabled | quote }}
+            - name: INSIGHTS_SERVICE_COLLECTOR_URL_WITH_PROTOCOL
+              value: {{ .Values.cognigyInsights.apiUrl | quote }}
+            {{- if and (.Values.cognigyInsights.apiKey.secret) (.Values.cognigyInsights.apiKey.secretKey) }}
+            - name: COGNIGY_INSIGHTS_SERVICE_COLLECTOR_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.cognigyInsights.apiKey.secret | quote }}
+                  key: {{ .Values.cognigyInsights.apiKey.secretKey | quote }}
+            {{- end }}
+            - name: COGNIGY_ENDPOINT_BASE_URL_WITH_PROTOCOL
+              value: {{ .Values.cognigyEndpoint.apiUrl | quote }}            
+            {{- if and (.Values.cognigyJwtSecret.secret) (.Values.cognigyJwtSecret.secretKey) }}
+            - name: COGNIGY_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.cognigyJwtSecret.secret | quote }}
+                  key: {{ .Values.cognigyJwtSecret.secretKey | quote }}
+            {{- end }}
       volumes:
         - name: temp-audio-volume
           emptyDir: {}
