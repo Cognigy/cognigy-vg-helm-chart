@@ -31,7 +31,7 @@ spec:
               protocol: TCP
           env:
             - name: NODE_ENV
-              value: {{ .Values.global.nodeEnv }}
+              value: {{ .Values.global.nodeEnv | quote }}
             - name: PORT
               value: {{ .Values.billingApp.port | quote }}
             - name: VOICE_BILLING_API_SECRET
