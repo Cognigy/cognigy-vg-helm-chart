@@ -42,7 +42,11 @@ spec:
             - name: CLEAN_UP_THRESHOLD_TIME_RECENT_CALLS
               value: {{ .Values.testCallManager.cleanUpThreshold.recentCalls | quote }}
             - name: AUTH_ENDPOINT
+              {{- if and (.Values.testCallManager.authEndpointProtocol) (.Values.ingress.testCallManager.host) (.Values.testCallManager.authEndpointPath) }}
+              value: {{ printf "%s://%s%s" .Values.testCallManager.authEndpointProtocol .Values.ingress.testCallManager.host .Values.testCallManager.authEndpointPath | quote }}
+              {{- else }}
               value: {{ .Values.testCallManager.authEndpoint }}
+              {{- end }}
             - name: REDIS_HOST
               value: {{ .Values.redis.host }}
             - name: REDIS_PORT

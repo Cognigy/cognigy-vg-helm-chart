@@ -53,11 +53,19 @@ spec:
             periodSeconds: 10
           env:
             - name: NODE_ENV
-              value: {{ .Values.global.nodeEnv }}
+              value: {{ .Values.global.nodeEnv | quote }}
             - name: K8S 
               value: {{ .Values.global.k8s | quote }}
+          {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
+            - name: K8S_FEATURE_SERVER_TRANSPORT
+              value: "tcp"
+          {{- end }}
             - name: K8S_FEATURE_SERVER_SERVICE_NAME 
+              {{- if .Values.featureServer.useStatefulSet }}
+              value: {{ .Values.featureServer.headlessServiceName | quote }}
+              {{- else}}
               value: {{ .Values.featureServer.serviceName | quote }}
+              {{- end }}
             - name: K8S_RTPENGINE_SERVICE_NAME 
               value: {{ .Values.sbc.rtp.serviceName }}:{{ .Values.sbc.rtp.port }}
             - name: DTMF_LISTEN_PORT
