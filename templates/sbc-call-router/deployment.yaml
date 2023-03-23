@@ -27,7 +27,7 @@ spec:
               protocol: TCP
           env:
             - name: NODE_ENV
-              value: {{ .Values.global.nodeEnv }}
+              value: {{ .Values.global.nodeEnv | quote }}
             - name: HTTP_PORT
               value: {{ .Values.sbcCallRouter.port | quote }}
             - name: JAMBONES_LOGLEVEL
