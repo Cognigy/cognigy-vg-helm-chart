@@ -26,7 +26,9 @@ spec:
           env:
             - name: NODE_ENV
               value: {{ .Values.global.nodeEnv | quote }}
-            - name: REACT_APP_API_BASE_URL
+            - name: API_BASE_URL
               value: {{ .Values.api.protocol }}://{{ .Values.ingress.api.host }}/v1
-            - name: REACT_APP_ENABLE_ACCOUNT_LIMITS_ALL
+            - name: VITE_APP_ENABLE_ACCOUNT_LIMITS_ALL
               value: {{ .Values.webapp.enableAccountLimits | quote }}
+            - name: VITE_APP_ENABLE_ALL_SPEECH_PROVIDERS
+              value: {{ .Values.webapp.enableAllSpeechProviders | quote }}
