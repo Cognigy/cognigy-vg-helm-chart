@@ -64,18 +64,19 @@ IP range according to your requirements.
 For SIP and RTP protocols to operate properly, SIP and RTP nodes must have public IPs directly attached to k8s nodes in
 `voip_nodes` and `media_nodes` node groups. Make sure you provision these node groups with `Public IP` option enabled. 
 
-Additionally, public IPs of SIP nodes must be static during operation lifecycle. Reconfiguring or upgrading the node group 
+Additionally, public IPs of both SIP and RTP nodes must be static during operation lifecycle. Reconfiguring or upgrading the node group 
 in EKS cluster recreates the nodes with new public IPs. Since the majority of SIP trunk providers require
 static IPs on SIP endpoints, this will break SIP operation. To overcome this limitation we provision a separate set of 
-[Elastic IPs](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html) and attach these IPs to SIP nodes
+[Elastic IPs](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html) and attach these IPs to SIP and RTP nodes
 during the SIP application startup phase. For this to work: 
-1. Create a set of Elastic IPs with the size equal to the number of `voip_nodes` (3 by default).
-2. Assign unique tag to this set of Elastic IPs with `Key`: `role` and `Name`: `CLUSTER_NAME-sip-node`, replace `CLUSTER_NAME` 
-with the name of the EKS cluster being provisioned. 
-3. The value of the tag must be used in Helm Chart configuration under `spec.values.sbc.ec2EipAllocator.eipGroupRole` variable.
+1. Create a set of Elastic IPs with the size equal to the number of `voip_nodes` (3 by default) and `media_nodes` (3 by default).
+2. Assign unique tag to the sets of Elastic IPs. For `voip_nodes` set the tag with `Key`: `role` and `Name`: `CLUSTER_NAME-sip-node` and for `media_nodes` 
+set the tag with `Key`: `role` and `Name`: `CLUSTER_NAME-rtp-node`. Replace `CLUSTER_NAME` with the name of the EKS cluster being provisioned. 
+3. The value of the tag must be used in Helm Chart configuration under `spec.values.sbc.ec2EipAllocator.sipEipGroupRole` variable for the `voip_nodes` and 
+`spec.values.sbc.ec2EipAllocator.rtpEipGroupRole` variable for the `media_nodes`.
 
 ### AWS IAM Permission Policy
-To perform remapping of EIPs for SIP nodes, a dedicated user with a static access key and a specific IAM
+To perform remapping of EIPs for SIP and RTP nodes, a dedicated user with a static access key and a specific IAM
 policy is required: 
 1. Create a dedicated user in AWS account (e.g. `vg_operator`), disable MFA for the user.
 2. Generate a static access key for the user, save the key ID and the value. You will need to provide the key ID and its value in `vg-operator-key` Secret in `awsKeyId` and `awsSecretKey` fields respectively. This secret must be created before instantiating a Helm release.
@@ -98,5 +99,5 @@ policy is required:
     "Version": "2012-10-17"
    }
    ```
-4. Attach `eip_remappers_policy` to the created user. The policy allows the user to deassociate and associate EIPs on SIP nodes.
+4. Attach `eip_remappers_policy` to the created user. The policy allows the user to dissociate and associate EIPs on SIP and RTP nodes based on the tag.
 You can make `Resource` scope of the policy more restrictive according to your internal security guidelines.

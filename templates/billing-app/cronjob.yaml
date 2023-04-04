@@ -14,7 +14,12 @@ spec:
               imagePullPolicy: IfNotPresent
               env:
                 - name: URL
+                  {{- if and (.Values.billingApp.updateCallHistoryEndpointProtocol) (.Values.ingress.billingApp.host) (.Values.billingApp.updateCallHistoryEndpointPath) }}
+                  value: {{ printf "%s://%s%s" .Values.billingApp.updateCallHistoryEndpointProtocol .Values.ingress.billingApp.host .Values.billingApp.updateCallHistoryEndpointPath | quote }}
+                  {{- else }}
                   value: {{ .Values.billingApp.updateCallHistoryEndpoint }}
+                  {{- end }}
+
                 - name: API_KEY
                   valueFrom:
                     secretKeyRef:
