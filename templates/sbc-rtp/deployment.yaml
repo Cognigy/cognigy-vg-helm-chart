@@ -27,9 +27,26 @@ spec:
           effect: "NoSchedule"
       restartPolicy: Always
       initContainers:
+        {{- if and (.Values.sbc.ec2EipAllocator.enabled) (eq .Values.cloud "aws") }}
+        - image: {{ .Values.sbc.ec2EipAllocator.image }}
+          name: ec2-eip-allocator
+          env:
+            - name: AWS_EIP_NODE_GROUP_ROLE
+              value: {{ .Values.sbc.ec2EipAllocator.rtpEipGroupRole }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  key: awsKeyId
+                  name: {{ .Values.sbc.ec2EipAllocator.vgOperatorUser }}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: awsSecretKey
+                  name: {{ .Values.sbc.ec2EipAllocator.vgOperatorUser }}
+        {{- end }}
         - image: kanisterio/mysql-sidecar:0.40.0
           name: db-create-wait
-          env:
+          env:            
             - name: PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -50,13 +67,13 @@ spec:
           resources: {{- toYaml .Values.rtpEngineSidecar.resources | nindent 12 }}
           ports:
             - name: metrics
-              containerPort: {{ .Values.metrics.sidecarPort }}
+              containerPort: {{ .Values.metrics.port }}
               protocol: TCP
           env:
             - name: K8S 
               value: {{ .Values.global.k8s | quote }}
             - name: NODE_ENV
-              value: {{ .Values.global.nodeEnv }}
+              value: {{ .Values.global.nodeEnv | quote }}
             - name: JAMBONES_LOGLEVEL
               value: {{ .Values.rtpEngineSidecar.logLevel }}
             - name: JAMBONES_REDIS_HOST
@@ -65,6 +82,24 @@ spec:
               value: {{ .Values.redis.port | quote }}
             - name: RTPENGINE_DTMF_LOG_PORT
               value: {{ .Values.rtpEngineSidecar.ports.dtmf | quote }}
+            - name: ENABLE_METRICS
+              value: {{ if .Values.stats.enabled }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: STATS_TAGS
+              value: "pod:$(K8S_POD_NAME)"
+            - name: STATS_PROTOCOL
+              value: {{ .Values.stats.protocol }}
+            - name: STATS_TELEGRAF
+              value: {{ if .Values.stats.telegraf }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            - name: STATS_HOST
+              value: {{ .Values.telegraf.serviceName }}
+            - name: STATS_PORT
+              value: {{ .Values.telegraf.port | quote }}
+            - name: STATS_SAMPLE_RATE
+              value:  {{ .Values.stats.sampleRate | quote }}
         - name: rtp-engine 
           image: {{ .Values.rtpEngine.image }}
           imagePullPolicy: {{ .Values.rtpEngine.imagePullPolicy }}
@@ -72,10 +107,7 @@ spec:
           ports:
             - name: rtp-engine
               containerPort: {{ .Values.rtpEngine.port }}
-              protocol: TCP
-            - name: metrics
-              containerPort: {{ .Values.metrics.port }}
-              protocol: TCP
+              protocol: TCP            
           args: 
             - rtpengine
             - --listen-udp=22222
@@ -89,10 +121,18 @@ spec:
             - --log-level
             - {{ .Values.rtpEngine.logLevel | quote }}
           env:
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv | quote }}
             - name: CLOUD 
               value: {{ .Values.cloud | quote }}
+            {{- if eq .Values.cloud "aws" }}
             - name: IMDSv2
               value: {{ .Values.aws.useIMDSv2 | quote }}
+            {{- end }}
+            {{- if and (eq .Values.cloud "azure") (.Values.azure.useLoadBalancerIMDS) }}
+            - name: LB_IMDS
+              value: {{ .Values.azure.useLoadBalancerIMDS | quote }}
+            {{- end }}
             - name: DRACHTIO_SECRET
               valueFrom:
                 secretKeyRef:
