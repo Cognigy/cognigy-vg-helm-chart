@@ -45,18 +45,26 @@ spec:
               containerPort: {{ .Values.metrics.port }}
               protocol: TCP
           env:
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv | quote }}
             - name: HTTP_PORT
               value: {{ .Values.api.port | quote }}
-            - name: K8S 
+            - name: K8S
               value: {{ .Values.global.k8s | quote }}
             - name: K8S_FEATURE_SERVER_SERVICE_NAME 
-              value: {{ .Values.featureServer.serviceName }}
-            - name: HOMER_BASE_URL 
+              {{- if .Values.featureServer.useStatefulSet }}
+              value: {{ .Values.featureServer.headlessServiceName | quote }}
+              {{- else}}
+              value: {{ .Values.featureServer.serviceName | quote }}
+              {{- end }}
+            - name: HOMER_BASE_URL
               value: {{ .Values.homer.urlPrefixServiceConnection }}{{ .Values.homer.serviceName }}
             - name: HOMER_USERNAME
               value: {{ .Values.homer.auth.username | quote }}
             - name: HOMER_PASSWORD
               value: {{ .Values.homer.auth.password | quote }}
+            - name: JAMBONES_AUTH_USE_JWT
+              value: {{ .Values.api.jwtAuth | quote }}
             - name: JAMBONES_LOGLEVEL
               value: {{ .Values.api.logLevel }}
             - name: JAMBONES_MYSQL_HOST
@@ -83,3 +91,13 @@ spec:
                 secretKeyRef:
                   name: voicegateway-jwt
                   key: jwt
+            - name: TRACING_ENABLED
+              value: {{ .Values.tracing.enabled | quote }}
+            - name: TRACING_BASE_URL_WITH_PROTOCOL
+              value: {{ .Values.tracing.baseUrl | quote }}      
+            - name: TRACING_ERRORS_ENABLED
+              value: {{ .Values.tracing.errorsEnabled | quote }}
+            - name: TRACING_EVENTS_SAMPLE_RATE
+              value: {{ .Values.tracing.eventsSampleRate | quote }}
+            - name: COGNIGY_AI_VERSION
+              value: {{ .Values.global.cognigyVgVersion | quote }}
