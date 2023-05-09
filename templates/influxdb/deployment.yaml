@@ -28,7 +28,7 @@ spec:
               containerPort: {{ .Values.influxdb.port }}
               protocol: TCP
           env:
-            - name: {{ .Values.influxdb.logLevel | quote }}
+            - name: INFLUXDB_LOGGING_LEVEL
               value: {{ .Values.influxdb.logLevel }}
           livenessProbe:
             httpGet:
