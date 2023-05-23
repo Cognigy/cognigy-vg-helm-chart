@@ -19,12 +19,12 @@ GKE Cluster for VG operation must meet following requirements, set them during c
 
 ### Cluster basics
 1. `Location Type`: `Regional` , select a region of your choice
-2. `Control plane version`: `Static version`, use `v1.22.x` at the moment
+2. `Control plane version`: `Static version`, use `v1.23.x` at the moment
 
 ### Cluster Networking 
 Set following parameters, you can leave the rest with default values:
 1. `Network access`: `Public cluster`. The Nodes in the cluster must have public IPs for SIP and RTP Nodes to be reachable from external SIP trunk providers.
-2. Advanced networking options:  set `Enable VPC-native traffic routing (uses alias IP)` and `Automatically create secondary ranges` options
+2. Advanced networking options: set `Enable VPC-native traffic routing (uses alias IP)` and `Automatically create secondary ranges` options
 3. Disable `Enable HTTP load balancing` option. We use [Treafik](https://traefik.io/) Ingress controller shipped with VG Helm Chart.
 
 ### Node Pools
@@ -62,7 +62,7 @@ Node pool for SIP protocol handling, at least 3 `e2-standard-4` instances distri
     ```
 
 #### media-nodes
-Node pool for RTP protocol handling, at least 3 `e2-standard-4` EC2 instances distributed across 3 availability zones are required. Nodes must have public IPs assigned to each instance for direct external access. To isolate RTP workloads, the node pool must have the following label and taint applied:
+Node pool for RTP protocol handling, at least 3 `e2-standard-4` instances distributed across 3 availability zones are required. Nodes must have public IPs assigned to each instance for direct external access. To isolate RTP workloads, the node pool must have the following label and taint applied:
 * Name: `media-nodes`
 * Number of nodes (per zone): `1`
 * Networking:
@@ -81,16 +81,16 @@ Node pool for RTP protocol handling, at least 3 `e2-standard-4` EC2 instances di
      ```
 
 ## kubeIP Deployment 
-As required by majority of SIP Trunk providers, SIP nodes must have public static IPs. In GKE, public IPs attached to the nodes are volatile and change during node pools and cluster upgrades. To overcome this limitation we use [kubeIP](https://github.com/doitintl/kubeip) deployment to keep static IPs attached to `voip-nodes` node pool. 
+As required by majority of SIP Trunk providers, SIP nodes must have public static IPs. In GKE, public IPs attached to the nodes are volatile and change during node pools and cluster upgrades. To overcome this limitation we use [kubeIP](https://github.com/doitintl/kubeip) deployment to keep static IPs attached to both `voip-nodes` and ` media-nodes` node pools. 
 
 Deploy kubeIP into the cluster following the steps below, refer to official [kubeIP installation documentation](https://github.com/doitintl/kubeip/blob/master/README.md) for further details: 
 1. Clone the project:
-```
+```bash
 git clone git@github.com:doitintl/kubeip.git
 cd kubeip
 ```
 2. Set environment variables, replace `<...>` blockers with your values:
-```
+```bash
 gcloud config set project <YOUR_PROJECT_ID>
 export GCP_REGION=<YOUR_GCP_REGION>
 export GCP_ZONE=<YOUR_GCP_REGION>
@@ -98,6 +98,8 @@ export GKE_CLUSTER_NAME=<YOUR_CLUSTER_NAME>
 export PROJECT_ID=$(gcloud config list --format 'value(core.project)')
 export KUBEIP_NODEPOOL=voip-nodes
 export KUBEIP_SELF_NODEPOOL=default-pool
+export KUBEIP_ADDITIONALNODEPOOLS=media-nodes
+export KUBEIP_LABELKEY=kubeip
 ```
 3. Obtain your GKE cluster credentials:
 ```bash
@@ -106,7 +108,7 @@ gcloud container clusters get-credentials $GKE_CLUSTER_NAME \
     --project $PROJECT_ID
 ```
 4. Create a Service Account for kubeIP:
-```
+```bash
 gcloud iam service-accounts create kubeip-service-account --display-name "kubeIP"
 ```
 5. Create and attach a custom kubeIP role to the service account:
@@ -128,24 +130,41 @@ kubectl create secret generic kubeip-key --from-file=key.json -n kube-system
 kubectl create clusterrolebinding cluster-admin-binding \
     --clusterrole cluster-admin --user `gcloud config list --format 'value(core.account)'`
 ```
-8. Create static reserved IP Addresses for `voip-nodes`, set number of IPs equal to `voip-nodes` node pool size (3 by default):
+8. Create static reserved IP Addresses for `voip-nodes` and `media-nodes`. Set number of IPs equal to nodes in `voip-nodes` and `media-nodes` respectively (3 by default for each node pools):
 ```bash
-for i in {1..3}; do gcloud compute addresses create kubeip-ip$i --project=$PROJECT_ID --region=$GCP_REGION; done
+# IPs for voip-nodes
+for i in {1..3}; do gcloud compute addresses create voip-nodes-ip$i --project=$PROJECT_ID --region=$GCP_REGION; done
+
+# IPs for media-nodes
+for i in {1..3}; do gcloud compute addresses create media-nodes-ip$i --project=$PROJECT_ID --region=$GCP_REGION; done
 ```
 9. Add labels to reserved IP addresses. We assign unique value per cluster here:
+
 ```bash
-for i in {1..3}; do gcloud beta compute addresses update kubeip-ip$i --update-labels kubeip=$GKE_CLUSTER_NAME --region $GCP_REGION; done
+# IPs for voip-nodes
+for i in {1..3}; do gcloud beta compute addresses update voip-nodes-ip$i --update-labels kubeip=$GKE_CLUSTER_NAME --region $GCP_REGION; done
+
+# IPs for media-nodes
+for i in {1..3}; do gcloud beta compute addresses update media-nodes-ip$i --update-labels $KUBEIP_LABELKEY-node-pool=media-nodes,kubeip=$GKE_CLUSTER_NAME --region $GCP_REGION; done
 ```
 10. Patch `kubeip-configmap.yaml` ConfigMap with env variables: 
 ```bash
 # on Linux
-sed -i -e "s/reserved/$GKE_CLUSTER_NAME/g" -e "s/default-pool/$KUBEIP_NODEPOOL/g" deploy/kubeip-configmap.yaml
+sed -i -e "/^\([[:space:]]*KUBEIP_LABELVALUE: \).*/s//\1\"$GKE_CLUSTER_NAME\"/" \
+       -e "/^\([[:space:]]*KUBEIP_NODEPOOL: \).*/s//\1\"$KUBEIP_NODEPOOL\"/" \
+       -e "/^\([[:space:]]*KUBEIP_LABELKEY: \).*/s//\1\"$KUBEIP_LABELKEY\"/" \
+       -e "/^\([[:space:]]*KUBEIP_ADDITIONALNODEPOOLS: \).*/s//\1\"$KUBEIP_ADDITIONALNODEPOOLS\"/" deploy/kubeip-configmap.yaml
+
 # on MacOS
-sed -i '' -e "s/reserved/$GKE_CLUSTER_NAME/g" -e "s/default-pool/$KUBEIP_NODEPOOL/g" deploy/kubeip-configmap.yaml
+sed -i '' -e "/^\([[:space:]]*KUBEIP_LABELVALUE: \).*/s//\1\"$GKE_CLUSTER_NAME\"/" \
+          -e "/^\([[:space:]]*KUBEIP_NODEPOOL: \).*/s//\1\"$KUBEIP_NODEPOOL\"/" \
+          -e "/^\([[:space:]]*KUBEIP_LABELKEY: \).*/s//\1\"$KUBEIP_LABELKEY\"/" \
+          -e "/^\([[:space:]]*KUBEIP_ADDITIONALNODEPOOLS: \).*/s//\1\"$KUBEIP_ADDITIONALNODEPOOLS\"/" deploy/kubeip-configmap.yaml
 ```
 Make sure `deploy/kubeip-configmap.yaml` file contains the correct values:
 * The KUBEIP_LABELVALUE: must be your GKE cluster name
 * The KUBEIP_NODEPOOL: must be equal to "voip-nodes"
+* The KUBEIP_ADDITIONALNODEPOOLS: must be equal to "media-nodes"
 * The KUBEIP_FORCEASSIGNMENT: controls whether kubeIP should assign static IPs to existing nodes in the node-pool and defaults to `true`
 11. Patch `deploy/kubeip-deployment.yaml` with the env variable:
 ```bash
@@ -161,15 +180,15 @@ Make sure `deploy/kubeip-deployment.yaml` file contains the correct value:
 kubectl apply -f deploy/.
 ```
 13. Check the deployment is up and running:
-```nashorn js
+```bash
 kubectl get -n=kube-system deployment kubeip  
 ```
 14. Check the static IPs are assigned to the `voip-nodes`: 
 ```bash
 kubectl get nodes -l=kubip_assigned -o wide
 ```
-Check if these static IPs correspond to `kubeip-ip` static IPs created in the GCP Project under `VPC Network -> IP addresses`
-15. Note down these static IPs, you will need them to configure SBC SIP Nodes in your SIP Trunk provider. 
+Check if these static IPs correspond to `voip-nodes-ip` static IPs created in the GCP Project under `VPC Network -> IP addresses`
+15. Note down these static IPs of the `voip_nodes`, you will need them to configure SBC SIP Nodes in your SIP Trunk provider. 
 
 
 ## Network Firewall Rules
