@@ -1,0 +1,11 @@
+{{- if and (.Values.ingress.enabled) (.Values.traefik.enabled) (.Values.ingress.jaeger.basicAuthMiddleware.enabled) }}
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: jaegerauth
+  namespace: {{ $.Release.Namespace | quote }}
+spec:
+    basicAuth:
+        secret: {{ default "jaeger-auth" .Values.jaeger.existingSecret }}
+{{- end }}

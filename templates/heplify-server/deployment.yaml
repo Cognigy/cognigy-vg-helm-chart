@@ -15,6 +15,8 @@ spec:
     metadata:
       labels:
         app: heplify-server
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
       containers:
         - name: heplify-server
@@ -32,12 +34,15 @@ spec:
             - name: HEPLIFYSERVER_DBUSER
               value: {{ .Values.postgresql.auth.postgresUsername | quote }}
             - name: HEPLIFYSERVER_DBPASS
-              value: {{ .Values.postgresql.auth.postgresPassword | quote }}
+              value: {{ .Values.postgresql.auth.postgresPassword | quote }}          
           args: ['./heplify-server', '-config', '/etc/heplify-server.toml']
           volumeMounts:
             - name: heplify-server-config
               mountPath: /etc/heplify-server.toml
               subPath: heplify-server.toml
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
       volumes:
       - name: heplify-server-config
         configMap:

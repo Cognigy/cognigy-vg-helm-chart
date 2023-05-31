@@ -16,6 +16,8 @@ spec:
       name: grafana
       labels:
         app: grafana
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
       securityContext:
           runAsUser: 472
@@ -62,6 +64,9 @@ spec:
             - name: grafana-config
               mountPath: /var/lib/grafana/dashboards/voicegateway-heplify.json
               subPath: voicegateway-heplify.json
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
       volumes:
       - name: grafana-config
         configMap:
