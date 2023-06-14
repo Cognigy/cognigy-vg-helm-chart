@@ -12,6 +12,8 @@ spec:
     metadata:
       labels:
         app: webapp
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
     {{- include "image.pullSecrets" $ | nindent 6 }}
       containers:
@@ -26,7 +28,24 @@ spec:
           env:
             - name: NODE_ENV
               value: {{ .Values.global.nodeEnv | quote }}
-            - name: REACT_APP_API_BASE_URL
+            - name: API_BASE_URL
               value: {{ .Values.api.protocol }}://{{ .Values.ingress.api.host }}/v1
-            - name: REACT_APP_ENABLE_ACCOUNT_LIMITS_ALL
+            - name: VITE_APP_ENABLE_ACCOUNT_LIMITS_ALL
               value: {{ .Values.webapp.enableAccountLimits | quote }}
+            - name: VITE_APP_ENABLE_ALL_SPEECH_PROVIDERS
+              value: {{ .Values.webapp.enableAllSpeechProviders | quote }}
+            - name: TRACING_ENABLED
+              value: {{ .Values.tracing.enabled | quote }}
+            - name: TRACING_BASE_URL_WITH_PROTOCOL
+              value: {{ .Values.tracing.baseUrl | quote }}      
+            - name: TRACING_ERRORS_ENABLED
+              value: {{ .Values.tracing.errorsEnabled | quote }}
+            - name: TRACING_EVENTS_SAMPLE_RATE
+              value: {{ .Values.tracing.eventsSampleRate | quote }}
+            - name: ENVIRONMENT
+              value: {{ .Values.tracing.environment | quote }}
+            - name: COGNIGY_AI_VERSION
+              value: {{ .Chart.Version | trunc 6 | quote }}
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
