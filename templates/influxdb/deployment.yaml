@@ -16,6 +16,8 @@ spec:
       name: influxdb
       labels:
         app: influxdb
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
       restartPolicy: Always
       containers:
@@ -28,8 +30,11 @@ spec:
               containerPort: {{ .Values.influxdb.port }}
               protocol: TCP
           env:
-            - name: {{ .Values.influxdb.logLevel | quote }}
+            - name: INFLUXDB_LOGGING_LEVEL
               value: {{ .Values.influxdb.logLevel }}
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
           livenessProbe:
             httpGet:
               path: /ping
