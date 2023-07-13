@@ -16,6 +16,8 @@ spec:
       name: telegraf
       labels:
         app: telegraf
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
       containers:
         - name: telegraf
@@ -30,6 +32,9 @@ spec:
             - name: telegraf-config
               mountPath: /etc/telegraf/telegraf.conf
               subPath: telegraf.conf
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
       restartPolicy: Always
       volumes:
       - name: telegraf-config
