@@ -7,15 +7,20 @@ spec:
   schedule: "*/15 * * * *"
   jobTemplate:
     spec:
+      backoffLimit: 0
       template:
         spec:
           containers:
           - name: clean-up
-            image: alpine:3.17.0
+            image: {{ .Values.jobs.image }}
             imagePullPolicy: IfNotPresent
             env:
               - name: URL
+                {{- if and (.Values.testCallManager.cleanUpEndpointProtocol) (.Values.ingress.testCallManager.host) (.Values.testCallManager.cleanUpEndpointPath) }}
+                value: {{ printf "%s://%s%s" .Values.testCallManager.cleanUpEndpointProtocol .Values.ingress.testCallManager.host .Values.testCallManager.cleanUpEndpointPath | quote }}
+                {{- else }}
                 value: {{ .Values.testCallManager.cleanUpEndpoint }}
+                {{- end }}
               - name: API_KEY
                 valueFrom:
                   secretKeyRef:
@@ -24,7 +29,8 @@ spec:
             args:
               - /bin/sh
               - -c
-              - "apk --update add curl \
-              && curl -X DELETE $URL -H 'x-api-key: '$API_KEY'' -H 'Content-Type: application/json' -d '{\"timestamp\": '$(date +%s000)'}'"
+              - "curl -X DELETE $URL -H 'x-api-key: '$API_KEY'' -H 'Content-Type: application/json' -d '{\"timestamp\": '$(date +%s000)'}'"
           restartPolicy: Never
+          imagePullSecrets:
+            - name: cognigy-registry-token
 {{- end }}
