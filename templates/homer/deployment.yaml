@@ -14,7 +14,10 @@ spec:
     metadata:
       labels:
         app: homer
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
+    {{- include "image.pullSecrets" $ | nindent 6 }}
       containers:
         - name: homer
           image: {{ .Values.homer.image }}
@@ -31,6 +34,9 @@ spec:
               value: {{ .Values.postgresql.auth.postgresUsername | quote }}
             - name: DB_PASS
               value: {{ .Values.postgresql.auth.postgresPassword | quote }}
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
           volumeMounts:
             - name: homer-config
               mountPath: /usr/local/homer/etc/webapp_config.json
