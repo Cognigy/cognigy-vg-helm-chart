@@ -1,11 +1,11 @@
-{{- if and (.Values.ingress.enabled) (.Values.traefik.enabled) (.Values.ingress.billingApp.ipWhiteListMiddleware.enabled) }}
-{{- with .Values.ingress.billingApp.ipWhiteListMiddleware }}
+{{- if and (.Values.ingress.enabled) (.Values.traefik.enabled) (.Values.ingress.jaeger.ipWhiteListMiddleware.enabled) }}
+{{- with .Values.ingress.jaeger.ipWhiteListMiddleware }}
 ---
 # Whitelisting Based on `X-Forwarded-For` with `depth=0`
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
-  name: ipwhitelistbillingapp
+  name: ipwhitelistjaeger
   namespace: {{ $.Release.Namespace | quote }}
 spec:
   ipWhiteList: {{- toYaml .ipWhiteList | nindent 4 }}

@@ -6,7 +6,9 @@ global:
   ## Indication that is a Kubernetes deployment
   k8s: true
   ## Node environment
-  nodeEnv:
+  nodeEnv: ""
+  ## Cognigy.VG Release Version
+  cognigyVgVersion: ""
   ## Default local host IP
   localhost: 127.0.0.1
   ## Collect stats variables
@@ -15,6 +17,27 @@ global:
     accountCalls: true
     applicationCalls: true
     serviceProviderCalls: true
+
+##################
+# Redis Sentinel #
+##################
+
+sentinel:
+  enabled: false
+
+###############
+# Cognigy ENV #
+###############
+
+cognigyEnv:
+  # FEATURE_REDIS_SENTINEL_MODE_ENABLED: "false"
+  # REDIS_SENTINEL_MASTER_NAME: "mymaster"
+  # REDIS_SENTINEL_HOST: "redis-ha-headless"
+  # REDIS_SENTINEL_PORT: "26379"
+
+  # We temporarilly disable the latest webapp features tracing and lcr
+  VITE_APP_LCR_DISABLED: "true"
+  VITE_APP_JAEGER_TRACING_DISABLED: "true"
 
 ## Credentials for pulling image from private image registry.
 ## Ref.: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
@@ -34,7 +57,7 @@ imageCredentials:
 ## We support the 3 major cloud providers: aws, azure, gcp
 cloud: ""
 
-aws: 
+aws:
   ## Set to true, if using IMDSv2
   useIMDSv2: true
   grafana:
@@ -55,6 +78,7 @@ aws:
     awsEBSVolumeType: "gp3"
 
 azure:
+  useLoadBalancerIMDS: true
   grafana:
     storageClassName: "grafana"
     provisionerName: "disk.csi.azure.com"
@@ -91,13 +115,14 @@ gcp:
     pdType: "pd-balanced"
 
 stats:
-    ## Metrics will be generate
-    enabled: true
-    ## Connection type
-    protocol: tcp
-    ## Metrics will be generated in Telegraf format
-    telegraf: true
-    sampleRate: true
+  ## Metrics will be generate
+  enabled: true
+  ## Connection type
+  protocol: tcp
+  ## Metrics will be generated in Telegraf format
+  telegraf: true
+  ## A value from 0 to 1; 1 = send all samples, 0.5 = send every 2nd sample, and so on.
+  sampleRate: 1
 
 #######
 # TLS #
@@ -132,6 +157,55 @@ tls:
   ## NOTE: When tls.existingSecret is set, clear text certificate passed in the previous parameters "tls.crt" and "tls.key" are ignored.
   existingSecret: ""
 
+#############
+# Analytics #
+#############
+
+cognigyInsights:
+  # If enabled, analytics data will be collected and sent to the cognigy insights collector api
+  enabled: false
+  collectInteractionPanelCalls: false
+
+  # API of service-collectors - VG can send to multiple ai endpoints
+  apiUrl: ""
+  apiUrlApp: ""
+  apiUrlDev: ""
+  apiUrlStaging: ""
+  apiUrlTrial: ""
+
+  apiKey:
+    secret: ""
+    secretKey: ""
+  apiKeyApp:
+    secret: ""
+    secretKey: ""
+  apiKeyDev:
+    secret: ""
+    secretKey: ""
+  apiKeyStaging:
+    secret: ""
+    secretKey: ""
+  apiKeyTrial:
+    secret: ""
+    secretKey: ""
+
+# Decoding of JWT Interaction Panels calls require the same secret as used in service-api for encoding
+# Supports multiple tokens, seperated by ';' secret1;secret2;
+cognigyJwtSecrets:
+  secret: ""
+  secretKey: ""
+
+###########
+# Tracing #
+###########
+
+tracing:
+  enabled: false
+  errorsEnabled: false
+  baseUrl: ""
+  eventsSampleRate: ""
+  environment: ""
+
 ###########
 # Ingress #
 ###########
@@ -142,7 +216,7 @@ ingress:
   enabled: true
   api:
     host: ""
-    ipWhiteListMiddleware: 
+    ipWhiteListMiddleware:
       enabled: false
       ipWhiteList:
         sourceRange:
@@ -151,7 +225,19 @@ ingress:
           depth: 0
   billingApp:
     host: ""
-    ipWhiteListMiddleware: 
+    ipWhiteListMiddleware:
+      enabled: false
+      ipWhiteList:
+        sourceRange:
+          - 0.0.0.0/0
+        ipStrategy:
+          depth: 0
+  jaeger:
+    enabled: false
+    host: ""
+    basicAuthMiddleware:
+      enabled: true
+    ipWhiteListMiddleware:
       enabled: false
       ipWhiteList:
         sourceRange:
@@ -160,7 +246,7 @@ ingress:
           depth: 0
   testCallManager:
     host: ""
-    ipWhiteListMiddleware: 
+    ipWhiteListMiddleware:
       enabled: false
       ipWhiteList:
         sourceRange:
@@ -169,7 +255,7 @@ ingress:
           depth: 0
   webapp:
     host: ""
-    ipWhiteListMiddleware: 
+    ipWhiteListMiddleware:
       enabled: false
       ipWhiteList:
         sourceRange:
@@ -219,8 +305,10 @@ sbc:
     ## Only for AWS
     enabled: false
     image: cognigy.azurecr.io/ec2-eip-allocator:1.1.1
-    ## Tag for the EIP Node Pool
-    eipGroupRole: ""
+    ## Tag for the SIP EIP Node Pool
+    sipEipGroupRole: ""
+    ## Tag for the RTP EIP Node Pool
+    rtpEipGroupRole: ""
     ## User to reallocate static EIPs
     vgOperatorUser: ""
 
@@ -231,9 +319,11 @@ sbc:
 dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
+  image: cognigy.azurecr.io/db-create:release-6ca324553e35a29b6a1c7c0a20adbb4bf9e9b13e-1688549156
+  imagePullPolicy: IfNotPresent
 
 influxdb:
-  image: influxdb:1.8.10-alpine
+  image: cognigy.azurecr.io/vg-influx:release-ded56799f93fb2c6035f8a4582b56d7e6d7aaac0-1689255770
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   storage: 20Gi
@@ -244,46 +334,98 @@ influxdb:
   host: influxdb
   port: 8086
 
-## Bitnami Chart, image info: bitnami/mysql:8.0.32-debian-11-r0
+## Bitnami Chart, image info: bitnami/mysql:8.0.33-debian-11-r12
 mysql:
   enabled: true
+  global:
+    imageRegistry: cognigy.azurecr.io
+    imagePullSecrets:
+      - cognigy-registry-token
+    storageClass: mysql
   fullnameOverride: mysql
   auth:
     createDatabase: true
     database: jambones
     username: jambones
     existingSecret: voicegateway-mysql-password
+  image:
+    repository: mysql
+    tag: 8.0.33-debian-11-r19
   primary:
     persistence:
-      storageClass: "mysql"
       size: "10Gi"
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1536Mi
+      requests:
+        cpu: 1000m
+        memory: 1536Mi
+  metrics:
+    enabled: true
+    image:
+      repository: mysqld-exporter
+      tag: 0.14.0-debian-11-r116
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 150Mi
+    serviceMonitor:
+      enabled: false
   database:
     name: jambones
   host: mysql
   port: 3306
 
-## Bitnami Chart, image info: bitnami/postgresql:14.6.0-debian-11-r26
+## Bitnami Chart, image info: bitnami/postgresql:14.8.0-debian-11-r28
 ## Used only internally by heplify-server and homer to store sip captures
 postgresql:
   enabled: true
+  global:
+    imageRegistry: cognigy.azurecr.io
+    imagePullSecrets:
+      - cognigy-registry-token
+    storageClass: postgres
   fullnameOverride: postgres
   auth:
     postgresUsername: postgres
     postgresPassword: homer7Seven
+    database: homer_config
   image:
-    registry: docker.io
-    repository: bitnami/postgresql
-    tag: 14.6.0-debian-11-r26
-    pullPolicy: IfNotPresent
+    repository: postgres
+    tag: 14.8.0-debian-11-r21
   primary:
     persistence:
-      storageClass: "postgres"
       size: "30Gi"
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 5Gi
+      requests:
+        cpu: 1000m
+        memory: 3Gi
+  metrics:
+    enabled: true
+    image:
+      repository: postgres-exporter
+      tag: 0.12.0-debian-11-r91
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 150Mi
+    serviceMonitor:
+      enabled: false
   host: postgres
   port: 5432
 
 redis:
-  image: redis:7.0.7-alpine3.17
+  image: redis:7.0.11-alpine
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   host: redis
@@ -293,7 +435,7 @@ redis:
 # Monitoring #
 ##############
 
-grafana: 
+grafana:
   image: grafana/grafana:9.1.8
   imagePullPolicy: IfNotPresent
   replicaCount: 1
@@ -301,9 +443,9 @@ grafana:
   storage: 2Gi
   port: 3000
 
-heplifyServer: 
+heplifyServer:
   ## The "latest" tag is the only one available
-  image: sipcapture/heplify-server:latest
+  image: cognigy.azurecr.io/vg-heplify:release-1071b4404ff17c8cee54fd118394fb058c7ad868-1689255787
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   serviceName: heplify-server
@@ -311,9 +453,9 @@ heplifyServer:
     tcp: 9096
     udp: 9060
 
-homer: 
+homer:
   ## The "latest" tag is the only one available
-  image: sipcapture/webapp:latest
+  image: cognigy.azurecr.io/vg-homer:release-3fdeac08d35a6747920bba905d39a7fb4a59a79c-1689255776
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   serviceName: homer
@@ -324,10 +466,15 @@ homer:
     password: sipcapture
   port: 80
 
-jaeger: 
-  image: jaegertracing/all-in-one:1.40.0
+jaeger:
+  image: cognigy.azurecr.io/vg-jaeger:release-497502cd13b86f36afb2095997e903bc141e9e1d-1689255781
   imagePullPolicy: IfNotPresent
   replicaCount: 1
+  serviceName: jaeger
+  urlPrefixServiceConnection: http://
+  username: "jaeger_admin"
+  password: "jaeger_password"
+  existingSecret: ""
   ports:
     tcp: 16686
     udp:
@@ -336,16 +483,18 @@ jaeger:
 
 metrics:
   port: 8002
-  sidecarPort: 8003
 
-telegraf: 
-  image: telegraf:1.25.0-alpine
+health:
+  port: 8001
+
+telegraf:
+  image: cognigy.azurecr.io/vg-telegraf:release-f560abcc37d6d01f49cb3dfd32668f94625cf8d9-1689255793
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   serviceName: telegraf
   port: 8125
 
-## You can enable the pod monitor if any prometheus instance is ruinning on your cluster.
+## You can enable the pod monitor if any prometheus instance is running on your cluster.
 podMonitors:
   enabled: false
   ## The namespace for the pod-monitor should be the same namespace where your prometheus instance is running
@@ -355,13 +504,17 @@ podMonitors:
 # VoiceGateway Components #
 ###########################
 
+jobs:
+  image: cognigy.azurecr.io/vg-alpine-curl:release-4e361acb49bce72a251bfb34268104d086c7abd3-1688393894
+
 api:
-  image: cognigy.azurecr.io/jambonz-api-server:release-71519d9cf43223c17a15cbfd68b3ee60ea425140-1672301038
+  image: cognigy.azurecr.io/api-server:release-6789881b72bd1a38ba1382e1fe076bec424c6c93-1689620038
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   logLevel: info
   port: 3000
   ## Prefix used to create some endpoint values [http | https]
+  jwtAuth: true
   protocol: https
   resources:
     requests:
@@ -373,7 +526,7 @@ api:
 
 apiBan:
   enabled: true
-  image: cognigy.azurecr.io/api-ban:release-768a9801ab53b11a4fb83d394866f8f819aeaa09-1672675489
+  image: cognigy.azurecr.io/api-ban:release-00e61e2e0a1589f8cf4405f20eb3ff40ea0734d3-1688996451
   imagePullPolicy: IfNotPresent
   endpoint: https://apiban.org/api
   redisSetKey: apiban:ips
@@ -389,11 +542,14 @@ apiBan:
   cronjobSchedule: "0 * * * *"
 
 billingApp:
-  image: cognigy.azurecr.io/voicegateway-billing-app:release-e2f29fbdc28ea269692ca25101ff15a76c1484bd-1672675630
+  image: cognigy.azurecr.io/voicegateway-billing-app:release-7c2051a0b1e324d7a5e48404698c98db3916597f-1690792378
   imagePullPolicy: IfNotPresent
   replicasCount: 1
   port: 9000
-  updateCallHistoryEndpoint: ""
+  endpoint: ""
+  endpointProtocol: "https"
+  updateCallHistoryEndpointPath: "/api/v1/call-history/update"
+  deactivateAccountEndpointPath: "/api/v1/account/deactivate"
   resources:
     requests:
       cpu: "0.5"
@@ -403,7 +559,7 @@ billingApp:
       memory: 1Gi
 
 drachtio:
-  image: cognigy.azurecr.io/drachtio-server:release-642f71febe9fdd2a47de73d344b858476e3d97b1-1673262375
+  image: cognigy.azurecr.io/drachtio-server:release-af894f5ba30b1351a250634b2079c8ac1390bd3b-1683710545
   imagePullPolicy: IfNotPresent
   port: 9022
   homerId: 10
@@ -416,13 +572,22 @@ drachtio:
       memory: 4Gi
 
 featureServer:
-  image: cognigy.azurecr.io/jambonz-feature-server:release-3148327b49bc48f7cd55a81e4c781ff05005356e-1673631073
+  image: cognigy.azurecr.io/jambonz-feature-server:release-ab325a7ce6d78c25f813623e67bf3ca12d97f854-1691049076
   imagePullPolicy: Always
   replicaCount: 2
-  logLevel: debug
+  logLevel: info
+  trimTts: true
   serviceName: feature-server
+  sigtermForceCloseTimeoutMs: ""
+
+  ## 
+  ## Please set featureServer.useStatefulSet to false if you don't want to use StatefulSet for Feature Server (headless service)
+  ## Setting it to false is not recommended and does not work if Azure cloud.
+  ##
+  useStatefulSet: true
+  headlessServiceName: feature-server-headless
   freeswitchConnection: "127.0.0.1:8021:JambonzR0ck$"
-  ports: 
+  ports:
     tcp: 3000
     udp: 5060
   resources:
@@ -432,16 +597,17 @@ featureServer:
     limits:
       cpu: "2"
       memory: 2Gi
-  
+
 freeswitch:
-  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:release-4758eed2c6245efc1007893103848f8367ca8c94-1670945743
+  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:release-83515054a4c83befa7a5ad9360389ec1105eeb97-1689932625
   imagePullPolicy: IfNotPresent
+  logLevel: info
   ## Argument "--codec-answer-generous" is commented because we are looking into a DTMF recognition issue using Firefox, in the Interaction Panel Call,
   ## and until we don't have a solution we will force a specific codec for it. Once we have defintiive solution, we uncomment this.
   args:
     - freeswitch
     # - --codec-answer-generous
-    - --username 
+    - --username
     - Cognigy
   port: 8081
   resources:
@@ -453,7 +619,7 @@ freeswitch:
       memory: 3Gi
 
 rtpEngine:
-  image: cognigy.azurecr.io/docker-rtpengine:release-b20d289193faf6bc4dc69ca9d61b2a9f11c11eda-1670945746
+  image: cognigy.azurecr.io/docker-rtpengine:release-b3d95c5ef275dfea2a01db32ce0f2945e215a05d-1678782372
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   logLevel: 5
@@ -466,9 +632,9 @@ rtpEngine:
     limits:
       cpu: "4"
       memory: 4Gi
-  
+
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:release-0df16b3119524b4258393f4c55ba9be0dfc3eef0-1672760985
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:release-1fcc053fabe51ba9676fe4e97d34ed08bbf86954-1688996435
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   logLevel: info
@@ -483,7 +649,7 @@ rtpEngineSidecar:
       memory: 1Gi
 
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:release-51b5d33af42035dcefc71b553d607bf58e154c2c-1672237826
+  image: cognigy.azurecr.io/sbc-call-router:release-f87c76e4c2a928c433912e712bc1f51f25d6e2cc-1688996428
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   logLevel: info
@@ -497,11 +663,16 @@ sbcCallRouter:
       memory: 400Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:release-2ceec9e330365991d241285140c9014995023fba-1672760966
+  image: cognigy.azurecr.io/sbc-inbound:release-e01073ffdd0f608a61dc1f64e66f7c9980f6097a-1688996463
   imagePullPolicy: IfNotPresent
   replicaCount: 2
-  logLevel: debug
-  ports: 
+  logLevel: info
+  ## Enables Feature Server Signaling Transport as TCP, instead UDP (default)
+  ##
+  ## Note: This is an experimental feature. Please do not enable this in a production environment.
+  ##
+  featureServerSignalingTransportTcp: false
+  ports:
     tcp: 4000
     dtmf: 22224
   serviceName: sbc-inbound
@@ -514,11 +685,11 @@ sbcInbound:
       memory: 2Gi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:release-9fa82495f097c9b25cabb8ffab40b692bdeb8d32-1672760955
+  image: cognigy.azurecr.io/sbc-outbound:release-12ce063f39de8f6c94426ffc74640b266cc4317f-1688996457
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   logLevel: info
-  ports: 
+  ports:
     tcp: 4000
     dtmf: 22225
   serviceName: sbc-outbound
@@ -531,7 +702,7 @@ sbcOutbound:
       memory: 2Gi
 
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:release-69cd6e937dc504e5fa0183348ab136e448c4d98a-1672760981
+  image: cognigy.azurecr.io/sbc-sip-sidecar:release-5515bd682c1434cbbe7d68eaa2666d12f8ea9f16-1688996445
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   logLevel: info
@@ -545,12 +716,16 @@ sbcSipSidecar:
 
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-test-call-manager:release-c99d1b0d3c52d58c8982cb2687ff6884fbdac9de-1672675645
+  image: cognigy.azurecr.io/voicegateway-test-call-manager:release-abd5d139510f7e5274e13fd10f091628a88c6029-1688996476
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   port: 3000
   authEndpoint: ""
+  authEndpointProtocol: "https"
+  authEndpointPath: "/api/v1/call/auth"
   cleanUpEndpoint: ""
+  cleanUpEndpointProtocol: "https"
+  cleanUpEndpointPath: "/api/v1/call/clean-up"
   cleanUpThreshold:
     garbageCollection: 1800000 # 30 minutes
     recentCalls: 600000 # 10 minutes
@@ -560,7 +735,7 @@ testCallManager:
     ## For existing service provider info, the secret must have the following two keys:
     ## "id": Containing the ID of the Service Provider
     ## "apiKey": Containing API Key of the above Service Provider
-    ## NOTE: When interactionPanelServiceProvider.existingCredentials is set, the values in the previous parameters 
+    ## NOTE: When interactionPanelServiceProvider.existingCredentials is set, the values in the previous parameters
     ## "interactionPanelServiceProvider.id" and "interactionPanelServiceProvider.apiKey" are ignored.
     existingCredentials: ""
   resources:
@@ -572,11 +747,12 @@ testCallManager:
       memory: 1Gi
 
 webapp:
-  image: cognigy.azurecr.io/jambonz-webapp:release-9c1c8059087f58126ce19203b0d36886d80c73a9-1672301068
+  image: cognigy.azurecr.io/vg-webapp:release-16e1f750b3e33507a9cebfaa7e01e5419fee17b3-1691067661
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   port: 3001
   enableAccountLimits: true
+  enableAllSpeechProviders: true
   resources:
     requests:
       cpu: "0.1"
@@ -593,10 +769,12 @@ webapp:
 # For more information, see: https://github.com/traefik/traefik-helm-chart
 traefik:
   enabled: true
+  instanceLabelOverride: "voicegateway"
   fullnameOverride: traefik
   image:
-    name: cognigy.azurecr.io/traefik
-    tag: "2.6.3"
+    registry: cognigy.azurecr.io
+    repository: traefik
+    tag: "2.10.1"
     pullPolicy: IfNotPresent
   deployment:
     ## Specify imagePullSecrets to pull the image from private repository
@@ -621,14 +799,12 @@ traefik:
   ingressClass:
     enabled: true
     isDefaultClass: true
-    fallbackApiVersion: ""
-  globalArguments: []
-  additionalArguments:
+  ingressRoute:
+    dashboard:
+      enabled: false
+  globalArguments:
     - "--api.insecure=true"
-    - "--entryPoints.web.forwardedHeaders.insecure"
-    - "--entryPoints.websecure.forwardedHeaders.insecure"
-    - "--entryPoints.web.proxyProtocol.insecure"
-    - "--entryPoints.websecure.proxyProtocol.insecure"
+  additionalArguments: []
   ports:
     traefik:
       port: 9000
@@ -643,11 +819,27 @@ traefik:
       ## Note: If traefik is enabled, and tls not, then the auto redirection of http to https also must be disabled
       ## Do that by setting traefik.ports.web.redirectTo: null
       redirectTo: websecure
+      # Trust forwarded headers information (X-Forwarded-*).
+      forwardedHeaders:
+        trustedIPs: []
+        insecure: true
+      # Enable the Proxy Protocol header parsing for the entry point
+      proxyProtocol:
+        trustedIPs: []
+        insecure: true
     websecure:
       port: 8443
       expose: true
       exposedPort: 443
       protocol: TCP
+      # Trust forwarded  headers information (X-Forwarded-*).
+      forwardedHeaders:
+        trustedIPs: []
+        insecure: true  
+      # Enable the Proxy Protocol header parsing for the entry point
+      proxyProtocol:
+        trustedIPs: []
+        insecure: true
       tls:
         enabled: true
         options: ""
@@ -676,5 +868,5 @@ traefik:
         - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
         - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
 ## For the securityContext config of traefik, please refer to the official values.yaml file of the traefik
-## This is the link for chart v10.19.4 for example
-## https://github.com/traefik/traefik-helm-chart/blob/f24ac3c53579e0889b53a29f23a76d359ad54803/traefik/values.yaml#L490-L501
+## This is the link for chart v123.1.0 for example
+## https://github.com/traefik/traefik-helm-chart/blob/6df869b8e8bcd6757e7934b554b97d925350c9fa/traefik/values.yaml#L882-L901

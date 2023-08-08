@@ -15,7 +15,10 @@ spec:
     metadata:
       labels:
         app: jaeger
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
+    {{- include "image.pullSecrets" $ | nindent 6 }}
       containers:
         - name: jaeger
           image: {{ .Values.jaeger.image }}
@@ -31,3 +34,6 @@ spec:
             - name: ui
               containerPort: {{ .Values.jaeger.ports.tcp }}
               protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
