@@ -1,4 +1,5 @@
 {{- if and (.Values.ingress.enabled) (.Values.tls.enabled) (not .Values.tls.existingSecret) }}
+---
 apiVersion: v1
 kind: Secret
 metadata:

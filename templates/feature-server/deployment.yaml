@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: {{ if .Values.featureServer.useStatefulSet }}StatefulSet{{- else }}Deployment{{- end }}
 metadata:
   name: feature-server
   namespace: {{ $.Release.Namespace | quote }}
@@ -8,10 +8,15 @@ spec:
     matchLabels:
       app: feature-server
   replicas: {{ .Values.featureServer.replicaCount }}
+  {{- if .Values.featureServer.useStatefulSet }}
+  serviceName: feature-server-headless
+  {{- end }}
   template:
     metadata:
       labels:
         app: feature-server
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
     {{- include "image.pullSecrets" $ | nindent 6 }}
       restartPolicy: Always
@@ -22,7 +27,7 @@ spec:
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
-              app: feature-server    
+              app: feature-server
       initContainers:
         - image: kanisterio/mysql-sidecar:0.40.0
           name: db-create-wait
@@ -52,8 +57,14 @@ spec:
           env: 
             - name: CLOUD 
               value: {{ .Values.cloud | quote }}
-            - name: IMDSv2 
+            {{- if eq .Values.cloud "aws" }}
+            - name: IMDSv2
               value: {{ .Values.aws.useIMDSv2 | quote }}
+            {{- end }}
+            {{- if and (eq .Values.cloud "azure") (.Values.azure.useLoadBalancerIMDS) }}
+            - name: LB_IMDS
+              value: {{ .Values.azure.useLoadBalancerIMDS | quote }}
+            {{- end }}
             - name: DRACHTIO_SECRET
               valueFrom:
                 secretKeyRef:
@@ -71,7 +82,11 @@ spec:
                   "-c",
                   "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
                 ]
-          args: ['drachtio', '--contact', 'sip:*:5060;transport=udp', '--loglevel', 'info', 'sofia-loglevel', '3']
+          {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
+          args: ['drachtio', '--contact', 'sip:*:5060;transport=udp,tcp', '--loglevel', 'info', 'sofia-loglevel', '3']
+          {{- else }}
+          args: ['drachtio', '--contact', 'sip:*:5060;transport=udp', '--mtu', '4096', '--loglevel', 'info', 'sofia-loglevel', '3']          
+          {{- end }}
         - name: freeswitch
           image: {{ .Values.freeswitch.image }}
           imagePullPolicy: {{ .Values.freeswitch.imagePullPolicy }}
@@ -113,14 +128,25 @@ spec:
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
               protocol: TCP
-          readinessProbe:
+            - name: health
+              containerPort: {{ .Values.health.port }}
+              protocol: TCP
+          livenessProbe:
             httpGet:
-              path: /health
-              port: {{ .Values.featureServer.ports.tcp }}
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh", "-c", "/opt/app/bin/k8s-pre-stop-hook.js"]
+              path: /health/liveness
+              port: {{ .Values.health.port }}
+            failureThreshold: 3
+            initialDelaySeconds: 90
+            periodSeconds: 60
+            timeoutSeconds: 10 
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: {{ .Values.health.port }}
+          # lifecycle:
+          #   preStop:
+          #     exec:
+          #       command: ["/bin/sh", "-c", "/opt/app/bin/k8s-pre-stop-hook.js"]
           volumeMounts:
             - mountPath: /tmp 
               name: temp-audio-volume
@@ -142,16 +168,36 @@ spec:
               value: "true"
             - name: JAMBONZ_CLEANUP_INTERVAL_MINS
               value: "60"
+            - name: WS_PING_INTERVAL_MS
+              value: {{ .Values.featureServer.wsPingInterval | quote }}
             - name: JAMBONES_API_BASE_URL
               value: {{ .Values.ingress.api.host }}/v1
+            - name: JAMBONZ_RECORD_WS_BASE_URL
+              value: {{ printf "\"ws://%s:%s/v1\"" .Values.api.serviceName (toString (int .Values.api.port)) }}
+            - name: JAMBONZ_RECORD_WS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-call-recording-credentials
+                  key: username
+            - name: JAMBONZ_RECORD_WS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-call-recording-credentials
+                  key: password
             - name: JAMBONES_FREESWITCH
               value: {{ .Values.featureServer.freeswitchConnection | quote }}
             - name: ENABLE_METRICS
-              value: {{ .Values.stats.enabled  | quote }}
+              value: {{ if .Values.stats.enabled }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: STATS_TAGS
+              value: "pod:$(K8S_POD_NAME)"
             - name: STATS_PROTOCOL
               value: {{ .Values.stats.protocol }}
             - name: STATS_TELEGRAF
-              value: {{ .Values.stats.telegraf | quote }}
+              value: {{ if .Values.stats.telegraf }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: STATS_HOST
               value: {{ .Values.telegraf.serviceName }}
             - name: STATS_PORT
@@ -167,6 +213,8 @@ spec:
                 secretKeyRef:
                   name: voicegateway-drachtio-secret
                   key: secret
+            - name: LOG_LEVEL
+              value: {{ .Values.featureServer.logLevel }}
             - name: JAMBONES_LOGLEVEL
               value: {{ .Values.featureServer.logLevel }}
             - name: JAMBONES_MYSQL_HOST
@@ -195,12 +243,97 @@ spec:
               value: /etc/voicemail-phraselist.json
             - name: JAMBONES_OTEL_ENABLED
               value: "1" 
+            - name: VG_TTS_TRIM_SILENCE
+              value: {{ .Values.featureServer.trimTts | quote }}
             - name: OTEL_EXPORTER_JAEGER_AGENT_HOST
               value: jaeger
             - name: OTEL_TRACES_SAMPLER
               value: parentbased_traceidratio
             - name: OTEL_TRACES_SAMPLER_ARG
               value: {{ default "1.0" .Values.featureServer.otelSampleRate | quote }}
+            - name: TRACING_ENABLED
+              value: {{ .Values.tracing.enabled | quote }}
+            - name: TRACING_BASE_URL_WITH_PROTOCOL
+              value: {{ .Values.tracing.baseUrl | quote }}      
+            - name: TRACING_ERRORS_ENABLED
+              value: {{ .Values.tracing.errorsEnabled | quote }}
+            - name: TRACING_EVENTS_SAMPLE_RATE
+              value: {{ .Values.tracing.eventsSampleRate | quote }}
+            - name: ENVIRONMENT
+              value: {{ .Values.tracing.environment | quote }}            
+            - name: COGNIGY_AI_VERSION
+              value: {{ .Chart.Version | trunc 6 | quote }}
+            - name: COGNIGY_VG_COLLECT_ANALYTICS_DATA
+              value: {{ .Values.cognigyInsights.enabled | quote }}
+            - name: COGNIGY_SEND_INTERACTION_PANEL_ANALYTICS
+              value: {{ .Values.cognigyInsights.collectInteractionPanelCalls | quote }}
+            {{- if and (.Values.cognigyInsights.enabled) (.Values.cognigyInsights.apiUrl) }}
+            - name: COGNIGY_INSIGHTS_SERVICE_COLLECTOR_URL_WITH_PROTOCOL
+              value: {{ .Values.cognigyInsights.apiUrl | quote }}
+            {{- end }}
+            {{- if and (.Values.cognigyInsights.enabled) (.Values.cognigyInsights.apiUrlApp) }}
+            - name: COGNIGY_INSIGHTS_SERVICE_COLLECTOR_URL_WITH_PROTOCOL_APP
+              value: {{ .Values.cognigyInsights.apiUrlApp | quote }}
+            {{- end }}
+            {{- if and (.Values.cognigyInsights.enabled) (.Values.cognigyInsights.apiUrlDev) }}
+            - name: COGNIGY_INSIGHTS_SERVICE_COLLECTOR_URL_WITH_PROTOCOL_DEV
+              value: {{ .Values.cognigyInsights.apiUrlDev | quote }}
+            {{- end }}
+            {{- if and (.Values.cognigyInsights.enabled) (.Values.cognigyInsights.apiUrlStaging) }}
+            - name: COGNIGY_INSIGHTS_SERVICE_COLLECTOR_URL_WITH_PROTOCOL_STAGING
+              value: {{ .Values.cognigyInsights.apiUrlStaging | quote }}
+            {{- end }}
+            {{- if and (.Values.cognigyInsights.enabled) (.Values.cognigyInsights.apiUrlTrial) }}
+            - name: COGNIGY_INSIGHTS_SERVICE_COLLECTOR_URL_WITH_PROTOCOL_TRIAL
+              value: {{ .Values.cognigyInsights.apiUrlTrial | quote }}
+            {{- end }}
+            {{- if and (.Values.cognigyInsights.apiKey.secret) (.Values.cognigyInsights.apiKey.secretKey) }}
+            - name: COGNIGY_INSIGHTS_SERVICE_COLLECTOR_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.cognigyInsights.apiKey.secret | quote }}
+                  key: {{ .Values.cognigyInsights.apiKey.secretKey | quote }}
+            {{- end }}
+            {{- if and (.Values.cognigyInsights.apiKeyApp.secret) (.Values.cognigyInsights.apiKeyApp.secretKey) }}
+            - name: COGNIGY_INSIGHTS_SERVICE_COLLECTOR_API_KEY_APP
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.cognigyInsights.apiKeyApp.secret | quote }}
+                  key: {{ .Values.cognigyInsights.apiKeyApp.secretKey | quote }}
+            {{- end }}
+            {{- if and (.Values.cognigyInsights.apiKeyDev.secret) (.Values.cognigyInsights.apiKeyDev.secretKey) }}
+            - name: COGNIGY_INSIGHTS_SERVICE_COLLECTOR_API_KEY_DEV
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.cognigyInsights.apiKeyDev.secret | quote }}
+                  key: {{ .Values.cognigyInsights.apiKeyDev.secretKey | quote }}
+            {{- end }}
+            {{- if and (.Values.cognigyInsights.apiKeyStaging.secret) (.Values.cognigyInsights.apiKeyStaging.secretKey) }}
+            - name: COGNIGY_INSIGHTS_SERVICE_COLLECTOR_API_KEY_STAGING
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.cognigyInsights.apiKeyStaging.secret | quote }}
+                  key: {{ .Values.cognigyInsights.apiKeyStaging.secretKey | quote }}
+            {{- end }}
+            {{- if and (.Values.cognigyInsights.apiKeyTrial.secret) (.Values.cognigyInsights.apiKeyTrial.secretKey) }}
+            - name: COGNIGY_INSIGHTS_SERVICE_COLLECTOR_API_KEY_TRIAL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.cognigyInsights.apiKeyTrial.secret | quote }}
+                  key: {{ .Values.cognigyInsights.apiKeyTrial.secretKey | quote }}
+            {{- end }}
+            {{- if and (.Values.cognigyJwtSecrets.secret) (.Values.cognigyJwtSecrets.secretKey) }}
+            - name: COGNIGY_AI_JWT_SECRETS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.cognigyJwtSecrets.secret | quote }}
+                  key: {{ .Values.cognigyJwtSecrets.secretKey | quote }}
+            {{- end }}
+            - name: SIGTERM_FORCE_CLOSE_TIMEOUT
+              value: {{ .Values.featureServer.sigtermForceCloseTimeoutMs | quote }}            
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
       volumes:
         - name: temp-audio-volume
           emptyDir: {}
