@@ -12,6 +12,8 @@ spec:
     metadata:
       labels:
         app: webapp
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
     {{- include "image.pullSecrets" $ | nindent 6 }}
       containers:
@@ -26,7 +28,48 @@ spec:
           env:
             - name: NODE_ENV
               value: {{ .Values.global.nodeEnv | quote }}
-            - name: REACT_APP_API_BASE_URL
+            - name: API_BASE_URL
               value: {{ .Values.api.protocol }}://{{ .Values.ingress.api.host }}/v1
-            - name: REACT_APP_ENABLE_ACCOUNT_LIMITS_ALL
-              value: {{ .Values.webapp.enableAccountLimits | quote }}
+            - name: TRACING_ENABLED
+              value: {{ .Values.tracing.enabled | quote }}
+            - name: TRACING_BASE_URL_WITH_PROTOCOL
+              value: {{ .Values.tracing.baseUrl | quote }}      
+            - name: TRACING_ERRORS_ENABLED
+              value: {{ .Values.tracing.errorsEnabled | quote }}
+            - name: TRACING_EVENTS_SAMPLE_RATE
+              value: {{ .Values.tracing.eventsSampleRate | quote }}
+            - name: ENVIRONMENT
+              value: {{ .Values.tracing.environment | quote }}
+            - name: COGNIGY_AI_VERSION
+              value: {{ .Chart.Version | trunc 6 | quote }}
+            - name: COGNIGY_VG_VERSION
+              value: {{ .Chart.Version | trunc 6 | quote }}
+            - name: COGNIGY_URL
+              value: {{ .Values.webapp.cognigyUrl | quote }}
+            - name: ENABLE_COGNIGY_LOGIN
+              value: {{ .Values.webapp.enableCognigyLogin | quote }}
+            - name: DISABLE_SIP_CLIENT
+              value: {{ .Values.webapp.disableSipClient | quote }}
+            - name: DISABLE_SP_LIMITS
+              value: {{ .Values.webapp.disableSpLimits | quote }}
+            - name: ENABLE_MSTEAMS_ROUTING
+              value: {{ .Values.webapp.enableMsTeamsRouting | quote }}
+            - name: DISABLE_CUSTOM_SPEECH
+              value: {{ .Values.webapp.disableCustomSpeech | quote }}
+            - name: ENABLE_ALL_SPEECH_PROVIDERS
+              value: {{ .Values.webapp.enableAllSpeechProviders | quote }}
+            - name: ENABLE_ENABLE_SMS
+              value: {{ .Values.webapp.enableSms | quote }}
+            - name: DISABLE_DEFAULT_TRUNK_ROUTING
+              value: {{ .Values.webapp.disableDefaultTrunkRouting | quote }}
+            - name: DISABLE_LCR
+              value: {{ .Values.webapp.disableLcr | quote }}
+            - name: DISABLE_JAEGER_TRACING
+              value: {{ .Values.webapp.disableJeagerTracing | quote }}
+            - name: ENABLE_FORGOT_PASSWORD
+              value: {{ .Values.webapp.enableForgotPassword | quote }}
+            - name: DISABLE_CALL_RECORDING
+              value: {{ .Values.webapp.disableCallRecording | quote }}
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
