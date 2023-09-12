@@ -13,6 +13,9 @@ spec:
     metadata:
       labels:
         app: sbc-sip
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
+        checksum/sbc-sip: {{ include (print $.Template.BasePath "/sbc-sip/config-map.yaml") $ | sha256sum }}
     spec:
     {{- include "image.pullSecrets" $ | nindent 6 }}
       nodeSelector:
@@ -29,7 +32,7 @@ spec:
           name: ec2-eip-allocator
           env:
             - name: AWS_EIP_NODE_GROUP_ROLE
-              value: {{ .Values.sbc.ec2EipAllocator.eipGroupRole }}
+              value: {{ .Values.sbc.ec2EipAllocator.sipEipGroupRole }}
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
@@ -72,12 +75,13 @@ spec:
               protocol: UDP
             - name: sip-tcp
               containerPort: {{ .Values.sbc.sip.ports.tcp }}
-              protocol: TCP
-            - name: metrics
-              containerPort: {{ .Values.metrics.port }}
-              protocol: TCP
+              protocol: TCP            
           args: 
             - drachtio
+            {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
+            - --contact
+            - "sip:*:5062;transport=tcp"
+            {{- end }}
             - --loglevel
             - {{ .Values.sbc.sip.logLevel }}
             - --cloud-deployment
@@ -88,21 +92,34 @@ spec:
             - --homer-id
             - {{ .Values.drachtio.homerId | quote }}
           {{- if .Values.apiBan.enabled }}
+          {{- if eq .Values.cognigyEnv.FEATURE_REDIS_SENTINEL_MODE_ENABLED "true" }}
+            - --blacklist-redis-sentinels
+            - {{ printf "\"%s:%s\"" .Values.cognigyEnv.REDIS_SENTINEL_HOST .Values.cognigyEnv.REDIS_SENTINEL_PORT }}
+            - --blacklist-redis-master
+            - {{ .Values.cognigyEnv.REDIS_SENTINEL_MASTER_NAME | quote }}
+          {{- else }}
             - --blacklist-redis-address
             - {{ .Values.redis.host | quote }}
             - --blacklist-redis-port
             - {{ .Values.redis.port | quote }}
+          {{- end }}
             - --blacklist-refresh-secs
             - {{ .Values.apiBan.refreshInterval | quote }}
             - --blacklist-redis-key
             - {{ .Values.apiBan.redisSetKey | quote }}
           {{- end }}
           env:
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv | quote }}
             - name: CLOUD 
               value: {{ .Values.cloud | quote }}
             {{- if eq .Values.cloud "aws" }}
-            - name: IMDSv2 
+            - name: IMDSv2
               value: {{ .Values.aws.useIMDSv2 | quote }}
+            {{- end }}
+            {{- if and (eq .Values.cloud "azure") (.Values.azure.useLoadBalancerIMDS) }}
+            - name: LB_IMDS
+              value: {{ .Values.azure.useLoadBalancerIMDS | quote }}
             {{- end }}
             - name: DRACHTIO_SECRET
               valueFrom:
@@ -135,13 +152,28 @@ spec:
           resources: {{- toYaml .Values.sbcSipSidecar.resources | nindent 12 }}
           ports:
             - name: metrics
-              containerPort: {{ .Values.metrics.sidecarPort }}
+              containerPort: {{ .Values.metrics.port }}
               protocol: TCP
+            - name: health
+              containerPort: {{ .Values.health.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: {{ .Values.health.port }}
+            failureThreshold: 3
+            initialDelaySeconds: 90
+            periodSeconds: 60
+            timeoutSeconds: 10 
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: {{ .Values.health.port }}
           env:
             - name: K8S 
               value: {{ .Values.global.k8s | quote }}
             - name: NODE_ENV
-              value: {{ .Values.global.nodeEnv }}
+              value: {{ .Values.global.nodeEnv | quote }}
             - name: DRACHTIO_HOST
               value: 127.0.0.1
             - name: DRACHTIO_PORT 
@@ -152,11 +184,22 @@ spec:
                   name: voicegateway-drachtio-secret
                   key: secret
             - name: ENABLE_METRICS
-              value: {{ .Values.stats.enabled  | quote }}
+              value: {{ if .Values.stats.enabled }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-jwt
+                  key: jwt
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: STATS_TAGS
+              value: "pod:$(K8S_POD_NAME)"
             - name: STATS_PROTOCOL
               value: {{ .Values.stats.protocol }}
             - name: STATS_TELEGRAF
-              value: {{ .Values.stats.telegraf | quote }}
+              value: {{ if .Values.stats.telegraf }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: STATS_HOST
               value: {{ .Values.telegraf.serviceName }}
             - name: STATS_PORT
@@ -184,6 +227,21 @@ spec:
               value: "1"
             - name: JAMBONES_TIME_SERIES_HOST
               value: {{ .Values.influxdb.host }}
+            - name: TRACING_ENABLED
+              value: {{ .Values.tracing.enabled | quote }}
+            - name: TRACING_BASE_URL_WITH_PROTOCOL
+              value: {{ .Values.tracing.baseUrl | quote }}      
+            - name: TRACING_ERRORS_ENABLED
+              value: {{ .Values.tracing.errorsEnabled | quote }}
+            - name: TRACING_EVENTS_SAMPLE_RATE
+              value: {{ .Values.tracing.eventsSampleRate | quote }}
+            - name: ENVIRONMENT
+              value: {{ .Values.tracing.environment | quote }}
+            - name: COGNIGY_AI_VERSION
+              value: {{ .Chart.Version | trunc 6 | quote }}
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
       volumes:
       - name: drachtio-certs
         secret:
