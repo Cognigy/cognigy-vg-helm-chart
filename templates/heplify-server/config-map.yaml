@@ -35,10 +35,10 @@ data:
     DBPartLog             = "2h"
     DBPartSip             = "1h"
     DBPartQos             = "6h"
-    DBDropDays            = 14
-    DBDropDaysCall        = 0
-    DBDropDaysRegister    = 0
-    DBDropDaysDefault     = 0
+    DBDropDays            = {{ .Values.heplifyServer.dbDropDays }}
+    DBDropDaysCall        = {{ .Values.heplifyServer.dbDropDaysCall }}
+    DBDropDaysRegister    = {{ .Values.heplifyServer.dbDropDaysRegister }}
+    DBDropDaysDefault     = {{ .Values.heplifyServer.dbDropDaysDefault }}
     DBDropOnStart         = false
     DBUsageProtection     = true
     DBUsageScheme         = "percentage"

@@ -16,7 +16,10 @@ spec:
       name: telegraf
       labels:
         app: telegraf
+      annotations:
+        checksum/telegraf: {{ include (print $.Template.BasePath "/telegraf/config-map.yaml") $ | sha256sum }}
     spec:
+    {{- include "image.pullSecrets" $ | nindent 6 }}
       containers:
         - name: telegraf
           image: {{ .Values.telegraf.image }}

@@ -13,18 +13,19 @@ metadata:
     {{- end }}
 spec:
   backoffLimit: 10
+  ttlSecondsAfterFinished: 180
   template:
     metadata:
       name: db-create
       annotations:
         sidecar.istio.io/inject: "false"
     spec:
+    {{- include "image.pullSecrets" $ | nindent 6 }}
       restartPolicy: OnFailure
       containers:
         - name: db-init
-          # build an image to our repo
-          image: jambonz/db-create:0.7.7
-          imagePullPolicy: Always
+          image: {{ .Values.dbCreate.image }}
+          imagePullPolicy: {{ .Values.dbCreate.imagePullPolicy }}
           env:
             - name: JAMBONES_MYSQL_HOST
               value: {{ .Values.mysql.host }}
@@ -43,3 +44,8 @@ spec:
               value: {{ .Values.redis.port | quote }}
             - name: JAMBONES_TIME_SERIES_HOST
               value: {{ .Values.influxdb.host }}
+        {{- if .Values.dbCreate.logCollectorEnabled }}
+        - name: log-collector
+          image: fluentd
+          imagePullPolicy: {{ .Values.dbCreate.imagePullPolicy }}
+        {{- end }}

@@ -1,3 +1,4 @@
+{{- if not (.Values.tracing.callTracingEnabled) }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -18,3 +19,4 @@ spec:
       port: {{ .Values.jaeger.ports.tcp }}
       targetPort: {{ .Values.jaeger.ports.tcp }}
       protocol: TCP
+{{- end }}
