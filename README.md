@@ -7,9 +7,9 @@
 This chart installs a Cognigy VoiceGateway deployment on a [Kubernetes](https://kubernetes.io/) cluster using the [Helm](https://helm.sh/) package manager.
 
 ## Prerequisites
-- Kubernetes v1.19-1.23 running on AWS EKS, GCP GKE or Azure AKS 
+- Kubernetes v1.23-1.26 running on AWS EKS, GCP GKE or Azure AKS 
 - [kubectl utility](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/) installed on Linux or MacOS client and connected to the cluster. **Windows clients are not supported by this installation guide.**
-- [Helm](https://helm.sh/docs/intro/install/) v3.8.0+ installed locally 
+- [Helm](https://helm.sh/docs/intro/install/) v3.9.0+ installed locally 
 
 ## Configuration
 
@@ -31,9 +31,9 @@ You need to set at least following parameters in `YOUR_VALUES_FILE.yaml`:
 1. Cognigy.AI Image repository credentials: set `imageCredentials.username` and `imageCredentials.password` accordingly.
 2. Cloud Provider: set `cloud` variable accordingly.
 
-### Cognigy.AI DNS and TLS Settings
+### Cognigy.VG DNS and TLS Settings
 
-Cognigy VoiceGateway exposes two web services for which you will need to assign DNS records in a public domain operated by your organization. These DNS records must be added into your DNS system during the installation process. Replace `yourdomain.com` according to the domain (subdomain) of your organization under `ingress` section as below:
+Cognigy VoiceGateway exposes three web services for which you will need to assign DNS records in a public domain operated by your organization. These DNS records must be added into your DNS system during the installation process. Replace `yourdomain.com` according to the domain (subdomain) of your organization under `ingress` section as below:
 
 ```
 ingress:
@@ -128,7 +128,7 @@ feature-server:
       memory: 3Gi
 ```
 
-### Cognigy.AI Secrets Backup
+### Cognigy.VG Secrets Backup
 
 During the installation process `dbinit-generate.sh` initialization script generates connection strings for Cognigy VoiceGateway microservices to Redis and stores these connection strings in form of [Kubernetes secrets](https://kubernetes.io/docs/concepts/configuration/secret/) in `voicegateway` installation namespace. In case you loose the cluster where Cognigy VoiceGateway is running or accidentally delete these secrets, there will be no possibility to connect to the existing databases anymore.
 

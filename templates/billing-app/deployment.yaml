@@ -14,6 +14,8 @@ spec:
     metadata:
       labels:
         app: billing-app
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
     {{- include "image.pullSecrets" $ | nindent 6 }}
       restartPolicy: Always
@@ -29,9 +31,24 @@ spec:
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
               protocol: TCP
+            - name: health
+              containerPort: {{ .Values.health.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: {{ .Values.health.port }}
+            failureThreshold: 3
+            initialDelaySeconds: 90
+            periodSeconds: 60
+            timeoutSeconds: 10 
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: {{ .Values.health.port }}
           env:
             - name: NODE_ENV
-              value: {{ .Values.global.nodeEnv }}
+              value: {{ .Values.global.nodeEnv | quote }}
             - name: PORT
               value: {{ .Values.billingApp.port | quote }}
             - name: VOICE_BILLING_API_SECRET
@@ -56,4 +73,32 @@ spec:
                 secretKeyRef:
                   name: voicegateway-mysql-password
                   key: mysql-password
-                  
+            - name: TRACING_ENABLED
+              value: {{ .Values.tracing.enabled | quote }}
+            - name: TRACING_BASE_URL_WITH_PROTOCOL
+              value: {{ .Values.tracing.baseUrl | quote }}      
+            - name: TRACING_ERRORS_ENABLED
+              value: {{ .Values.tracing.errorsEnabled | quote }}
+            - name: TRACING_SAMPLE_RATE
+              value: {{ .Values.tracing.sampleRate | quote }}
+            - name: TRACING_EVENTS_SAMPLE_RATE
+              value: {{ .Values.tracing.eventsSampleRate | quote }}
+            - name: ENVIRONMENT
+              value: {{ .Values.tracing.environment | quote }}
+            - name: COGNIGY_AI_VERSION
+              value: {{ .Chart.Version | trunc 6 | quote }}
+            - name: VG_ENDPOINT
+              value: {{ .Values.api.protocol }}://{{ .Values.ingress.api.host }}/v1
+            - name: VG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vg-api-credentials
+                  key: password
+            - name: VG_USER
+              valueFrom:
+                secretKeyRef:
+                  name: vg-api-credentials
+                  key: user
+          envFrom:
+            - configMapRef:
+                name: cognigy-env

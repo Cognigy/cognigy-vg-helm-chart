@@ -1,3 +1,4 @@
+{{- if not (.Values.tracing.callTracingEnabled) }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -16,6 +17,7 @@ spec:
       labels:
         app: jaeger
     spec:
+    {{- include "image.pullSecrets" $ | nindent 6 }}
       containers:
         - name: jaeger
           image: {{ .Values.jaeger.image }}
@@ -31,3 +33,4 @@ spec:
             - name: ui
               containerPort: {{ .Values.jaeger.ports.tcp }}
               protocol: TCP
+{{- end }}
