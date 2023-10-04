@@ -15,7 +15,10 @@ spec:
     metadata:
       labels:
         app: heplify-server
+      annotations:
+        checksum/heplify-server: {{ include (print $.Template.BasePath "/heplify-server/config-map.yaml") $ | sha256sum }}
     spec:
+    {{- include "image.pullSecrets" $ | nindent 6 }}
       containers:
         - name: heplify-server
           image: {{ .Values.heplifyServer.image }}
@@ -32,7 +35,7 @@ spec:
             - name: HEPLIFYSERVER_DBUSER
               value: {{ .Values.postgresql.auth.postgresUsername | quote }}
             - name: HEPLIFYSERVER_DBPASS
-              value: {{ .Values.postgresql.auth.postgresPassword | quote }}
+              value: {{ .Values.postgresql.auth.postgresPassword | quote }}          
           args: ['./heplify-server', '-config', '/etc/heplify-server.toml']
           volumeMounts:
             - name: heplify-server-config
