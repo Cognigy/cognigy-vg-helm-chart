@@ -16,6 +16,8 @@ spec:
       name: grafana
       labels:
         app: grafana
+      annotations:
+        checksum/grafana: {{ include (print $.Template.BasePath "/grafana/config-map.yaml") $ | sha256sum }}
     spec:
       securityContext:
           runAsUser: 472

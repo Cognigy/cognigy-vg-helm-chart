@@ -12,6 +12,8 @@ spec:
     metadata:
       labels:
         app: api-server
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
     {{- include "image.pullSecrets" $ | nindent 6 }}
       restartPolicy: Always
@@ -44,19 +46,44 @@ spec:
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
               protocol: TCP
+            - name: health
+              containerPort: {{ .Values.health.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: {{ .Values.health.port }}
+            failureThreshold: 3
+            initialDelaySeconds: 90
+            periodSeconds: 60
+            timeoutSeconds: 10 
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: {{ .Values.health.port }}
           env:
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv | quote }}
             - name: HTTP_PORT
               value: {{ .Values.api.port | quote }}
-            - name: K8S 
+            - name: K8S
               value: {{ .Values.global.k8s | quote }}
             - name: K8S_FEATURE_SERVER_SERVICE_NAME 
-              value: {{ .Values.featureServer.serviceName }}
-            - name: HOMER_BASE_URL 
+              {{- if .Values.featureServer.useStatefulSet }}
+              value: {{ .Values.featureServer.headlessServiceName | quote }}
+              {{- else}}
+              value: {{ .Values.featureServer.serviceName | quote }}
+              {{- end }}
+            - name: HOMER_BASE_URL
               value: {{ .Values.homer.urlPrefixServiceConnection }}{{ .Values.homer.serviceName }}
             - name: HOMER_USERNAME
               value: {{ .Values.homer.auth.username | quote }}
             - name: HOMER_PASSWORD
               value: {{ .Values.homer.auth.password | quote }}
+            - name: JAEGER_BASE_URL
+              value: {{ .Values.jaeger.urlPrefixServiceConnection }}{{ .Values.jaeger.serviceName }}:{{ .Values.jaeger.ports.tcp }}
+            - name: JAMBONES_AUTH_USE_JWT
+              value: {{ .Values.api.jwtAuth | quote }}
             - name: JAMBONES_LOGLEVEL
               value: {{ .Values.api.logLevel }}
             - name: JAMBONES_MYSQL_HOST
@@ -83,3 +110,62 @@ spec:
                 secretKeyRef:
                   name: voicegateway-jwt
                   key: jwt
+            - name: TRACING_ENABLED
+              value: {{ .Values.tracing.enabled | quote }}
+            - name: TRACING_BASE_URL_WITH_PROTOCOL
+              value: {{ .Values.tracing.baseUrl | quote }}      
+            - name: TRACING_ERRORS_ENABLED
+              value: {{ .Values.tracing.errorsEnabled | quote }}
+            - name: TRACING_SAMPLE_RATE
+              value: {{ .Values.tracing.sampleRate | quote }}
+            - name: TRACING_EVENTS_SAMPLE_RATE
+              value: {{ .Values.tracing.eventsSampleRate | quote }}
+            - name: ENVIRONMENT
+              value: {{ .Values.tracing.environment | quote }}
+            - name: COGNIGY_AI_VERSION
+              value: {{ .Chart.Version | trunc 6 | quote }}
+            - name: ENABLE_DEBOUNCE_MIDDLEWARE
+              value: {{ .Values.api.enableDebounceMiddleware | quote }}
+            - name: DEBOUNCE_TIME_IN_SECONDS
+              value: {{ .Values.api.debounceTimeInSeconds | quote }}
+            - name: JAMBONZ_RECORD_WS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-call-recording-credentials
+                  key: username
+            - name: JAMBONZ_RECORD_WS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-call-recording-credentials
+                  key: password
+            {{- if .Values.cognigyLogin.enabled }}
+            - name: VG_API_BASE_URL
+              value: {{ printf "%s://%s" .Values.api.protocol .Values.ingress.api.host | quote }}
+            - name: VG_WEBAPP_BASE_URL
+              value: {{ printf "%s://%s" .Values.api.protocol .Values.ingress.webapp.host | quote }}
+            - name: COGNIGY_API_BASE_URL
+              value: {{ .Values.cognigyLogin.baseUrl | quote }}
+            - name: COGNIGY_OAUTH_CLIENT_ID
+              value: {{ .Values.cognigyLogin.clientId | quote }}
+            - name: COGNIGY_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.cognigyLogin.secret | quote }}
+                  key: {{ .Values.cognigyLogin.secretKey | quote }}
+            {{- end }}
+            - name: VG_SENTRY_TRACING_ENABLED
+              value: {{ .Values.tracing.callTracingEnabled | quote }}
+            {{- if .Values.tracing.callTracingEnabled }}
+            - name: VG_SENTRY_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tracing.secret | quote }}
+                  key: {{ .Values.tracing.secretKey | quote }}
+            - name: VG_SENTRY_API_PROJECT
+              value: {{ .Values.tracing.apiProject | quote }}
+            - name: VG_SENTRY_API_BASE_URL
+              value: {{ .Values.tracing.apiBaseUrl | quote }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: cognigy-env

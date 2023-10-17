@@ -14,7 +14,10 @@ spec:
     metadata:
       labels:
         app: homer
+      annotations:
+        checksum/homer: {{ include (print $.Template.BasePath "/homer/config-map.yaml") $ | sha256sum }}
     spec:
+    {{- include "image.pullSecrets" $ | nindent 6 }}
       containers:
         - name: homer
           image: {{ .Values.homer.image }}

@@ -17,18 +17,19 @@ spec:
       labels:
         app: influxdb
     spec:
+    {{- include "image.pullSecrets" $ | nindent 6 }}
       restartPolicy: Always
       containers:
         - name: influxdb
           image: {{ .Values.influxdb.image }}
           imagePullPolicy: {{ .Values.influxdb.imagePullPolicy }}
-          resources: {}
+          resources: {{- toYaml .Values.influxdb.resources | nindent 12 }}
           ports:
             - name: influxdb
               containerPort: {{ .Values.influxdb.port }}
               protocol: TCP
           env:
-            - name: {{ .Values.influxdb.logLevel | quote }}
+            - name: INFLUXDB_LOGGING_LEVEL
               value: {{ .Values.influxdb.logLevel }}
           livenessProbe:
             httpGet:

@@ -101,7 +101,8 @@ stages:
               cp -r ./ ../cognigy-vg-helm-chart
 
               cd ../cognigy-vg-helm-chart
-              git checkout main
+              git fetch origin
+              git checkout -b main --track origin/main
               git add -A
               git commit -m "Adding files for Helm Chart $helmChartVersion"
               git tag v$helmChartVersion

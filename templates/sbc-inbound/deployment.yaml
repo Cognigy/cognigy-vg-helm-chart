@@ -14,9 +14,13 @@ spec:
     metadata:
       labels:
         app: sbc-inbound
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
     {{- include "image.pullSecrets" $ | nindent 6 }}
-      terminationGracePeriodSeconds: 900
+      {{- if .Values.sbcInbound.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.sbcInbound.terminationGracePeriodSeconds }}
+      {{- end }}
       containers:
         - name: sbc-inbound
           image: {{ .Values.sbcInbound.image }}
@@ -27,37 +31,41 @@ spec:
               containerPort: {{ .Values.sbcInbound.ports.dtmf }}
               protocol: UDP
             - name: health
-              containerPort: 3000
-              protocol: UDP
+              containerPort: {{ .Values.health.port }}
+              protocol: TCP
             - name: drachtio
               containerPort: {{ .Values.sbcInbound.ports.tcp }}
               protocol: TCP
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
               protocol: TCP
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh", "-c", "/opt/app/bin/k8s-pre-stop-hook.js"]
           livenessProbe:
             httpGet:
-              path: /system-health
-              port: 3000
-            initialDelaySeconds: 5
-            periodSeconds: 30
+              path: /health/liveness
+              port: {{ .Values.health.port }}
+            failureThreshold: 3
+            initialDelaySeconds: 90
+            periodSeconds: 60
+            timeoutSeconds: 10 
           startupProbe:
             httpGet:
-              path: /system-health
-              port: 3000
-            failureThreshold: 40
-            periodSeconds: 10
+              path: /health/startup
+              port: {{ .Values.health.port }}
           env:
             - name: NODE_ENV
-              value: {{ .Values.global.nodeEnv }}
+              value: {{ .Values.global.nodeEnv | quote }}
             - name: K8S 
               value: {{ .Values.global.k8s | quote }}
+          {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
+            - name: K8S_FEATURE_SERVER_TRANSPORT
+              value: "tcp"
+          {{- end }}
             - name: K8S_FEATURE_SERVER_SERVICE_NAME 
+              {{- if .Values.featureServer.useStatefulSet }}
+              value: {{ .Values.featureServer.headlessServiceName | quote }}
+              {{- else}}
               value: {{ .Values.featureServer.serviceName | quote }}
+              {{- end }}
             - name: K8S_RTPENGINE_SERVICE_NAME 
               value: {{ .Values.sbc.rtp.serviceName }}:{{ .Values.sbc.rtp.port }}
             - name: DTMF_LISTEN_PORT
@@ -71,11 +79,22 @@ spec:
             - name: JAMBONES_TRACK_SP_CALLS
               value: {{ .Values.global.track.serviceProviderCalls | quote }}
             - name: ENABLE_METRICS
-              value: {{ .Values.stats.enabled  | quote }}
+              value: {{ if .Values.stats.enabled }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-jwt
+                  key: jwt
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: STATS_TAGS
+              value: "pod:$(K8S_POD_NAME)"
             - name: STATS_PROTOCOL
               value: {{ .Values.stats.protocol }}
             - name: STATS_TELEGRAF
-              value: {{ .Values.stats.telegraf | quote }}
+              value: {{ if .Values.stats.telegraf }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: STATS_HOST
               value: {{ .Values.telegraf.serviceName }}
             - name: STATS_PORT
@@ -106,3 +125,20 @@ spec:
               value: {{ .Values.redis.port | quote }}
             - name: JAMBONES_TIME_SERIES_HOST
               value: {{ .Values.influxdb.host }}
+            - name: TRACING_ENABLED
+              value: {{ .Values.tracing.enabled | quote }}
+            - name: TRACING_BASE_URL_WITH_PROTOCOL
+              value: {{ .Values.tracing.baseUrl | quote }}      
+            - name: TRACING_ERRORS_ENABLED
+              value: {{ .Values.tracing.errorsEnabled | quote }}
+            - name: TRACING_SAMPLE_RATE
+              value: {{ .Values.tracing.sampleRate | quote }}
+            - name: TRACING_EVENTS_SAMPLE_RATE
+              value: {{ .Values.tracing.eventsSampleRate | quote }}
+            - name: ENVIRONMENT
+              value: {{ .Values.tracing.environment | quote }}
+            - name: COGNIGY_AI_VERSION
+              value: {{ .Chart.Version | trunc 6 | quote }}
+          envFrom:
+            - configMapRef:
+                name: cognigy-env

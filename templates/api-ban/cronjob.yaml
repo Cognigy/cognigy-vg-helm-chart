@@ -7,7 +7,13 @@ spec:
   schedule: {{ .Values.apiBan.cronjobSchedule }}
   jobTemplate:
     spec:
+      backoffLimit: 0
       template:
+        metadata:
+          labels:
+            app: update-api-ban-list
+          annotations:
+            checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
         spec:
           containers:
             - name: api-ban
@@ -27,6 +33,9 @@ spec:
                   value: {{ .Values.redis.host }}
                 - name: REDIS_PORT
                   value: {{ .Values.redis.port | quote }}
+              envFrom:
+                - configMapRef:
+                    name: cognigy-env
           restartPolicy: Never
           imagePullSecrets:
             - name: cognigy-registry-token
