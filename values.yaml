@@ -865,7 +865,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:release-1939200d882ef66c22e641c98aa6137ee17aa0f6-1696607464
+  image: cognigy.azurecr.io/vg-webapp:release-d4ea1b374b5ea43c5d46b3b2a8808f75cd46806e-1698059667
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   port: 3001
