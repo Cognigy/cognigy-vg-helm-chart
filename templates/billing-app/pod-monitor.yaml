@@ -1,4 +1,4 @@
-{{- if (.Values.podMonitors.enabled) }}
+{{- if and (.Values.billingApp.enabled) (.Values.podMonitors.enabled) }}
 {{- with .Values.podMonitors }}
 ---
 apiVersion: monitoring.coreos.com/v1

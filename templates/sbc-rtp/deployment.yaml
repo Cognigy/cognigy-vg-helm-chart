@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: DaemonSet
+kind: {{ if .Values.sbc.rtp.useStatefulSet }}StatefulSet{{- else }}DaemonSet{{- end }}
 metadata:
   name: sbc-rtp
   namespace: {{ $.Release.Namespace | quote }}
@@ -11,6 +11,7 @@ spec:
   selector:
     matchLabels:
       app: sbc-rtp
+  replicas: {{ .Values.sbc.rtp.replicaCount }}
   template:
     metadata:
       labels:

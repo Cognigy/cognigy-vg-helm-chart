@@ -128,6 +128,12 @@ spec:
               value: {{ .Values.api.enableDebounceMiddleware | quote }}
             - name: DEBOUNCE_TIME_IN_SECONDS
               value: {{ .Values.api.debounceTimeInSeconds | quote }}
+            - name: DEBOUNCE_QUANTITY
+              value: {{ .Values.api.debounceQuantity | quote }}
+            - name: RATE_LIMIT_WINDOWS_MINS
+              value: {{ .Values.api.rateLimitMinutes | quote }}
+            - name: RATE_LIMIT_MAX_PER_WINDOW
+              value: {{ .Values.api.rateLimit | quote }}              
             - name: JAMBONZ_RECORD_WS_USERNAME
               valueFrom:
                 secretKeyRef:

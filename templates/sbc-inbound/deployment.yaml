@@ -67,7 +67,11 @@ spec:
               value: {{ .Values.featureServer.serviceName | quote }}
               {{- end }}
             - name: K8S_RTPENGINE_SERVICE_NAME 
-              value: {{ .Values.sbc.rtp.serviceName }}:{{ .Values.sbc.rtp.port }}
+              {{- if .Values.sbc.rtp.useStatefulSet }}
+              value: {{ printf "%s:%.0f" .Values.sbc.rtp.headlessServiceName .Values.sbc.rtp.port }}
+              {{- else }}
+              value: {{ printf "%s:%.0f" .Values.sbc.rtp.serviceName .Values.sbc.rtp.port }}
+              {{- end }}
             - name: DTMF_LISTEN_PORT
               value: {{ .Values.sbcInbound.ports.dtmf | quote }}
             - name: JAMBONES_LOGLEVEL

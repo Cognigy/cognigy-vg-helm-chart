@@ -1,3 +1,4 @@
+{{- if .Values.billingApp.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -92,13 +93,14 @@ spec:
             - name: VG_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: vg-api-credentials
+                  name: {{- include "billingAppUserCreds" $ | indent 1 }}
                   key: password
             - name: VG_USER
               valueFrom:
                 secretKeyRef:
-                  name: vg-api-credentials
+                  name: {{- include "billingAppUserCreds" $ | indent 1 }}
                   key: user
           envFrom:
             - configMapRef:
                 name: cognigy-env
+{{- end }}

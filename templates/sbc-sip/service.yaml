@@ -1,13 +1,20 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: sbc-sip
+  {{- if .Values.sbc.sip.useStatefulSet }}
+  name: {{ .Values.sbc.sip.headlessServiceName | quote }}
+  {{- else }}
+  name: {{ .Values.sbc.sip.serviceName | quote }}
+  {{- end }}
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: sbc-sip
 spec:
   selector:
     app: sbc-sip
+  {{- if .Values.sbc.sip.useStatefulSet }}
+  clusterIP: None
+  {{- end }}
   ports:
     - name: sip-tcp
       port: {{ .Values.sbc.sip.ports.tcp }}

@@ -56,8 +56,12 @@ spec:
               value: {{ .Values.global.nodeEnv | quote }}
             - name: K8S 
               value: {{ .Values.global.k8s | quote }}
-            - name: K8S_RTPENGINE_SERVICE_NAME 
-              value: {{ .Values.sbc.rtp.serviceName }}:{{ .Values.sbc.rtp.port }}
+            - name: K8S_RTPENGINE_SERVICE_NAME
+              {{- if .Values.sbc.rtp.useStatefulSet }}
+              value: {{ printf "%s:%.0f" .Values.sbc.rtp.headlessServiceName .Values.sbc.rtp.port }}
+              {{- else }}
+              value: {{ printf "%s:%.0f" .Values.sbc.rtp.serviceName .Values.sbc.rtp.port }}
+              {{- end }}
             - name: DRACHTIO_PORT
               value: {{ .Values.sbcOutbound.ports.tcp | quote }}
             - name: DTMF_LISTEN_PORT

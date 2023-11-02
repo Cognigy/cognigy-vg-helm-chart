@@ -164,7 +164,11 @@ spec:
             - name: K8S 
               value: {{ .Values.global.k8s | quote }}
             - name: K8S_SBC_SIP_SERVICE_NAME 
+              {{- if .Values.sbc.sip.useStatefulSet }}
+              value: {{ .Values.sbc.sip.headlessServiceName }}
+              {{- else }}
               value: {{ .Values.sbc.sip.serviceName }}
+              {{- end }}
             - name: JAMBONZ_GATHER_EARLY_HINTS_MATCH
               value: "true"
             - name: JAMBONES_INJECT_CONTENT

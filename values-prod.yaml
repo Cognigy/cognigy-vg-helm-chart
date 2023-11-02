@@ -5,6 +5,14 @@ global:
 # set to aws, azure or gcp
 cloud: ""
 
+## Only if using AWS as cloud provider
+# sbc:
+#   ec2EipAllocator:
+#       enabled: true
+#       sipEipGroupRole: ""
+#       rtpEipGroupRole: ""
+#       vgOperatorUser: ""
+
 # set to Azure Container Registry (ACR) credentials received from Cognigy
 imageCredentials:
   registry: ""
@@ -14,6 +22,8 @@ imageCredentials:
 # Ingress
 ingress:
   api:
+    host: ""
+  billingApp:
     host: ""
   testCallManager:
     host: ""
@@ -30,4 +40,33 @@ tls:
   key: |
     -----BEGIN PRIVATE KEY-----
     -----END PRIVATE KEY-----
-    
+
+## When doing the deployment for the first time, keep the value as false
+## After that, set the value to true. Needs to be true for upgrade deployments
+dbCreate:
+  hookEnabled: false
+
+## Retrieves a list with known malicious IPs from APIBAN (https://www.apiban.org/),
+## adds the IPs from your CIDR list, and the SBC uses the list to block traffic from those IPs
+## Get your API Key free from the APIBAN website
+apiBan:
+  enabled: false
+  apiKey:
+    key: ""
+  ## Add a list of known CIDRs to be banned, e.g.: "192.255.255.0/12, 168.27.1.0/24, 127.0.0.0/32"
+  bannedIpsList: ""
+  ## Set the schedule for the cronjob to run as you wish 
+  cronjobSchedule: "0 * * * *"
+
+billingApp:
+  updateCallHistoryEndpoint: "https://<billing-vg.yourdomain.<tld>>/api/v1/call-history/update"
+
+## This feature can only be enabled after the first installation is done
+## A new ServiceProvider entity needs to be created to be used by the Interaction Panel Calls
+testCallManager:
+  enabled: false
+  authEndpoint: ""
+  cleanUpEndpoint: ""
+  interactionPanelServiceProvider:
+    id: ""
+    apiKey: ""

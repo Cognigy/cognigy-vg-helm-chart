@@ -75,6 +75,29 @@ tls:
 {{- end -}}
 
 {{/*
+Return the proper billing app user credentials 
+*/}}
+{{- define "billingAppUserCreds" -}}
+  {{- $billingAppUserCredsInfo := "" -}}
+
+  {{- if .Values.billingApp.enabled -}}
+    {{- if .Values.billingApp.billingAppUserCreds.existingCredentials -}}
+      {{- $billingAppUserCredsInfo = .Values.billingApp.billingAppUserCreds.existingCredentials -}}
+    {{- else if and (.Values.billingApp.billingAppUserCreds.user) (.Values.billingApp.billingAppUserCreds.password) -}}
+      {{- $billingAppUserCredsInfo = "billing-app-user-credentials" -}}
+    {{- else -}}
+      {{ required "A valid value for .Values.billingApp.billingAppUserCredsInfo is required!" .Values.billingApp.billingAppUserCredsInfo.user }}
+      {{ required "A valid value for .Values.billingApp.billingAppUserCredsInfo is required!" .Values.billingApp.billingAppUserCredsInfo.password }}
+      {{ required "A valid value for .Values.billingApp.billingAppUserCredsInfo is required!" .Values.billingApp.billingAppUserCredsInfo.existingCredentials }}
+    {{- end -}}
+  {{- end -}}
+
+  {{- if (not (empty $billingAppUserCredsInfo)) -}}
+    {{- printf "%s" (tpl $billingAppUserCredsInfo $) | indent 1 -}}
+  {{- end -}}
+{{- end -}}
+
+{{/*
 Return the proper interaction panel service provider info 
 */}}
 {{- define "interactionPanelServiceProvider" -}}

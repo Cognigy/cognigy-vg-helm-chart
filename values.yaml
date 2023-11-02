@@ -278,14 +278,17 @@ ingress:
 # Remark: For production deployments, separate nodepools are recommended for SIP and RTP.
 sbc:
   sip:
-    ## Tag for EIP group role, we have two at the moment:
-    ## vg-dev-sip-node -> fleet-non-prod
-    ## vg-prod-sip-node -> fleet-prod
+    ## The number of replicas for the RTP pods needs to be the same as the number of static IPs provisioned for the media traffic.
+    replicaCount: 2
+    ## Please set sbc.rtp.useStatefulSet to false if you don't want to use StatefulSet for SBC RTP (headless service).
+    ## Setting it to false is not recommended because the media traffic is often not divided between the pods.
+    useStatefulSet: true
+    headlessServiceName: sbc-sip-headless
+    serviceName: sbc-sip
     nodeSelector:
       label: voip-environment
       value: edge
     toleration: voip-edge
-    serviceName: sbc-sip
     logLevel: info
     sofiaLoglevel: "3"
     ports:
@@ -294,11 +297,17 @@ sbc:
       udp: 5060
       wss: 8443
   rtp:
+    ## The number of replicas for the RTP pods needs to be the same as the number of static IPs provisioned for the media traffic.
+    replicaCount: 2
+    ## Please set sbc.rtp.useStatefulSet to false if you don't want to use StatefulSet for SBC RTP (headless service).
+    ## Setting it to false is not recommended because the media traffic is often not divided between the pods.
+    useStatefulSet: true
+    headlessServiceName: sbc-rtp-headless
+    serviceName: sbc-rtp
     nodeSelector:
       label: media-environment
       value: edge
     toleration: media-edge
-    serviceName: sbc-rtp
     port: 22222
   ## EC2 Static EIP Allocator
   ec2EipAllocator:
@@ -319,7 +328,7 @@ sbc:
 dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
-  image: cognigy.azurecr.io/db-create:release-92bd53f564469fc3934fcfce1801b3ec3be93135-1696607466
+  image: cognigy.azurecr.io/db-create:release-2e972e09c358ad3e09f6476bb7f47d3929359166-1697016907
   imagePullPolicy: IfNotPresent
   logCollectorEnabled: false
 
@@ -342,7 +351,7 @@ influxdb:
       cpu: "1"
       memory: 1.5Gi
 
-## Bitnami Chart, image info: bitnami/mysql:8.0.33-debian-11-r12
+## Bitnami Chart, image info: bitnami/mysql:8.0.34-debian-11-r75
 mysql:
   enabled: true
   global:
@@ -358,16 +367,16 @@ mysql:
     existingSecret: voicegateway-mysql-password
   image:
     repository: mysql
-    tag: 8.0.33-debian-11-r19
+    tag: 8.0.34-debian-11-r75
   primary:
     persistence:
       size: "10Gi"
     resources:
       requests:
-        cpu: "0.200"
+        cpu: "0.500"
         memory: 2Gi
       limits:
-        cpu: "0.200"
+        cpu: "0.500"
         memory: 2Gi
   metrics:
     enabled: true
@@ -376,11 +385,11 @@ mysql:
       tag: 0.14.0-debian-11-r116
     resources:
       requests:
-        cpu: "0.050"
-        memory: 100Mi
+        cpu: "0.200"
+        memory: 200Mi
       limits:
-        cpu: "0.050"
-        memory: 100Mi
+        cpu: "0.200"
+        memory: 200Mi
     serviceMonitor:
       enabled: false
   database:
@@ -388,7 +397,7 @@ mysql:
   host: mysql
   port: 3306
 
-## Bitnami Chart, image info: bitnami/postgresql:14.8.0-debian-11-r84
+## Bitnami Chart, image info: bitnami/postgresql:14.9.0-debian-11-r58
 ## Used only internally by heplify-server and homer to store sip captures
 postgresql:
   enabled: true
@@ -404,17 +413,17 @@ postgresql:
     database: homer_config
   image:
     repository: postgres
-    tag: 14.8.0-debian-11-r21
+    tag: 14.9.0-debian-11-r58
   primary:
     persistence:
       size: "30Gi"
     resources:
       requests:
-        cpu: "0.100"
+        cpu: "0.500"
         memory: 3Gi
       limits:
-        cpu: "0.200"
-        memory: 6Gi
+        cpu: "0.500"
+        memory: 3Gi
   metrics:
     enabled: true
     image:
@@ -422,10 +431,10 @@ postgresql:
       tag: 0.12.0-debian-11-r91
     resources:
       requests:
-        cpu: "0.050"
-        memory: 100Mi
+        cpu: "0.200"
+        memory: 200Mi
       limits:
-        cpu: "0.100"
+        cpu: "0.200"
         memory: 200Mi
     serviceMonitor:
       enabled: false
@@ -517,10 +526,10 @@ redisHa:
       tag: 1.45.0-debian-11-r31
     resources:
       requests:
-        cpu: "0.050"
+        cpu: "0.100"
         memory: 100Mi
       limits:
-        cpu: "0.050"
+        cpu: "0.100"
         memory: 100Mi
     serviceMonitor:
       enabled: false
@@ -622,7 +631,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:release-3e40d054c558f45fd5b1746733e8bd8e1dc3c758-1694002229
 
 api:
-  image: cognigy.azurecr.io/api-server:release-92bd53f564469fc3934fcfce1801b3ec3be93135-1696607466
+  image: cognigy.azurecr.io/api-server:release-2e972e09c358ad3e09f6476bb7f47d3929359166-1697016907
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   logLevel: info
@@ -630,8 +639,11 @@ api:
   serviceName: api-server
   ## Prefix used to create some endpoint values [http | https]
   jwtAuth: true
-  enableDebounceMiddleware: ""
-  debounceTimeInSeconds: ""
+  enableDebounceMiddleware: true
+  debounceTimeInSeconds: 5
+  debounceQuantity: 10
+  rateLimitMinutes: 5
+  rateLimit: 200
   protocol: https
   resources:
     requests:
@@ -659,7 +671,8 @@ apiBan:
   cronjobSchedule: "0 * * * *"
 
 billingApp:
-  image: cognigy.azurecr.io/voicegateway-billing-app:release-c34cade3e0db14874b703e292dc8583827eebcac-1694158899
+  enabled: false
+  image: cognigy.azurecr.io/voicegateway-billing-app:release-185752e53ca96d0ff4535c825ba9a7ca6a7f62c1-1698139348
   imagePullPolicy: IfNotPresent
   replicasCount: 1
   port: 9000
@@ -667,6 +680,15 @@ billingApp:
   endpointProtocol: "https"
   updateCallHistoryEndpointPath: "/api/v1/call-history/update"
   deactivateAccountEndpointPath: "/api/v1/account/deactivate"
+  billingAppUserCreds:
+    user: ""
+    password: ""
+    ## For existing user info, the secret must have the following two keys:
+    ## "user": Containing the username to log into api-server
+    ## "password": Containing password of the above username
+    ## NOTE: When billingApp.existingCredentials is set, the values in the previous parameters
+    ## "billingApp.user" and "billingApp.password" are ignored.
+    existingCredentials: ""
   resources:
     requests:
       cpu: "0.100"
@@ -689,7 +711,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/jambonz-feature-server:release-8936d140212fc366c2c4a5e0ecd1d936ea50955e-1695894595
+  image: cognigy.azurecr.io/jambonz-feature-server:release-1393593b0981ef80651a1a6db3e74f93be92d1ae-1698074963
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -707,10 +729,10 @@ featureServer:
     udp: 5060
   resources:
     requests:
-      cpu: "0.500"
+      cpu: "1"
       memory: 500Mi
     limits:
-      cpu: "0.500"
+      cpu: "1"
       memory: 500Mi
 
 freeswitch:
@@ -865,7 +887,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:release-d4ea1b374b5ea43c5d46b3b2a8808f75cd46806e-1698059667
+  image: cognigy.azurecr.io/vg-webapp:release-0234484afef716078a85609bfd8c6fdf724d2492-1698048586
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   port: 3001

@@ -1,3 +1,4 @@
+{{- if .Values.billingApp.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -13,3 +14,4 @@ spec:
       port: {{ .Values.billingApp.port }}
       targetPort: {{ .Values.billingApp.port }}
       protocol: TCP
+{{- end }}

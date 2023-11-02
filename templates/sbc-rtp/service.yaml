@@ -1,13 +1,20 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: sbc-rtp
+  {{- if .Values.sbc.rtp.useStatefulSet }}
+  name: {{ .Values.sbc.rtp.headlessServiceName | quote }}
+  {{- else }}
+  name: {{ .Values.sbc.rtp.serviceName | quote }}
+  {{- end }}
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: sbc-rtp
 spec:
   selector:
     app: sbc-rtp
+  {{- if .Values.sbc.rtp.useStatefulSet }}
+  clusterIP: None
+  {{- end }}
   ports:
     - name: sbc-rtp
       port: {{ .Values.sbc.rtp.port }}
