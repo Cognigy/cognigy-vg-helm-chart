@@ -1,4 +1,4 @@
-{{- if eq .Values.cloud "gcp" -}}
+{{- if and (eq .Values.cloud "gcp") (.Values.grafana.enabled) }}
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
@@ -9,4 +9,4 @@ volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 parameters:
   type: {{ .Values.gcp.grafana.pdType | default "pd-balanced" | quote }}
-{{- end -}}
+{{- end }}

@@ -385,11 +385,11 @@ mysql:
       tag: 0.14.0-debian-11-r116
     resources:
       requests:
-        cpu: "0.200"
-        memory: 200Mi
+        cpu: "0.400"
+        memory: 400Mi
       limits:
-        cpu: "0.200"
-        memory: 200Mi
+        cpu: "0.400"
+        memory: 400Mi
     serviceMonitor:
       enabled: false
   database:
@@ -526,11 +526,11 @@ redisHa:
       tag: 1.45.0-debian-11-r31
     resources:
       requests:
-        cpu: "0.100"
-        memory: 100Mi
+        cpu: "0.200"
+        memory: 200Mi
       limits:
-        cpu: "0.100"
-        memory: 100Mi
+        cpu: "0.200"
+        memory: 200Mi
     serviceMonitor:
       enabled: false
 
@@ -539,10 +539,11 @@ redisHa:
 ##############
 
 grafana:
+  enabled: false
   image: grafana/grafana:9.1.8
   imagePullPolicy: IfNotPresent
   replicaCount: 1
-  storageClassName: influxdb
+  storageClassName: grafana
   storage: 2Gi
   port: 3000
 
@@ -633,7 +634,7 @@ jobs:
 api:
   image: cognigy.azurecr.io/api-server:release-2e972e09c358ad3e09f6476bb7f47d3929359166-1697016907
   imagePullPolicy: IfNotPresent
-  replicaCount: 1
+  replicaCount: 2
   logLevel: info
   port: 3000
   serviceName: api-server
@@ -887,9 +888,9 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:release-0234484afef716078a85609bfd8c6fdf724d2492-1698048586
+  image: cognigy.azurecr.io/vg-webapp:release-5e8a652a61cb19b2437be1ef11d50e22976a1999-1699958054
   imagePullPolicy: IfNotPresent
-  replicaCount: 1
+  replicaCount: 2
   port: 3001
   cognigyUrl: ""
   disableCallRecording: false

@@ -1,3 +1,4 @@
+{{- if .Values.grafana.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -3226,3 +3227,4 @@ data:
       "version": 1,
       "weekStart": ""
     }
+{{- end }}

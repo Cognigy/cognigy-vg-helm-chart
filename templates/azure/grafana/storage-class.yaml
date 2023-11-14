@@ -1,4 +1,4 @@
-{{- if eq .Values.cloud "azure" -}}
+{{- if and (eq .Values.cloud "azure") (.Values.grafana.enabled) }}
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
@@ -14,4 +14,4 @@ parameters:
   cachingmode: ReadOnly
   kind: Managed
   storageaccounttype: {{ .Values.azure.grafana.azureStorageAccountType | default "StandardSSD_LRS" | quote }}
-{{- end -}}
+{{- end }}
