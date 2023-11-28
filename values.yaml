@@ -282,13 +282,28 @@ sbc:
     replicaCount: 2
     ## Please set sbc.rtp.useStatefulSet to false if you don't want to use StatefulSet for SBC RTP (headless service).
     ## Setting it to false is not recommended because the media traffic is often not divided between the pods.
-    useStatefulSet: true
+    useStatefulSet: false
     headlessServiceName: sbc-sip-headless
     serviceName: sbc-sip
+    useAffinityOnDaemonSet: false
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                    - sbc-sip
+            topologyKey: "kubernetes.io/hostname"
     nodeSelector:
-      label: voip-environment
-      value: edge
-    toleration: voip-edge
+      voip-environment: "edge"
+    priorityClassName: ""
+    podSecurityContext: {}
+    tolerations:
+      - key: "voip-edge"
+        operator: "Exists"
+        effect: "NoSchedule"
     logLevel: info
     sofiaLoglevel: "3"
     ports:
@@ -301,13 +316,28 @@ sbc:
     replicaCount: 2
     ## Please set sbc.rtp.useStatefulSet to false if you don't want to use StatefulSet for SBC RTP (headless service).
     ## Setting it to false is not recommended because the media traffic is often not divided between the pods.
-    useStatefulSet: true
+    useStatefulSet: false
     headlessServiceName: sbc-rtp-headless
     serviceName: sbc-rtp
+    useAffinityOnDaemonSet: false
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                    - sbc-rtp
+            topologyKey: "kubernetes.io/hostname"
     nodeSelector:
-      label: media-environment
-      value: edge
-    toleration: media-edge
+      media-environment: "edge"
+    priorityClassName: ""
+    podSecurityContext: {}
+    tolerations:
+      - key: "media-edge"
+        operator: "Exists"
+        effect: "NoSchedule"
     port: 22222
   ## EC2 Static EIP Allocator
   ec2EipAllocator:
@@ -328,7 +358,7 @@ sbc:
 dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
-  image: cognigy.azurecr.io/db-create:release-2e972e09c358ad3e09f6476bb7f47d3929359166-1697016907
+  image: cognigy.azurecr.io/db-create:release-6c6f917eb3e598f50203f1a991ad79b6a238d808-1700034885
   imagePullPolicy: IfNotPresent
   logCollectorEnabled: false
 
@@ -336,6 +366,11 @@ influxdb:
   image: cognigy.azurecr.io/vg-influx:release-ded56799f93fb2c6035f8a4582b56d7e6d7aaac0-1689255770
   imagePullPolicy: IfNotPresent
   replicaCount: 1
+  affinity: {}
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
   storage: 20Gi
   storageClassName: influxdb
   logLevel: info
@@ -369,6 +404,7 @@ mysql:
     repository: mysql
     tag: 8.0.34-debian-11-r75
   primary:
+    priorityClassName: ""
     persistence:
       size: "10Gi"
     resources:
@@ -415,6 +451,7 @@ postgresql:
     repository: postgres
     tag: 14.9.0-debian-11-r58
   primary:
+    priorityClassName: ""
     persistence:
       size: "30Gi"
     resources:
@@ -447,6 +484,11 @@ redis:
   replicaCount: 1
   host: redis
   port: 6379
+  affinity: {}
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
 
 ###########################
 # Redis High Availability #
@@ -485,6 +527,7 @@ redisHa:
       limits:
         cpu: "0.150"
         memory: 300Mi
+    priorityClassName: ""
     ## Set the maxmemory to the 85% of the redis memory limit.
     configuration: |-
       maxmemory 436mb
@@ -543,6 +586,11 @@ grafana:
   image: grafana/grafana:9.1.8
   imagePullPolicy: IfNotPresent
   replicaCount: 1
+  affinity: {}
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
   storageClassName: grafana
   storage: 2Gi
   port: 3000
@@ -552,6 +600,11 @@ heplifyServer:
   image: cognigy.azurecr.io/vg-heplify:release-1071b4404ff17c8cee54fd118394fb058c7ad868-1689255787
   imagePullPolicy: IfNotPresent
   replicaCount: 1
+  affinity: {}
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
   serviceName: heplify-server
   ## This param specifies the number of days after which all data in the database (except logs) will be deleted automatically.
   dbDropDays: 14
@@ -570,6 +623,11 @@ homer:
   image: cognigy.azurecr.io/vg-homer:release-3fdeac08d35a6747920bba905d39a7fb4a59a79c-1689255776
   imagePullPolicy: IfNotPresent
   replicaCount: 1
+  affinity: {}
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
   serviceName: homer
   urlPrefixServiceConnection: http://
   ## Default credentials
@@ -582,6 +640,11 @@ jaeger:
   image: cognigy.azurecr.io/vg-jaeger:release-497502cd13b86f36afb2095997e903bc141e9e1d-1689255781
   imagePullPolicy: IfNotPresent
   replicaCount: 1
+  affinity: {}
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
   serviceName: jaeger
   urlPrefixServiceConnection: http://
   username: "jaeger_admin"
@@ -603,6 +666,11 @@ telegraf:
   image: cognigy.azurecr.io/vg-telegraf:release-f560abcc37d6d01f49cb3dfd32668f94625cf8d9-1689255793
   imagePullPolicy: IfNotPresent
   replicaCount: 1
+  affinity: {}
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
   serviceName: telegraf
   port: 8125
 
@@ -632,12 +700,28 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:release-3e40d054c558f45fd5b1746733e8bd8e1dc3c758-1694002229
 
 api:
-  image: cognigy.azurecr.io/api-server:release-2e972e09c358ad3e09f6476bb7f47d3929359166-1697016907
+  image: cognigy.azurecr.io/api-server:release-6c6f917eb3e598f50203f1a991ad79b6a238d808-1700034885
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   logLevel: info
   port: 3000
   serviceName: api-server
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - api-server
+            topologyKey: kubernetes.io/hostname
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
   ## Prefix used to create some endpoint values [http | https]
   jwtAuth: true
   enableDebounceMiddleware: true
@@ -656,11 +740,12 @@ api:
 
 apiBan:
   enabled: true
-  image: cognigy.azurecr.io/api-ban:release-25d02a3a99c8a3c77de20886e26936510f750e6b-1694002242
+  image: cognigy.azurecr.io/api-ban:release-b682f058504507cd139f16eb54bbf82b9e823014-1700065274
   imagePullPolicy: IfNotPresent
   endpoint: https://apiban.org/api
   redisSetKey: apiban:ips
   refreshInterval: 3600
+  cronjobTtlSecondsAfterFinished: 180
   apiKey:
     key: ""
     ## For existing API Key, the secret must have the following key:
@@ -673,14 +758,21 @@ apiBan:
 
 billingApp:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:release-185752e53ca96d0ff4535c825ba9a7ca6a7f62c1-1698139348
+  image: cognigy.azurecr.io/voicegateway-billing-app:release-c492fb47adaa39d488c021986782db8e523e9206-1700065261
   imagePullPolicy: IfNotPresent
   replicasCount: 1
+  affinity: {}
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
   port: 9000
   endpoint: ""
   endpointProtocol: "https"
   updateCallHistoryEndpointPath: "/api/v1/call-history/update"
   deactivateAccountEndpointPath: "/api/v1/account/deactivate"
+  callHistoryTtlSecondsAfterFinished: 180
+  deactivateTtlSecondsAfterFinished: 180
   billingAppUserCreds:
     user: ""
     password: ""
@@ -699,7 +791,7 @@ billingApp:
       memory: 300Mi
 
 drachtio:
-  image: cognigy.azurecr.io/drachtio-server:release-1b1b0083d566a43b961fc08e492bc82a6c2979aa-1700131885
+  image: cognigy.azurecr.io/drachtio-server:release-58a8f8d16468bae2e6d1031474364b9a192aa2df-1700034936
   imagePullPolicy: IfNotPresent
   port: 9022
   homerId: 10
@@ -712,12 +804,28 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/jambonz-feature-server:release-1393593b0981ef80651a1a6db3e74f93be92d1ae-1698074963
+  image: cognigy.azurecr.io/jambonz-feature-server:release-193d5a610e85e4760d8e9af311e259e0923ef97c-1701079002
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
   trimTts: true
   serviceName: feature-server
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - feature-server
+            topologyKey: kubernetes.io/hostname
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
   sigtermForceCloseTimeoutMs: ""
   terminationGracePeriodSeconds: 900
   ## Please set featureServer.useStatefulSet to false if you don't want to use StatefulSet for Feature Server (headless service)
@@ -737,7 +845,7 @@ featureServer:
       memory: 500Mi
 
 freeswitch:
-  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:release-9a0972881c0e22b6ecb2fb0fa1b64e4937df870c-1693838729
+  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:release-8ac433a7004b7d8ed0fe14137a38427320f373e8-1700035520
   imagePullPolicy: IfNotPresent
   logLevel: info
   ## Argument "--codec-answer-generous" is commented because we are looking into a DTMF recognition issue using Firefox, in the Interaction Panel Call,
@@ -747,7 +855,7 @@ freeswitch:
     # - --codec-answer-generous
     - --username
     - Cognigy
-  port: 8081
+  port: 8021
   resources:
     requests:
       cpu: "2.5"
@@ -772,7 +880,7 @@ rtpEngine:
       memory: 250Mi
 
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:release-d28291e6268b973a1b6c6cf41f5d9f88d797044b-1694160973
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:release-efbd10d98da2514a9b4c3b2a1a889d2d5187a1cd-1700034906
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   logLevel: info
@@ -787,9 +895,25 @@ rtpEngineSidecar:
       memory: 200Mi
 
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:release-980832bbf9adad666430047187e3ced704427afc-1694167155
+  image: cognigy.azurecr.io/sbc-call-router:release-70c89c82415645cbce389343bb2beecaa5c2cfba-1700034913
   imagePullPolicy: IfNotPresent
   replicaCount: 2
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - sbc-call-router
+            topologyKey: kubernetes.io/hostname
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
   logLevel: info
   port: 3000
   resources:
@@ -801,9 +925,25 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:release-9a2cc3b84da9de264abe7ec1cc81dc60af449caa-1695813325
+  image: cognigy.azurecr.io/sbc-inbound:release-3ed4b26713edc88688ac1d03cd36c1d7b01926c7-1700034959
   imagePullPolicy: IfNotPresent
   replicaCount: 2
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - sbc-inbound
+            topologyKey: kubernetes.io/hostname
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
   logLevel: info
   terminationGracePeriodSeconds: 900
   ## Enables Feature Server Signaling Transport as TCP, instead UDP (default)
@@ -824,9 +964,25 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:release-91eadd5593e696e59c466a1b0577e39528931b31-1695909886
+  image: cognigy.azurecr.io/sbc-outbound:release-5cf8a31cc6de03cb0adca77050ee4d48a841f977-1700034953
   imagePullPolicy: IfNotPresent
   replicaCount: 2
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - sbc-outbound
+            topologyKey: kubernetes.io/hostname
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
   logLevel: info
   terminationGracePeriodSeconds: 900
   ports:
@@ -843,7 +999,7 @@ sbcOutbound:
   padCrypto: false
 
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:release-101a9b5bbc9a1e847329ce63ea25d997bc0edfa9-1695813317
+  image: cognigy.azurecr.io/sbc-sip-sidecar:release-c6d88fc2c143f6f81ea4d7375668b5ae52f71c8b-1700034898
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   logLevel: info
@@ -857,13 +1013,19 @@ sbcSipSidecar:
 
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-test-call-manager:release-32b38ece5c41b0ed100f6ab523fa21cbb2d433a9-1694167169
+  image: cognigy.azurecr.io/voicegateway-test-call-manager:release-02f50edc9db1b37cb97340df5a36f7ac49c20682-1700065268
   imagePullPolicy: IfNotPresent
   replicaCount: 1
+  affinity: {}
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
   port: 3000
   authEndpoint: ""
   authEndpointProtocol: "https"
   authEndpointPath: "/api/v1/call/auth"
+  cronjobTtlSecondsAfterFinished: 180
   cleanUpEndpoint: ""
   cleanUpEndpointProtocol: "https"
   cleanUpEndpointPath: "/api/v1/call/clean-up"
@@ -888,9 +1050,25 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:release-5e8a652a61cb19b2437be1ef11d50e22976a1999-1699958054
+  image: cognigy.azurecr.io/vg-webapp:release-a3904052c07abf9775061a3505fc2997c6c6b8e7-1700043313
   imagePullPolicy: IfNotPresent
   replicaCount: 2
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - webapp
+            topologyKey: kubernetes.io/hostname
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
   port: 3001
   cognigyUrl: ""
   disableCallRecording: false
@@ -1020,6 +1198,42 @@ traefik:
         - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
         - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
         - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
-## For the securityContext config of traefik, please refer to the official values.yaml file of the traefik
-## This is the link for chart v123.1.0 for example
+## For the SecurityContext config of traefik, please refer to the official values.yaml file of the traefik
+## This is the link for chart v23.1.0 for example
 ## https://github.com/traefik/traefik-helm-chart/blob/6df869b8e8bcd6757e7934b554b97d925350c9fa/traefik/values.yaml#L882-L901
+
+
+## Optionally create priorityClass
+## ref: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#priorityclass
+##
+priorityClass:
+  enabled: true
+  critical:
+    enabled: true
+    name: critical
+    value: 4000000
+    preemptionPolicy: PreemptLowerPriority
+    globalDefault: false
+    description: "PriorityClass for critical priority services"
+  high:
+    enabled: true
+    name: high
+    value: 3000000
+    preemptionPolicy: PreemptLowerPriority
+    globalDefault: false
+    description: "PriorityClass for high priority services"
+  medium:
+    enabled: true
+    name: medium
+    value: 2000000
+    preemptionPolicy: PreemptLowerPriority
+    globalDefault: false
+    description: "PriorityClass for medium priority services"
+  low:
+    enabled: true
+    name: low
+    value: 1000000
+    preemptionPolicy: Never
+    globalDefault: false
+    description: "PriorityClass for low priority services"
+

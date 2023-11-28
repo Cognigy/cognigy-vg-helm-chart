@@ -17,9 +17,24 @@ spec:
       annotations:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
-    {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.sbcInbound.terminationGracePeriodSeconds }}
       terminationGracePeriodSeconds: {{ .Values.sbcInbound.terminationGracePeriodSeconds }}
+      {{- end }}
+      {{- if .Values.sbcInbound.affinity }}
+      affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbcInbound.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.sbcInbound.nodeSelector }}
+      nodeSelector: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbcInbound.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.sbcInbound.priorityClassName }}
+      priorityClassName: {{ .Values.sbcInbound.priorityClassName }}
+      {{- end }}
+      {{- if .Values.sbcInbound.podSecurityContext }}
+      securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbcInbound.podSecurityContext "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.sbcInbound.tolerations }}
+      tolerations: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbcInbound.tolerations "context" $) | nindent 8 }}
       {{- end }}
       containers:
         - name: sbc-inbound

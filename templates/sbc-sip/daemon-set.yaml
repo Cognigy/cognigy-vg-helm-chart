@@ -1,5 +1,6 @@
+{{- if not .Values.sbc.sip.useStatefulSet }}
 apiVersion: apps/v1
-kind: {{ if .Values.sbc.sip.useStatefulSet }}StatefulSet{{- else }}DaemonSet{{- end }}
+kind: DaemonSet
 metadata:
   name: sbc-sip
   namespace: {{ $.Release.Namespace | quote }}
@@ -9,7 +10,6 @@ spec:
   selector:
     matchLabels:
       app: sbc-sip
-  replicas: {{ .Values.sbc.sip.replicaCount }}
   template:
     metadata:
       labels:
@@ -18,15 +18,25 @@ spec:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
         checksum/sbc-sip: {{ include (print $.Template.BasePath "/sbc-sip/config-map.yaml") $ | sha256sum }}
     spec:
-    {{- include "image.pullSecrets" $ | nindent 6 }}
-      nodeSelector:
-        {{ .Values.sbc.sip.nodeSelector.label }}: {{.Values.sbc.sip.nodeSelector.value | quote }}
+      {{- include "image.pullSecrets" $ | nindent 6 }}
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
-      tolerations:
-        - key: {{ .Values.sbc.sip.toleration | quote }}
-          operator: "Exists"
-          effect: "NoSchedule"
+      {{- if and (.Values.sbc.sip.affinity) (.Values.sbc.sip.useAffinityOnDaemonSet) }}
+      affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbc.sip.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.sbc.sip.nodeSelector }}
+      nodeSelector: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbc.sip.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.sbc.sip.priorityClassName }}
+      priorityClassName: {{ .Values.sbc.sip.priorityClassName }}
+      {{- end }}
+      {{- if .Values.sbc.sip.podSecurityContext }}
+      securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbc.sip.podSecurityContext "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.sbc.sip.tolerations }}
+      tolerations: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbc.sip.tolerations "context" $) | nindent 8 }}
+      {{- end }}
+      restartPolicy: Always
       initContainers:
         {{- if and (.Values.sbc.ec2EipAllocator.enabled) (eq .Values.cloud "aws") }}
         - image: {{ .Values.sbc.ec2EipAllocator.image }}
@@ -61,7 +71,6 @@ spec:
               do 
                 sleep 5
               done
-      restartPolicy: Always
       containers:
         - name: drachtio
           image: {{ .Values.drachtio.image }}
@@ -261,3 +270,4 @@ spec:
           items:
           - key: drachtio.conf.xml
             path: drachtio.conf.xml
+{{- end }}

@@ -17,7 +17,22 @@ spec:
       annotations:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
-    {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- if .Values.sbcCallRouter.affinity }}
+      affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbcCallRouter.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.sbcCallRouter.nodeSelector }}
+      nodeSelector: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbcCallRouter.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.sbcCallRouter.priorityClassName }}
+      priorityClassName: {{ .Values.sbcCallRouter.priorityClassName }}
+      {{- end }}
+      {{- if .Values.sbcCallRouter.podSecurityContext }}
+      securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbcCallRouter.podSecurityContext "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.sbcCallRouter.tolerations }}
+      tolerations: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbcCallRouter.tolerations "context" $) | nindent 8 }}
+      {{- end }}
       containers:
         - name: sbc-call-router
           image: {{ .Values.sbcCallRouter.image }}

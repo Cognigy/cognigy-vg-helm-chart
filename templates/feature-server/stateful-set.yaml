@@ -1,6 +1,6 @@
-{{- if not .Values.featureServer.useStatefulSet }}
+{{- if .Values.featureServer.useStatefulSet }}
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: feature-server
   namespace: {{ $.Release.Namespace | quote }}
@@ -9,6 +9,7 @@ spec:
     matchLabels:
       app: feature-server
   replicas: {{ .Values.featureServer.replicaCount }}
+  serviceName: feature-server-headless
   template:
     metadata:
       labels:
@@ -18,7 +19,6 @@ spec:
         checksum/feature-server: {{ include (print $.Template.BasePath "/feature-server/config-map.yaml") $ | sha256sum }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
-      restartPolicy: Always
       {{- if .Values.featureServer.terminationGracePeriodSeconds }}
       terminationGracePeriodSeconds: {{ .Values.featureServer.terminationGracePeriodSeconds }}
       {{- end }}
@@ -44,6 +44,7 @@ spec:
           labelSelector:
             matchLabels:
               app: feature-server
+      restartPolicy: Always
       initContainers:
         - image: kanisterio/mysql-sidecar:0.40.0
           name: db-create-wait
@@ -177,7 +178,7 @@ spec:
             - name: K8S 
               value: {{ .Values.global.k8s | quote }}
             - name: K8S_SBC_SIP_SERVICE_NAME 
-              value: {{ .Values.sbc.sip.serviceName }}
+              value: {{ .Values.sbc.sip.headlessServiceName }}
             - name: JAMBONZ_GATHER_EARLY_HINTS_MATCH
               value: "true"
             - name: JAMBONES_INJECT_CONTENT

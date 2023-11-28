@@ -8,6 +8,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
+      ttlSecondsAfterFinished: {{ .Values.apiBan.cronjobTtlSecondsAfterFinished }}
       template:
         metadata:
           labels:

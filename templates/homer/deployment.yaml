@@ -17,7 +17,22 @@ spec:
       annotations:
         checksum/homer: {{ include (print $.Template.BasePath "/homer/config-map.yaml") $ | sha256sum }}
     spec:
-    {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- if .Values.homer.affinity }}
+      affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.homer.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.homer.nodeSelector }}
+      nodeSelector: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.homer.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.homer.priorityClassName }}
+      priorityClassName: {{ .Values.homer.priorityClassName }}
+      {{- end }}
+      {{- if .Values.homer.podSecurityContext }}
+      securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.homer.podSecurityContext "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.homer.tolerations }}
+      tolerations: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.homer.tolerations "context" $) | nindent 8 }}
+      {{- end }}
       containers:
         - name: homer
           image: {{ .Values.homer.image }}

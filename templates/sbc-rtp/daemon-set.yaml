@@ -1,5 +1,6 @@
+{{- if not .Values.sbc.rtp.useStatefulSet }}
 apiVersion: apps/v1
-kind: {{ if .Values.sbc.rtp.useStatefulSet }}StatefulSet{{- else }}DaemonSet{{- end }}
+kind: DaemonSet
 metadata:
   name: sbc-rtp
   namespace: {{ $.Release.Namespace | quote }}
@@ -11,7 +12,6 @@ spec:
   selector:
     matchLabels:
       app: sbc-rtp
-  replicas: {{ .Values.sbc.rtp.replicaCount }}
   template:
     metadata:
       labels:
@@ -19,15 +19,24 @@ spec:
       annotations:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
-    {{- include "image.pullSecrets" $ | nindent 6 }}
-      nodeSelector:
-        {{ .Values.sbc.rtp.nodeSelector.label }}: {{.Values.sbc.rtp.nodeSelector.value | quote }}
+      {{- include "image.pullSecrets" $ | nindent 6 }}
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
-      tolerations:
-        - key: {{ .Values.sbc.rtp.toleration | quote }}
-          operator: "Exists"
-          effect: "NoSchedule"
+      {{- if and (.Values.sbc.rtp.affinity) (.Values.sbc.rtp.useAffinityOnDaemonSet) }}
+      affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbc.rtp.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.sbc.rtp.nodeSelector }}
+      nodeSelector: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbc.rtp.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.sbc.sip.priorityClassName }}
+      priorityClassName: {{ .Values.sbc.sip.priorityClassName }}
+      {{- end }}
+      {{- if .Values.sbc.sip.podSecurityContext }}
+      securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbc.sip.podSecurityContext "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.sbc.rtp.tolerations }}
+      tolerations: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbc.rtp.tolerations "context" $) | nindent 8 }}
+      {{- end }}
       restartPolicy: Always
       initContainers:
         {{- if and (.Values.sbc.ec2EipAllocator.enabled) (eq .Values.cloud "aws") }}
@@ -176,3 +185,4 @@ spec:
           envFrom:
             - configMapRef:
                 name: cognigy-env
+{{- end }}

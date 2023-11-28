@@ -16,7 +16,22 @@ spec:
       annotations:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
-    {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- if .Values.testCallManager.affinity }}
+      affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.testCallManager.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.testCallManager.nodeSelector }}
+      nodeSelector: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.testCallManager.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.testCallManager.priorityClassName }}
+      priorityClassName: {{ .Values.testCallManager.priorityClassName }}
+      {{- end }}
+      {{- if .Values.testCallManager.podSecurityContext }}
+      securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.testCallManager.podSecurityContext "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.testCallManager.tolerations }}
+      tolerations: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.testCallManager.tolerations "context" $) | nindent 8 }}
+      {{- end }}
       containers:
         - name: test-call-manager
           image: {{ .Values.testCallManager.image }}

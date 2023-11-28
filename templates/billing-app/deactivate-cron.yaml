@@ -8,6 +8,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
+      ttlSecondsAfterFinished: {{ .Values.billingApp.deactivateTtlSecondsAfterFinished }}
       template:
         spec:
           containers:

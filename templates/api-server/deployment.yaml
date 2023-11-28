@@ -15,7 +15,22 @@ spec:
       annotations:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
-    {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- if .Values.api.affinity }}
+      affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.api.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.api.nodeSelector }}
+      nodeSelector: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.api.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.api.priorityClassName }}
+      priorityClassName: {{ .Values.api.priorityClassName }}
+      {{- end }}
+      {{- if .Values.api.podSecurityContext }}
+      securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.api.podSecurityContext "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.api.tolerations }}
+      tolerations: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.api.tolerations "context" $) | nindent 8 }}
+      {{- end }}
       restartPolicy: Always
       initContainers:
         - image: kanisterio/mysql-sidecar:0.40.0
