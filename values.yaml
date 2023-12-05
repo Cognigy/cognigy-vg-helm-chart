@@ -804,7 +804,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/jambonz-feature-server:release-193d5a610e85e4760d8e9af311e259e0923ef97c-1701079002
+  image: cognigy.azurecr.io/jambonz-feature-server:release-a17d1042225e67253d4b1e41b9779734847ab44e-1701792085
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -999,7 +999,7 @@ sbcOutbound:
   padCrypto: false
 
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:release-c6d88fc2c143f6f81ea4d7375668b5ae52f71c8b-1700034898
+  image: cognigy.azurecr.io/sbc-sip-sidecar:release-15f398409fd21d1b0232c9c2757269f4f08ea45f-1701441406
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   logLevel: info
@@ -1050,7 +1050,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:release-a3904052c07abf9775061a3505fc2997c6c6b8e7-1700043313
+  image: cognigy.azurecr.io/vg-webapp:release-93fc63c6305b564783a4fd1714e36ef1a39b1878-1701349399
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
