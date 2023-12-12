@@ -350,6 +350,8 @@ spec:
               value: {{ .Values.featureServer.sigtermForceCloseTimeoutMs | quote }}
             - name: VG_SENTRY_TRACING_ENABLED
               value: {{ .Values.tracing.callTracingEnabled | quote }}
+            - name: NODE_OPTIONS
+              value: {{ .Values.featureServer.nodeOptions | quote }}
           envFrom:
             - configMapRef:
                 name: cognigy-env

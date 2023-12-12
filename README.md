@@ -7,9 +7,9 @@
 This chart installs a Cognigy VoiceGateway deployment on a [Kubernetes](https://kubernetes.io/) cluster using the [Helm](https://helm.sh/) package manager.
 
 ## Prerequisites
-- Kubernetes v1.23-1.26 running on AWS EKS, GCP GKE or Azure AKS 
+- Kubernetes v1.23 - v1.26 running on AWS EKS, GCP GKE or Azure AKS 
 - [kubectl utility](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/) installed on Linux or MacOS client and connected to the cluster. **Windows clients are not supported by this installation guide.**
-- [Helm](https://helm.sh/docs/intro/install/) v3.9.0+ installed locally 
+- [Helm](https://helm.sh/docs/intro/install/) v3.9.0 - v3.12.3 installed locally 
 
 ## Configuration
 
