@@ -89,6 +89,10 @@ spec:
               value: {{ .Values.webapp.disableCallRecording | quote }}
             - name: VG_SENTRY_TRACING_ENABLED
               value: {{ .Values.tracing.callTracingEnabled | quote }}
+            - name: ENABLE_TTS_ELEVENLABS
+              value: {{ .Values.webapp.enableTtsElevenlabs | quote }}
+            - name: ENABLE_TTS_ELEVENLABS_OPTIONS
+              value: {{ .Values.webapp.enableTtsElevenlabsOptions | quote }}
           envFrom:
             - configMapRef:
                 name: cognigy-env

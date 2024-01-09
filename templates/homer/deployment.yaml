@@ -37,7 +37,7 @@ spec:
         - name: homer
           image: {{ .Values.homer.image }}
           imagePullPolicy: {{ .Values.homer.imagePullPolicy }}
-          resources: {}
+          resources: {{- toYaml .Values.homer.resources | nindent 12 }}
           ports:
             - name: homer
               containerPort: {{ .Values.homer.port }}

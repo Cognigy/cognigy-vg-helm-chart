@@ -51,11 +51,7 @@ cloud: ""
 
 aws:
   ## Set to true, if using IMDSv2
-  useIMDSv2: true
-  grafana:
-    storageClassName: "grafana"
-    provisionerName: "ebs.csi.aws.com"
-    awsEBSVolumeType: "gp3"
+  useIMDSv2: true  
   influxdb:
     storageClassName: "influxdb"
     provisionerName: "ebs.csi.aws.com"
@@ -70,11 +66,7 @@ aws:
     awsEBSVolumeType: "gp3"
 
 azure:
-  useLoadBalancerIMDS: true
-  grafana:
-    storageClassName: "grafana"
-    provisionerName: "disk.csi.azure.com"
-    azureStorageAccountType: "StandardSSD_LRS"
+  useLoadBalancerIMDS: true  
   influxdb:
     storageClassName: "influxdb"
     provisionerName: "disk.csi.azure.com"
@@ -88,11 +80,7 @@ azure:
     provisionerName: "disk.csi.azure.com"
     azureStorageAccountType: "StandardSSD_LRS"
 
-gcp:
-  grafana:
-    storageClassName: "grafana"
-    provisionerName: "pd.csi.storage.gke.io"
-    pdType: "pd-balanced"
+gcp:  
   influxdb:
     storageClassName: "influxdb"
     provisionerName: "pd.csi.storage.gke.io"
@@ -581,20 +569,6 @@ redisHa:
 # Monitoring #
 ##############
 
-grafana:
-  enabled: false
-  image: grafana/grafana:9.1.8
-  imagePullPolicy: IfNotPresent
-  replicaCount: 1
-  affinity: {}
-  nodeSelector: {}
-  priorityClassName: ""
-  podSecurityContext: {}
-  tolerations: []
-  storageClassName: grafana
-  storage: 2Gi
-  port: 3000
-
 heplifyServer:
   ## The "latest" tag is the only one available
   image: cognigy.azurecr.io/vg-heplify:release-1071b4404ff17c8cee54fd118394fb058c7ad868-1689255787
@@ -617,6 +591,13 @@ heplifyServer:
   ports:
     tcp: 9096
     udp: 9060
+  resources:
+    requests:
+      cpu: "0.05"
+      memory: 100Mi
+    limits:
+      cpu: "0.100"
+      memory: 500Mi
 
 homer:
   ## The "latest" tag is the only one available
@@ -635,6 +616,13 @@ homer:
     username: admin
     password: sipcapture
   port: 80
+  resources:
+    requests:
+      cpu: "0.05"
+      memory: 50Mi
+    limits:
+      cpu: "0.100"
+      memory: 150Mi
 
 jaeger:
   image: cognigy.azurecr.io/vg-jaeger:release-497502cd13b86f36afb2095997e903bc141e9e1d-1689255781
@@ -655,6 +643,13 @@ jaeger:
     udp:
       compact: 6831
       collector: 6832
+  resources:
+    requests:
+      cpu: "0.05"
+      memory: 150Mi
+    limits:
+      cpu: "0.150"
+      memory: 450Mi
 
 metrics:
   port: 8002
@@ -673,6 +668,13 @@ telegraf:
   tolerations: []
   serviceName: telegraf
   port: 8125
+  resources:
+    requests:
+      cpu: "0.05"
+      memory: 100Mi
+    limits:
+      cpu: "0.100"
+      memory: 250Mi
 
 ## You can enable the pod monitor if any prometheus instance is running on your cluster.
 podMonitors:
@@ -804,7 +806,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/jambonz-feature-server:release-609f179a91fe3fb950081157bab888e50ce2d956-1701871053
+  image: cognigy.azurecr.io/jambonz-feature-server:release-ea643d85e78de587eac370f9bab58386d1af65ee-1701792054
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -871,8 +873,7 @@ freeswitch:
 
 rtpEngine:
   image: cognigy.azurecr.io/docker-rtpengine:release-be70cea88c549b07dd241f1a170ba42146e7d262-1692285009
-  imagePullPolicy: IfNotPresent
-  replicaCount: 1
+  imagePullPolicy: IfNotPresent  
   logLevel: 5
   port: 22222
   homerId: 11
@@ -886,8 +887,7 @@ rtpEngine:
 
 rtpEngineSidecar:
   image: cognigy.azurecr.io/sbc-rtpengine-sidecar:release-efbd10d98da2514a9b4c3b2a1a889d2d5187a1cd-1700034906
-  imagePullPolicy: IfNotPresent
-  replicaCount: 1
+  imagePullPolicy: IfNotPresent  
   logLevel: info
   ports:
     dtmf: 22223
@@ -969,7 +969,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:release-5cf8a31cc6de03cb0adca77050ee4d48a841f977-1700034953
+  image: cognigy.azurecr.io/sbc-outbound:release-be78db820950e98dd73d53cea0d4a4ea4378b3dc-1702551365
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1005,8 +1005,7 @@ sbcOutbound:
 
 sbcSipSidecar:
   image: cognigy.azurecr.io/sbc-sip-sidecar:release-0d47608674d471563acdeb758c5c59fdddcd844f-1701179645
-  imagePullPolicy: IfNotPresent
-  replicaCount: 1
+  imagePullPolicy: IfNotPresent  
   logLevel: info
   resources:
     requests:
@@ -1055,7 +1054,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:release-67fddb855b0108a7122123a6a34e52c488db44ce-1702044646
+  image: cognigy.azurecr.io/vg-webapp:release-ab0e5c05849bbea0805332cfe5dd7a41de7bee1e-1704711534
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1089,6 +1088,8 @@ webapp:
   enableForgotPassword: false
   enableMsTeamsRouting: false
   enableSms: false
+  enableTtsElevenlabs: false
+  enableTtsElevenlabsOptions: false
   resources:
     requests:
       cpu: "0.1"

@@ -39,7 +39,7 @@ spec:
         - name: telegraf
           image: {{ .Values.telegraf.image }}
           imagePullPolicy: {{ .Values.telegraf.imagePullPolicy }}
-          resources: {}
+          resources: {{- toYaml .Values.telegraf.resources | nindent 12 }}
           ports:
             - name: telegraf
               containerPort: {{ .Values.telegraf.port }}

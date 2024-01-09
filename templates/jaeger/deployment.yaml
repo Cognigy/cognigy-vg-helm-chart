@@ -37,7 +37,7 @@ spec:
         - name: jaeger
           image: {{ .Values.jaeger.image }}
           imagePullPolicy: {{ .Values.jaeger.imagePullPolicy }}
-          resources: {}
+          resources: {{- toYaml .Values.jaeger.resources | nindent 12 }}
           ports:
             - name: collector
               containerPort: {{ .Values.jaeger.ports.udp.collector }}
