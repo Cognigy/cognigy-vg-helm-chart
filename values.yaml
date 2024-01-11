@@ -793,10 +793,11 @@ billingApp:
       memory: 300Mi
 
 drachtio:
-  image: cognigy.azurecr.io/drachtio-server:release-58a8f8d16468bae2e6d1031474364b9a192aa2df-1700034936
+  image: cognigy.azurecr.io/drachtio-server:release-120cc548ec172b87fcf35cef5aa121690086a627-1704903108
   imagePullPolicy: IfNotPresent
   port: 9022
   homerId: 10
+  supportBestEffortTls: false
   resources:
     requests:
       cpu: "0.250"
@@ -806,7 +807,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/jambonz-feature-server:release-ea643d85e78de587eac370f9bab58386d1af65ee-1701792054
+  image: cognigy.azurecr.io/jambonz-feature-server:release-fb39cb57da903b9a3519167f536a39dc77980360-1704894744
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -876,6 +877,8 @@ rtpEngine:
   imagePullPolicy: IfNotPresent  
   logLevel: 5
   port: 22222
+  startPort: 40000
+  endPort: 60000
   homerId: 11
   resources:
     requests:
@@ -1054,7 +1057,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:release-ab0e5c05849bbea0805332cfe5dd7a41de7bee1e-1704711534
+  image: cognigy.azurecr.io/vg-webapp:release-74a984af6399f403aaa57ee18ea75037bd4d887f-1704963426
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:

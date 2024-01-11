@@ -151,7 +151,9 @@ spec:
             - name: SOFIA_SEARCH_DOMAINS
               value: "1"
             - name: SOFIA_SRES_NO_CACHE
-              value: "1"            
+              value: "1"
+            - name: DRACHTIO_SUPPORT_BEST_EFFORT_TLS
+              value: {{ if .Values.drachtio.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}              
           volumeMounts:
             - mountPath: /etc/letsencrypt/
               name: drachtio-certs
