@@ -185,7 +185,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: voicegateway-drachtio-secret
-                  key: secret
+                  key: secret            
           envFrom:
             - configMapRef:
                 name: cognigy-env

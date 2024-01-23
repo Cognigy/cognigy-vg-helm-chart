@@ -137,38 +137,6 @@ tls:
   ## NOTE: When tls.existingSecret is set, clear text certificate passed in the previous parameters "tls.crt" and "tls.key" are ignored.
   existingSecret: ""
 
-#############
-# Analytics #
-#############
-
-cognigyInsights:
-  # If enabled, analytics data will be collected and sent to the cognigy insights collector api
-  enabled: false
-  collectInteractionPanelCalls: false
-
-  # API of service-collectors - VG can send to multiple ai endpoints
-  apiUrl: ""
-  apiUrlApp: ""
-  apiUrlDev: ""
-  apiUrlStaging: ""
-  apiUrlTrial: ""
-
-  apiKey:
-    secret: ""
-    secretKey: ""
-  apiKeyApp:
-    secret: ""
-    secretKey: ""
-  apiKeyDev:
-    secret: ""
-    secretKey: ""
-  apiKeyStaging:
-    secret: ""
-    secretKey: ""
-  apiKeyTrial:
-    secret: ""
-    secretKey: ""
-
 # Decoding of JWT Interaction Panels calls require the same secret as used in service-api for encoding
 # Supports multiple tokens, seperated by ';' secret1;secret2;
 cognigyJwtSecrets:
@@ -495,7 +463,7 @@ redisHa:
   image:
     registry: cognigy.azurecr.io
     repository: redis
-    tag: 7.0.10-debian-11-r8
+    tag: 7.2.3-debian-11-r1
   auth:
     enabled: false
     sentinel: false
@@ -511,10 +479,10 @@ redisHa:
     resources:
       requests:
         cpu: "0.150"
-        memory: 300Mi
+        memory: 600Mi
       limits:
         cpu: "0.150"
-        memory: 300Mi
+        memory: 600Mi
     priorityClassName: ""
     ## Set the maxmemory to the 85% of the redis memory limit.
     configuration: |-
@@ -742,7 +710,7 @@ api:
 
 apiBan:
   enabled: true
-  image: cognigy.azurecr.io/api-ban:release-b682f058504507cd139f16eb54bbf82b9e823014-1700065274
+  image: cognigy.azurecr.io/api-ban:release-5be2aa16391683cc54daca317d1b972d6efd0397-1705391648
   imagePullPolicy: IfNotPresent
   endpoint: https://apiban.org/api
   redisSetKey: apiban:ips
@@ -760,7 +728,7 @@ apiBan:
 
 billingApp:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:release-c492fb47adaa39d488c021986782db8e523e9206-1700065261
+  image: cognigy.azurecr.io/voicegateway-billing-app:release-02be9e9ddec736568f346fa0c8db7cfdb5708744-1705391666
   imagePullPolicy: IfNotPresent
   replicasCount: 1
   affinity: {}
@@ -807,7 +775,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/jambonz-feature-server:release-fb39cb57da903b9a3519167f536a39dc77980360-1704894744
+  image: cognigy.azurecr.io/jambonz-feature-server:release-f53ce8836ee679a6927b3314b2f45fefd9a6f63f-1705672994
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -933,7 +901,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:release-3ed4b26713edc88688ac1d03cd36c1d7b01926c7-1700034959
+  image: cognigy.azurecr.io/sbc-inbound:release-c4d2dbcd5f538352dbc29e028eb37371727b6fad-1705336054
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -972,7 +940,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:release-be78db820950e98dd73d53cea0d4a4ea4378b3dc-1702551365
+  image: cognigy.azurecr.io/sbc-outbound:release-c625b936ae82aefd959cdd6ee37e0d1b11a19b16-1705336064
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1020,7 +988,7 @@ sbcSipSidecar:
 
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-test-call-manager:release-02f50edc9db1b37cb97340df5a36f7ac49c20682-1700065268
+  image: cognigy.azurecr.io/voicegateway-test-call-manager:release-a6c231ba62e67abbb4cb92cd0d632583495f768b-1705391657
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1057,7 +1025,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:release-74a984af6399f403aaa57ee18ea75037bd4d887f-1704963426
+  image: cognigy.azurecr.io/vg-webapp:release-f4f78b0ae5d90fc81ce8d445b8b0f40bcf246274-1706000194
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
