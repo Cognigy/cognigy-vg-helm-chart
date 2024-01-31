@@ -940,7 +940,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:release-c625b936ae82aefd959cdd6ee37e0d1b11a19b16-1705336064
+  image: cognigy.azurecr.io/sbc-outbound:release-0b09a4b32fd1d13bb22877292d222792b2aa5609-1706688743
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -973,6 +973,7 @@ sbcOutbound:
       cpu: "0.150"
       memory: 150Mi
   padCrypto: false
+  supportBestEffortTls: false
 
 sbcSipSidecar:
   image: cognigy.azurecr.io/sbc-sip-sidecar:release-0d47608674d471563acdeb758c5c59fdddcd844f-1701179645
