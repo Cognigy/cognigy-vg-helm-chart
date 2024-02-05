@@ -261,7 +261,7 @@ spec:
       volumes:
       - name: drachtio-certs
         secret:
-          secretName: cognigy-traefik
+          secretName: {{ .Values.sbc.sip.certSecretName | quote }}
           items:
             - key: tls.crt
               path: tls.crt

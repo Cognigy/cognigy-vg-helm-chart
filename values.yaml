@@ -234,6 +234,11 @@ ingress:
 # Remark: For production deployments, separate nodepools are recommended for SIP and RTP.
 sbc:
   sip:
+    ## SAN Multi-Domain certificate or wildcard certificate
+    ## Existing secret with TLS certificates. The secret must have the following two keys:
+    ## "tls.crt": Containing the CA certificate
+    ## "tls.key": Containing the certificate key
+    certSecretName: cognigy-traefik
     ## The number of replicas for the RTP pods needs to be the same as the number of static IPs provisioned for the media traffic.
     replicaCount: 2
     ## Please set sbc.rtp.useStatefulSet to false if you don't want to use StatefulSet for SBC RTP (headless service).
