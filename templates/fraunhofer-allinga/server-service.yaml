@@ -1,0 +1,17 @@
+{{- if .Values.fraunhofer.server.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: fraunhofer-server
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: fraunhofer-server
+spec:
+  selector:
+    app: fraunhofer-server
+  ports:
+    - name: fraunhofer-server
+      port: {{ .Values.fraunhofer.server.port }}
+      targetPort: {{ .Values.fraunhofer.server.port }}
+      protocol: TCP
+{{- end }}

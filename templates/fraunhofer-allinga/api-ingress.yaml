@@ -1,0 +1,30 @@
+{{- if and (.Values.ingress.enabled) (.Values.ingress.fraunhofer.api.enabled) }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fraunhofer-api
+  namespace: {{ $.Release.Namespace | quote }}
+  annotations:
+    {{- if .Values.tls.enabled }}
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    {{- else }}
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    {{- end }}
+    {{- if .Values.ingress.fraunhofer.api.ipWhiteListMiddleware.enabled }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-ipwhitelistfraunhoferapi@kubernetescrd
+    {{- end }}
+spec:
+  ingressClassName: traefik
+  {{- include "tlsCertificate.secretName.render" $ | nindent 2 }}
+  rules:
+    - host: {{ .Values.ingress.fraunhofer.api.host }}
+      http:
+        paths:
+          - backend:
+              service:
+                name: fraunhofer-api
+                port:
+                  number: {{ .Values.fraunhofer.api.port }}
+            path: /
+            pathType: Prefix
+{{- end }}

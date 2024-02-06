@@ -93,6 +93,8 @@ spec:
               value: {{ .Values.webapp.enableTtsElevenlabs | quote }}
             - name: ENABLE_TTS_ELEVENLABS_OPTIONS
               value: {{ .Values.webapp.enableTtsElevenlabsOptions | quote }}
+            - name: ENABLE_TTS_DEEPGRAM
+              value: {{ .Values.webapp.enableTtsDeepgram | quote }}
           envFrom:
             - configMapRef:
                 name: cognigy-env

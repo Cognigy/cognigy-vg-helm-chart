@@ -288,6 +288,8 @@ spec:
               value: {{ .Values.tracing.callTracingEnabled | quote }}
             - name: NODE_OPTIONS
               value: {{ .Values.featureServer.nodeOptions | quote }}
+            - name: JAMBONES_EAGERLY_PRE_CACHE_AUDIO
+              value: {{ if .Values.featureServer.preCacheAudio }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env
