@@ -969,7 +969,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:release-57ff1b84ea105931bfd0fce948dfda7f83859860-1707995450
+  image: cognigy.azurecr.io/sbc-outbound:release-0e347a3faf76342cb082cac4bbbdf41ce1f2b7dc-1708016197
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
