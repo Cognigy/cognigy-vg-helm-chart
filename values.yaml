@@ -187,28 +187,7 @@ ingress:
         sourceRange:
           - 0.0.0.0/0
         ipStrategy:
-          depth: 0
-  fraunhofer:
-    server:
-      enabled: false
-      host: ""    
-      ipWhiteListMiddleware:
-        enabled: false
-        ipWhiteList:
-          sourceRange:
-            - 0.0.0.0/0
-          ipStrategy:
-            depth: 0
-    api:
-      enabled: false
-      host: ""    
-      ipWhiteListMiddleware:
-        enabled: false
-        ipWhiteList:
-          sourceRange:
-            - 0.0.0.0/0
-          ipStrategy:
-            depth: 0
+          depth: 0 
   jaeger:
     enabled: false
     host: ""
@@ -694,10 +673,9 @@ cognigyLogin:
 ###########################
 
 jobs:
-  image: cognigy.azurecr.io/vg-alpine-curl:release-3e40d054c558f45fd5b1746733e8bd8e1dc3c758-1694002229
-
+  image: cognigy.azurecr.io/vg-alpine-curl:release-338dd0d042b74b7099fc6907fa3587cc43a0ab41-1707207601
 api:
-  image: cognigy.azurecr.io/api-server:release-acc8775f02934e4565451a6087b27b0d62e528c7-1706693302
+  image: cognigy.azurecr.io/api-server:release-18c7955aaff89b056325e46e25792e27e4be2dab-1707237595
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   logLevel: info
@@ -726,6 +704,7 @@ api:
   debounceQuantity: 50
   rateLimitMinutes: 4
   rateLimit: 400
+  enablePrepareCognigyData: false
   protocol: https
   resources:
     requests:
@@ -755,7 +734,7 @@ apiBan:
 
 billingApp:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:release-02be9e9ddec736568f346fa0c8db7cfdb5708744-1705391666
+  image: cognigy.azurecr.io/voicegateway-billing-app:release-2445c3ac94445211ee0a087e410dc05e5e8dac7c-1707207557
   imagePullPolicy: IfNotPresent
   replicasCount: 1
   affinity: {}
@@ -788,11 +767,12 @@ billingApp:
       memory: 300Mi
 
 drachtio:
-  image: cognigy.azurecr.io/drachtio-server:release-120cc548ec172b87fcf35cef5aa121690086a627-1704903108
+  image: cognigy.azurecr.io/drachtio-server:release-20d5777c036fba3a7264f90569dc807b36eb69ce-1707299120
   imagePullPolicy: IfNotPresent
   port: 9022
   homerId: 10
   supportBestEffortTls: false
+  rejectRegisterWithNoRealm: true
   resources:
     requests:
       cpu: "0.250"
@@ -802,10 +782,11 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/jambonz-feature-server:release-54cf4e6e67ac7a83cfb9566c26f73ab05443567a-1706864464
+  image: cognigy.azurecr.io/jambonz-feature-server:release-b8222e8b1af05aa65022aaf73b2bab9b7848294a-1708428267
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
+  sofiaLoglevel: "3"
   trimTts: true
   serviceName: feature-server
   affinity:
@@ -847,7 +828,7 @@ featureServer:
       memory: 500Mi
 
 freeswitch:
-  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:release-b9801e32e33a0fb12341440c5328abdba33f86a6-1705918183
+  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:release-1cb9662523b9f0a4f04449941e178f8ae7b6258e-1705918145
   imagePullPolicy: IfNotPresent
   logLevel: info
   ## Argument "--codec-answer-generous" is commented because we are looking into a DTMF recognition issue using Firefox, in the Interaction Panel Call,
@@ -886,7 +867,7 @@ rtpEngine:
       memory: 250Mi
 
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:release-1dcca57e3d832297e7d4b35081e6ad7f90060709-1705916692
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:release-1bf2e0b837ff1ea8c21e037ac6350f2bbbaf4cc3-1707207581
   imagePullPolicy: IfNotPresent  
   logLevel: info
   ports:
@@ -930,7 +911,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:release-7bbbcaa16661087e97314a9404f30a35de57ce24-1706521028
+  image: cognigy.azurecr.io/sbc-inbound:release-28510a21174cef7e1ab6b19825fd032be055d307-1707207545
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -969,7 +950,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:release-0e347a3faf76342cb082cac4bbbdf41ce1f2b7dc-1708016197
+  image: cognigy.azurecr.io/sbc-outbound:release-4a035bac6b5aad7cee44b62f032e061029f7a4b8-1707995435
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1018,7 +999,7 @@ sbcSipSidecar:
 
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-test-call-manager:release-a6c231ba62e67abbb4cb92cd0d632583495f768b-1705391657
+  image: cognigy.azurecr.io/voicegateway-test-call-manager:release-53375691ca063911d96983344d95765ba4f7d15d-1707207571
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1055,7 +1036,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:release-aef067272e345e19e566477119783bc47ce28462-1706519587
+  image: cognigy.azurecr.io/vg-webapp:release-bc0f1c953254b272d902087a3a80d0fb18a47dbc-1707237610
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1245,35 +1226,164 @@ priorityClass:
     globalDefault: false
     description: "PriorityClass for low priority services"
 
-## TTS Fraunhofer Allinga Server and API middleware
-fraunhofer:
-  server:
-    enabled: false
-    replicas: 1
-    image: cognigy.azurecr.io/vg-fraunhofer-allinga:1.4.1_cu111
-    imagePullPolicy: IfNotPresent
-    runtime: runc # runc for CPU or nvidia for GPU
-    port: 8896
-    resources: 
-      requests:
-        memory: 6Gi
-        cpu: 250m
-      limits:
-        memory: 7Gi
-        cpu: 500m
-  api:
-    enabled: false
-    replicas: 1
-    image: cognigy.azurecr.io/vg-fraunhofer-api:main-bbb785b92a79718772a940e8aae478e8c73c89c7-1706272937    
-    imagePullPolicy: IfNotPresent
-    logLevel: debug
-    baseUrl: http://localhost:8896
-    ttsPath: /speaker.beta2.TextToSpeech/synthesize
-    port: 4000
-    resources:      
-      requests:
-        memory: 100Mi
-        cpu: 250m
-      limits:
-        memory: 200Mi
-        cpu: 500m
+## Optionally enable HorizontalPodAutoscaler for pods
+## ref: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+##
+## Make sure that pods have resources limits and requests defined and the 'metrics server' has been deployed and configured in the cluster.
+## https://github.com/kubernetes-sigs/metrics-server
+##
+## Note: This is an experimental feature and should not be used in production.
+## Please don't enable this flag for now if you are a customer running Cognigy Voice Gateway using this Helm Chart.
+## This note will be removed once we are done with the testing and the feature will be production ready.
+##
+hpa:
+  enabled: false
+  ## When set to true, and "hpa.enabled" is true, the "spec.replicas" field will be omitted from the deployment manifest of all the HPA managed services.
+  ##
+  removeReplicas: true
+  ## Enabling this flag would append the tolerations defined in "hpa.hpaTolerations" to the deployment manifest of all the HPA managed services.
+  ##
+  useHpaTolerations: true
+  ## default tolerations to be added to the deployment manifest of all the HPA managed services.
+  ##
+  hpaTolerations:
+    - key: "node-role.cognigy.ai"
+      value: "autoscaler"
+      effect: "NoSchedule"
+  ## Enabling this flag would append the nodeSelector defined in "hpa.hpaNodeSelector" to the deployment manifest of all the HPA managed services.
+  ##
+  useHpaNodeSelector: true
+  ## default nodeSelector to be added to the deployment manifest of all the HPA managed services.
+  ##
+  hpaNodeSelector:
+    "node-role": "autoscaler"
+  ## HorizontalPodAutoscaler (HPA) managed services 
+  ##
+  services:
+    featureServer:
+      ## Enable horizontal pod autoscaler
+      ##
+      enabled: true
+      name: feature-server
+      ## Define the specification of the workload this HAP will manage.
+      ## Examples:
+      ## If the HPA will manage a Deployment then set the following
+      ##  scaleTargetRef:
+      ##    apiVersion: apps/v1
+      ##    kind: Deployment
+      ##
+      ## Alternatively if the HPA will manage a StatefulSet then set the following
+      ##  scaleTargetRef:
+      ##    apiVersion: apps/v1
+      ##    kind: StatefulSet
+      ##
+      scaleTargetRef:
+        apiVersion: apps/v1
+        kind: StatefulSet
+      ## Minimum allowed replicas to which the scaling target can be scaled down
+      ##
+      minReplicas: 2
+      ## Maximum allowed replicas to which the scaling target can be scaled up
+      ##
+      maxReplicas: 10
+      ## Define metrics against which HorizontalPodAutoscaler will react
+      ## metrics:
+      ##   - type: Resource
+      ##     resource:
+      ##       name: memory
+      ##       target:
+      ##         type: Utilization
+      ##         averageUtilization: 80
+      ##   - type: Resource
+      ##     resource:
+      ##       name: cpu
+      ##       target:
+      ##         type: Utilization
+      ##         averageUtilization: 70
+      ##
+      metrics:
+        - type: Resource
+          resource:
+            name: cpu
+            target:
+              type: Utilization
+              ## Define the CPU target to trigger the scaling actions (utilization percentage)
+              ##
+              averageUtilization: 50
+        - type: Resource
+          resource:
+            name: memory
+            target:
+              type: Utilization
+              ## Define the memory target to trigger the scaling actions (utilization percentage)
+              ##
+              averageUtilization: 70
+      behavior: {}
+    apiServer:
+      enabled: true
+      name: api-server
+      scaleTargetRef:
+        apiVersion: apps/v1
+        kind: Deployment
+      minReplicas: 2
+      maxReplicas: 10
+      metrics:
+        - type: Resource
+          resource:
+            name: cpu
+            target:
+              type: Utilization
+              averageUtilization: 50
+        - type: Resource
+          resource:
+            name: memory
+            target:
+              type: Utilization
+              averageUtilization: 70
+      behavior: {}
+    sbcInbound:
+      enabled: true
+      name: sbc-inbound
+      scaleTargetRef:
+        apiVersion: apps/v1
+        kind: Deployment
+      minReplicas: 2
+      maxReplicas: 10
+      metrics:
+        - type: Resource
+          resource:
+            name: cpu
+            target:
+              type: Utilization
+              averageUtilization: 50
+        - type: Resource
+          resource:
+            name: memory
+            target:
+              type: Utilization
+              averageUtilization: 70
+      behavior: {}
+    sbcOutbound:
+      enabled: true
+      name: sbc-outbound
+      scaleTargetRef:
+        apiVersion: apps/v1
+        kind: Deployment
+      minReplicas: 2
+      maxReplicas: 10
+      metrics:
+        - type: Resource
+          resource:
+            name: cpu
+            target:
+              type: Utilization
+              averageUtilization: 50
+        - type: Resource
+          resource:
+            name: memory
+            target:
+              type: Utilization
+              averageUtilization: 70
+      behavior: {}
+
+

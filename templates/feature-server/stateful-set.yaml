@@ -8,7 +8,9 @@ spec:
   selector:
     matchLabels:
       app: feature-server
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas)) }}
   replicas: {{ .Values.featureServer.replicaCount }}
+  {{- end }}
   serviceName: feature-server-headless
   template:
     metadata:
@@ -25,8 +27,14 @@ spec:
       {{- if .Values.featureServer.affinity }}
       affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.featureServer.affinity "context" $) | nindent 8 }}
       {{- end }}
-      {{- if .Values.featureServer.nodeSelector }}
-      nodeSelector: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.featureServer.nodeSelector "context" $) | nindent 8 }}
+      {{- if or (.Values.featureServer.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector))}}
+      nodeSelector:
+        {{- if .Values.featureServer.nodeSelector }}
+          {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.featureServer.nodeSelector "context" $) | nindent 8 }}
+        {{- end }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
+          {{- include "cognigyvg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
+        {{- end }}
       {{- end }}
       {{- if .Values.featureServer.priorityClassName }}
       priorityClassName: {{ .Values.featureServer.priorityClassName }}
@@ -34,8 +42,14 @@ spec:
       {{- if .Values.featureServer.podSecurityContext }}
       securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.featureServer.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
-      {{- if .Values.featureServer.tolerations }}
-      tolerations: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.featureServer.tolerations "context" $) | nindent 8 }}
+      {{- if or (.Values.featureServer.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
+      tolerations: 
+        {{- if or (.Values.featureServer.tolerations) }}
+          {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.featureServer.tolerations "context" $) | nindent 8 }}
+        {{- end }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
+          {{- include "cognigyvg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
+        {{- end }}
       {{- end }}
       topologySpreadConstraints:
         - maxSkew: 1
@@ -102,9 +116,25 @@ spec:
                   "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
                 ]
           {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
-          args: ['drachtio', '--contact', 'sip:*:5060;transport=udp,tcp', '--loglevel', 'info', 'sofia-loglevel', '3']
+          args:
+            - drachtio
+            - --contact
+            - 'sip:*:5060;transport=udp,tcp'
+            - --loglevel
+            - {{ .Values.featureServer.logLevel | quote }}
+            - --sofia-loglevel
+            - {{ .Values.featureServer.sofiaLoglevel | quote }}
           {{- else }}
-          args: ['drachtio', '--contact', 'sip:*:5060;transport=udp', '--mtu', '4096', '--loglevel', 'info', 'sofia-loglevel', '3']          
+          args: 
+            - drachtio
+            - --contact
+            - 'sip:*:5060;transport=udp'
+            - --mtu ## max packet size for UDP
+            - '4096'
+            - --loglevel
+            - {{ .Values.featureServer.logLevel | quote }}
+            - --sofia-loglevel
+            - {{ .Values.featureServer.sofiaLoglevel | quote }}
           {{- end }}
         - name: freeswitch
           image: {{ .Values.freeswitch.image }}

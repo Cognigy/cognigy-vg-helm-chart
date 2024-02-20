@@ -117,6 +117,8 @@ spec:
             - {{ .Values.apiBan.refreshInterval | quote }}
             - --blacklist-redis-key
             - {{ .Values.apiBan.redisSetKey | quote }}
+            - --reject-register-with-no-realm
+            - {{ if .Values.drachtio.rejectRegisterWithNoRealm }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
           {{- end }}
           env:
             - name: NODE_ENV

@@ -95,7 +95,7 @@ spec:
             - "sip:*:5062;transport=tcp"
             {{- end }}
             - --loglevel
-            - {{ .Values.sbc.sip.logLevel }}
+            - {{ .Values.sbc.sip.logLevel | quote }}
             - --cloud-deployment
             - --sofia-loglevel
             - {{ .Values.sbc.sip.sofiaLoglevel | quote }}
@@ -119,6 +119,8 @@ spec:
             - {{ .Values.apiBan.refreshInterval | quote }}
             - --blacklist-redis-key
             - {{ .Values.apiBan.redisSetKey | quote }}
+            - --reject-register-with-no-realm
+            - {{ if .Values.drachtio.rejectRegisterWithNoRealm }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
           {{- end }}
           env:
             - name: NODE_ENV
@@ -153,7 +155,7 @@ spec:
             - name: SOFIA_SRES_NO_CACHE
               value: "1"
             - name: DRACHTIO_SUPPORT_BEST_EFFORT_TLS
-              value: {{ if .Values.drachtio.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}              
+              value: {{ if .Values.drachtio.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
           volumeMounts:
             - mountPath: /etc/letsencrypt/
               name: drachtio-certs
