@@ -14,7 +14,7 @@ data:
         "type": "internal"
       },
       "database_config": {
-        "help": "Settings for PGSQL Database (settings)",
+        "help": "Settings for PostgreSQL Database (settings)",
         "host": "postgres",
         "keepalive": true,
         "name": "homer_config",
@@ -24,7 +24,7 @@ data:
       },
       "database_data": {
         "localnode": {
-          "help": "Settings for PGSQL Database (data)",
+          "help": "Settings for PostgreSQL Database (data)",
           "host": "postgres",
           "keepalive": true,
           "name": "homer_data",

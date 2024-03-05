@@ -1,0 +1,11 @@
+{{- if and (.Values.ingress.enabled) (.Values.traefik.enabled) (.Values.ingress.homer.basicAuthMiddleware.enabled) }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: homerauth
+  namespace: {{ $.Release.Namespace | quote }}
+spec:
+    basicAuth:
+        secret: {{ default "homer-auth" .Values.homer.existingSecret }}
+{{- end }}

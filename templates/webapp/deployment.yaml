@@ -93,8 +93,14 @@ spec:
               value: {{ .Values.webapp.enableTtsElevenlabs | quote }}
             - name: ENABLE_TTS_ELEVENLABS_OPTIONS
               value: {{ .Values.webapp.enableTtsElevenlabsOptions | quote }}
+            - name: ENABLE_TTS_ELEVENLABS_STREAMING
+              value: {{ .Values.webapp.enableTtsElevenlabsStreaming | quote }}
             - name: ENABLE_TTS_DEEPGRAM
-              value: {{ .Values.webapp.enableTtsDeepgram | quote }}
+              value: {{ .Values.webapp.enableTtsDeepgram | quote }}            
+            - name: ENABLE_ON_PREMISES_DEEPGRAM
+              value: {{ .Values.webapp.enableOnPremisesDeepgram | quote }}
+            - name: ENABLE_ON_PREMISES_NUANCE
+              value: {{ .Values.webapp.enableOnPremisesNuance | quote }}
           envFrom:
             - configMapRef:
                 name: cognigy-env

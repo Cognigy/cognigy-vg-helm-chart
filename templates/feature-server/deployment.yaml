@@ -20,7 +20,6 @@ spec:
         checksum/feature-server: {{ include (print $.Template.BasePath "/feature-server/config-map.yaml") $ | sha256sum }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
-      restartPolicy: Always
       {{- if .Values.featureServer.terminationGracePeriodSeconds }}
       terminationGracePeriodSeconds: {{ .Values.featureServer.terminationGracePeriodSeconds }}
       {{- end }}
@@ -58,6 +57,7 @@ spec:
           labelSelector:
             matchLabels:
               app: feature-server
+      restartPolicy: Always
       initContainers:
         - image: kanisterio/mysql-sidecar:0.40.0
           name: db-create-wait
@@ -104,6 +104,8 @@ spec:
               value: "1"
             - name: SOFIA_SRES_NO_CACHE
               value: "1"
+            - name: DRACHTIO_SUPPORT_BEST_EFFORT_TLS
+              value: {{ if .Values.drachtio.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
           lifecycle:
             preStop:
               exec:
@@ -113,9 +115,25 @@ spec:
                   "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
                 ]
           {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
-          args: ['drachtio', '--contact', 'sip:*:5060;transport=udp,tcp', '--loglevel', 'info', 'sofia-loglevel', '3']
+          args:
+            - drachtio
+            - --contact
+            - 'sip:*:5060;transport=udp,tcp'
+            - --loglevel
+            - {{ .Values.featureServer.logLevel | quote }}
+            - --sofia-loglevel
+            - {{ .Values.featureServer.sofiaLoglevel | quote }}
           {{- else }}
-          args: ['drachtio', '--contact', 'sip:*:5060;transport=udp', '--mtu', '4096', '--loglevel', 'info', 'sofia-loglevel', '3']          
+          args: 
+            - drachtio
+            - --contact
+            - 'sip:*:5060;transport=udp'
+            - --mtu ## max packet size for UDP
+            - '4096'
+            - --loglevel
+            - {{ .Values.featureServer.logLevel | quote }}
+            - --sofia-loglevel
+            - {{ .Values.featureServer.sofiaLoglevel | quote }}
           {{- end }}
         - name: freeswitch
           image: {{ .Values.freeswitch.image }}
@@ -123,12 +141,23 @@ spec:
           resources: {{- toYaml .Values.freeswitch.resources | nindent 12 }}
           ports:
             - name: freeswitch
-              containerPort: {{ .Values.freeswitch.port }}
-              protocol: TCP
+              containerPort: {{ .Values.freeswitch.ports.eventSocket }}
+              protocol: TCP          
           args:
-          {{- range .Values.freeswitch.args }}
+            - freeswitch
+            - --username
+            - {{ .Values.freeswitch.username | quote }}
+            - -l
+            - {{ .Values.freeswitch.logLevel | quote }}
+            - --sip-port
+            - {{ .Values.freeswitch.ports.sip | quote }}
+            - --tls-port
+            - {{ .Values.freeswitch.ports.tls | quote }}
+            - --event-socket-port
+            - {{ .Values.freeswitch.ports.eventSocket | quote }}
+            {{- range .Values.freeswitch.args }}
             - {{ . }}
-          {{- end }}
+            {{- end }}
           env: 
             - name: MOD_AUDIO_FORK_SUBPROTOCOL_NAME
               value: audio.jambonz.org
@@ -136,6 +165,8 @@ spec:
               value: "1"
             - name: MOD_AUDIO_FORK_BUFFER_SECS
               value: "3"
+            - name: JAMBONZ_TMP_CACHE_FOLDER
+              value: {{ .Values.freeswitch.tmpCacheAudioFolder | quote }}
           lifecycle:
             preStop:
               exec:
@@ -270,7 +301,7 @@ spec:
             - name: VMD_HINTS_FILE
               value: /etc/voicemail-phraselist.json
             - name: JAMBONES_OTEL_ENABLED
-              value: "1"
+              value: "true"
             - name: VG_TTS_TRIM_SILENCE
               value: {{ .Values.featureServer.trimTts | quote }}            
             - name: OTEL_EXPORTER_JAEGER_AGENT_HOST
@@ -297,6 +328,12 @@ spec:
               value: {{ .Values.featureServer.sigtermForceCloseTimeoutMs | quote }}
             - name: VG_SENTRY_TRACING_ENABLED
               value: {{ .Values.tracing.callTracingEnabled | quote }}
+            - name: NODE_OPTIONS
+              value: {{ .Values.featureServer.nodeOptions | quote }}
+            - name: JAMBONES_EAGERLY_PRE_CACHE_AUDIO
+              value: {{ .Values.featureServer.preCacheAudio | quote }}
+            - name: JAMBONES_DISABLE_TTS_STREAMING
+              value: {{ not .Values.webapp.enableTtsElevenlabsStreaming | quote }}            
           envFrom:
             - configMapRef:
                 name: cognigy-env

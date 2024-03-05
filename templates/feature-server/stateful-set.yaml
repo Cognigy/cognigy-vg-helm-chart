@@ -106,7 +106,7 @@ spec:
             - name: SOFIA_SRES_NO_CACHE
               value: "1"
             - name: DRACHTIO_SUPPORT_BEST_EFFORT_TLS
-              value: {{ if .Values.drachtio.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}              
+              value: {{ if .Values.drachtio.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
           lifecycle:
             preStop:
               exec:
@@ -142,12 +142,23 @@ spec:
           resources: {{- toYaml .Values.freeswitch.resources | nindent 12 }}
           ports:
             - name: freeswitch
-              containerPort: {{ .Values.freeswitch.port }}
+              containerPort: {{ .Values.freeswitch.ports.eventSocket }}
               protocol: TCP
           args:
-          {{- range .Values.freeswitch.args }}
+            - freeswitch
+            - --username
+            - {{ .Values.freeswitch.username | quote }}
+            - -l
+            - {{ .Values.freeswitch.logLevel | quote }}
+            - --sip-port
+            - {{ .Values.freeswitch.ports.sip | quote }}
+            - --tls-port
+            - {{ .Values.freeswitch.ports.tls | quote }}
+            - --event-socket-port
+            - {{ .Values.freeswitch.ports.eventSocket | quote }}
+            {{- range .Values.freeswitch.args }}
             - {{ . }}
-          {{- end }}
+            {{- end }}
           env: 
             - name: MOD_AUDIO_FORK_SUBPROTOCOL_NAME
               value: audio.jambonz.org
@@ -155,6 +166,8 @@ spec:
               value: "1"
             - name: MOD_AUDIO_FORK_BUFFER_SECS
               value: "3"
+            - name: JAMBONZ_TMP_CACHE_FOLDER
+              value: {{ .Values.freeswitch.tmpCacheAudioFolder | quote }}
           lifecycle:
             preStop:
               exec:
@@ -289,7 +302,7 @@ spec:
             - name: VMD_HINTS_FILE
               value: /etc/voicemail-phraselist.json
             - name: JAMBONES_OTEL_ENABLED
-              value: "1"
+              value: "true"
             - name: VG_TTS_TRIM_SILENCE
               value: {{ .Values.featureServer.trimTts | quote }}            
             - name: OTEL_EXPORTER_JAEGER_AGENT_HOST
@@ -309,7 +322,7 @@ spec:
             - name: TRACING_EVENTS_SAMPLE_RATE
               value: {{ .Values.tracing.eventsSampleRate | quote }}
             - name: ENVIRONMENT
-              value: {{ .Values.tracing.environment | quote }}            
+              value: {{ .Values.tracing.environment | quote }}
             - name: COGNIGY_AI_VERSION
               value: {{ .Chart.Version | trunc 6 | quote }}
             - name: SIGTERM_FORCE_CLOSE_TIMEOUT
@@ -319,7 +332,9 @@ spec:
             - name: NODE_OPTIONS
               value: {{ .Values.featureServer.nodeOptions | quote }}
             - name: JAMBONES_EAGERLY_PRE_CACHE_AUDIO
-              value: {{ if .Values.featureServer.preCacheAudio }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+              value: {{ .Values.featureServer.preCacheAudio | quote }}
+            - name: JAMBONES_DISABLE_TTS_STREAMING
+              value: {{ not .Values.webapp.enableTtsElevenlabsStreaming | quote }}            
           envFrom:
             - configMapRef:
                 name: cognigy-env

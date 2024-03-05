@@ -202,7 +202,9 @@ spec:
               value: {{ .Values.tracing.apiBaseUrl | quote }}
             {{- end }}
             - name: ENABLE_PREPARE_COGNIGY_DATA
-              value: {{ .Values.api.enablePrepareCognigyData | quote }}            
+              value: {{ .Values.api.enablePrepareCognigyData | quote }}
+            - name: JAMBONES_DISABLE_TTS_STREAMING
+              value: {{ not .Values.webapp.enableTtsElevenlabsStreaming | quote }}
           envFrom:
             - configMapRef:
                 name: cognigy-env

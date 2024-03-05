@@ -188,6 +188,18 @@ ingress:
           - 0.0.0.0/0
         ipStrategy:
           depth: 0 
+  homer:
+    enabled: false
+    host: ""    
+    basicAuthMiddleware:
+      enabled: true
+    ipWhiteListMiddleware:
+      enabled: false
+      ipWhiteList:
+        sourceRange:
+          - 0.0.0.0/0
+        ipStrategy:
+          depth: 0
   jaeger:
     enabled: false
     host: ""
@@ -319,7 +331,7 @@ sbc:
 dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
-  image: cognigy.azurecr.io/db-create:release-acc8775f02934e4565451a6087b27b0d62e528c7-1706693302
+  image: cognigy.azurecr.io/db-create:release-34056c572028c1548a12edd23194ff489bf04faa-1709631442
   imagePullPolicy: IfNotPresent
   logCollectorEnabled: false
 
@@ -441,7 +453,10 @@ postgresql:
   port: 5432
 
 redis:
-  image: redis:7.0.12-alpine3.18
+  image: 
+    registry: cognigy.azurecr.io
+    repository: redis
+    tag: 7.2.4-debian-11-r3
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   host: redis
@@ -469,7 +484,7 @@ redisHa:
   image:
     registry: cognigy.azurecr.io
     repository: redis
-    tag: 7.2.3-debian-11-r1
+    tag: 7.2.4-debian-11-r3
   auth:
     enabled: false
     sentinel: false
@@ -512,7 +527,7 @@ redisHa:
     image:
       registry: cognigy.azurecr.io
       repository: redis-sentinel
-      tag: 7.0.10-debian-11-r7
+      tag: 7.2.4-debian-11-r4
     automateClusterRecovery: true
     downAfterMilliseconds: 2000
     failoverTimeout: 10000
@@ -528,7 +543,7 @@ redisHa:
     image:
       registry: cognigy.azurecr.io
       repository: redis-exporter
-      tag: 1.45.0-debian-11-r31
+      tag: 1.56.0-debian-11-r1
     resources:
       requests:
         cpu: "0.200"
@@ -585,6 +600,7 @@ homer:
   tolerations: []
   serviceName: homer
   urlPrefixServiceConnection: http://
+  existingSecret: ""
   ## Default credentials
   auth:
     username: admin
@@ -599,7 +615,7 @@ homer:
       memory: 150Mi
 
 jaeger:
-  image: cognigy.azurecr.io/vg-jaeger:release-497502cd13b86f36afb2095997e903bc141e9e1d-1689255781
+  image: cognigy.azurecr.io/vg-jaeger:release-9fdf4df7958a244246780105690776ee6fd01f89-1708936855
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -674,8 +690,9 @@ cognigyLogin:
 
 jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:release-338dd0d042b74b7099fc6907fa3587cc43a0ab41-1707207601
+
 api:
-  image: cognigy.azurecr.io/api-server:release-18c7955aaff89b056325e46e25792e27e4be2dab-1707237595
+  image: cognigy.azurecr.io/api-server:release-34056c572028c1548a12edd23194ff489bf04faa-1709631442
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   logLevel: info
@@ -704,7 +721,7 @@ api:
   debounceQuantity: 50
   rateLimitMinutes: 4
   rateLimit: 400
-  enablePrepareCognigyData: false
+  enablePrepareCognigyData: true
   protocol: https
   resources:
     requests:
@@ -716,7 +733,7 @@ api:
 
 apiBan:
   enabled: true
-  image: cognigy.azurecr.io/api-ban:release-5be2aa16391683cc54daca317d1b972d6efd0397-1705391648
+  image: cognigy.azurecr.io/api-ban:release-80d03f7a534d1cedc02550219c40447d9f3fef27-1708004652
   imagePullPolicy: IfNotPresent
   endpoint: https://apiban.org/api
   redisSetKey: apiban:ips
@@ -734,7 +751,7 @@ apiBan:
 
 billingApp:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:release-2445c3ac94445211ee0a087e410dc05e5e8dac7c-1707207557
+  image: cognigy.azurecr.io/voicegateway-billing-app:release-313239a384c7c5cedc20997a96f1c2998adf1b37-1708951886
   imagePullPolicy: IfNotPresent
   replicasCount: 1
   affinity: {}
@@ -767,7 +784,7 @@ billingApp:
       memory: 300Mi
 
 drachtio:
-  image: cognigy.azurecr.io/drachtio-server:release-20d5777c036fba3a7264f90569dc807b36eb69ce-1707299120
+  image: cognigy.azurecr.io/drachtio-server:release-6890140709d9715b4d31aa275af0211fb63295a9-1708619998
   imagePullPolicy: IfNotPresent
   port: 9022
   homerId: 10
@@ -782,7 +799,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/jambonz-feature-server:release-b8222e8b1af05aa65022aaf73b2bab9b7848294a-1708428267
+  image: cognigy.azurecr.io/jambonz-feature-server:release-f2e4564276b2d785fa2152e234295337a7271945-1709630929
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -815,7 +832,7 @@ featureServer:
   # Sets the max memory size of V8's old memory section - size in Megabytes
   nodeOptions: "--max-old-space-size=450"
   # Pre cache audio - default: true
-  preCacheAudio: true
+  preCacheAudio: true  
   ports:
     tcp: 3000
     udp: 5060
@@ -828,20 +845,22 @@ featureServer:
       memory: 500Mi
 
 freeswitch:
-  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:release-1cb9662523b9f0a4f04449941e178f8ae7b6258e-1705918145
+  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:release-7fa8d31ce6595313ecb4cc36475d7e1a07eb5ed1-1709572279
   imagePullPolicy: IfNotPresent
   logLevel: info
+  username: Cognigy
+  ports: 
+    sip: 5080
+    tls: 5081
+    eventSocket: 8021
   ## Argument "--codec-answer-generous" is commented because we are looking into a DTMF recognition issue using Firefox, in the Interaction Panel Call,
-  ## and until we don't have a solution we will force a specific codec for it. Once we have defintiive solution, we uncomment this.
-  args:
-    - freeswitch
+  ## and until we don't have a solution we will force a specific codec for it. Once we have defintive solution, we uncomment this.
+  args:    
     # - --codec-answer-generous
-    - --username
-    - Cognigy
-    # - --sip-port 5080 (default: 5080)
-    # - --tls-port 5081 (default: 5081)
-    # - --event-socket-port 8081 (default: 8021)
-  port: 8021
+    # - --g711-only
+    # - --rtp-range-start the starting UDP port for RTP traffic
+    # - --rtp-range-end the ending UDP port for RTP traffic  
+  tmpCacheAudioFolder: "/tmp/"
   resources:
     requests:
       cpu: "2.5"
@@ -867,7 +886,7 @@ rtpEngine:
       memory: 250Mi
 
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:release-1bf2e0b837ff1ea8c21e037ac6350f2bbbaf4cc3-1707207581
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:release-5c99e60855fadf99e2f416fe868705535b0bd755-1708344578
   imagePullPolicy: IfNotPresent  
   logLevel: info
   ports:
@@ -881,7 +900,7 @@ rtpEngineSidecar:
       memory: 200Mi
 
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:release-70c89c82415645cbce389343bb2beecaa5c2cfba-1700034913
+  image: cognigy.azurecr.io/sbc-call-router:release-6295ca1e67956345d4d6357d39f137efe4d58a6f-1708344314
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -911,7 +930,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:release-28510a21174cef7e1ab6b19825fd032be055d307-1707207545
+  image: cognigy.azurecr.io/sbc-inbound:release-901e35aedaf4b24e9d9caf721f84fa8b0768ab2a-1708336283
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -950,7 +969,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:release-4a035bac6b5aad7cee44b62f032e061029f7a4b8-1707995435
+  image: cognigy.azurecr.io/sbc-outbound:release-8ed22eacf6d2b9978c009f431d013c7aa6c19062-1708344303
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -986,7 +1005,7 @@ sbcOutbound:
   supportBestEffortTls: false
 
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:release-9c9dbf36aae84ec31590e626c8f764e6ee466059-1705916697
+  image: cognigy.azurecr.io/sbc-sip-sidecar:release-ad05b438dfdb27c72cca4733fa84bd77acead4c7-1708344611
   imagePullPolicy: IfNotPresent  
   logLevel: info
   resources:
@@ -999,7 +1018,7 @@ sbcSipSidecar:
 
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-test-call-manager:release-53375691ca063911d96983344d95765ba4f7d15d-1707207571
+  image: cognigy.azurecr.io/voicegateway-test-call-manager:release-6beeb55a8490eea5b043cbe6a44efdccfbe5d48c-1708004699
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1036,7 +1055,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:release-bc0f1c953254b272d902087a3a80d0fb18a47dbc-1707237610
+  image: cognigy.azurecr.io/vg-webapp:release-d423c3714975e7930561a515a7924e926ed02ba7-1709031089
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1070,9 +1089,12 @@ webapp:
   enableForgotPassword: false
   enableMsTeamsRouting: false
   enableSms: false
-  enableTtsElevenlabs: false
+  enableTtsElevenlabs: true
   enableTtsElevenlabsOptions: false
-  enableTtsDeepgram: false
+  enableTtsElevenlabsStreaming: true
+  enableTtsDeepgram: true
+  enableOnPremisesDeepgram: false
+  enableOnPremisesNuance: false
   resources:
     requests:
       cpu: "0.1"
