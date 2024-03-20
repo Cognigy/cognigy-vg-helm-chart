@@ -159,8 +159,6 @@ spec:
               value: {{ .Values.api.debounceTimeInSeconds | quote }}
             - name: DEBOUNCE_QUANTITY
               value: {{ .Values.api.debounceQuantity | quote }}
-            - name: DISABLE_RATE_LIMIT
-              value: {{ .Values.api.disableRateLimit | quote }}
             - name: RATE_LIMIT_WINDOWS_MINS
               value: {{ .Values.api.rateLimitMinutes | quote }}
             - name: RATE_LIMIT_MAX_PER_WINDOW

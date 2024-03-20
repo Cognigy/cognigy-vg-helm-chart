@@ -331,7 +331,7 @@ sbc:
 dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
-  image: cognigy.azurecr.io/db-create:release-878be7fcf670311c8eed3f3e2cd8643ce8446998-1710753886
+  image: cognigy.azurecr.io/db-create:release-34056c572028c1548a12edd23194ff489bf04faa-1709631442
   imagePullPolicy: IfNotPresent
   logCollectorEnabled: false
 
@@ -453,11 +453,8 @@ postgresql:
   port: 5432
 
 redis:
-  image: 
-    registry: cognigy.azurecr.io
-    repository: redis
-    tag: 7.2.4-debian-11-r3
-  imagePullPolicy: IfNotPresent
+  image: cognigy.azurecr.io/redis:7.2.4-debian-11-r3
+  imagePullPolicy: IfNotPresent  
   replicaCount: 1
   host: redis
   port: 6379
@@ -583,10 +580,10 @@ heplifyServer:
   resources:
     requests:
       cpu: "0.05"
-      memory: 400Mi
+      memory: 100Mi
     limits:
       cpu: "0.100"
-      memory: 800Mi
+      memory: 500Mi
 
 homer:
   ## The "latest" tag is the only one available
@@ -692,7 +689,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:release-338dd0d042b74b7099fc6907fa3587cc43a0ab41-1707207601
 
 api:
-  image: cognigy.azurecr.io/api-server:release-878be7fcf670311c8eed3f3e2cd8643ce8446998-1710753886
+  image: cognigy.azurecr.io/api-server:release-34056c572028c1548a12edd23194ff489bf04faa-1709631442
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   logLevel: info
@@ -719,7 +716,6 @@ api:
   enableDebounceMiddleware: true
   debounceTimeInSeconds: 5
   debounceQuantity: 50
-  disableRateLimit: false
   rateLimitMinutes: 4
   rateLimit: 400
   enablePrepareCognigyData: true
@@ -846,7 +842,7 @@ featureServer:
       memory: 500Mi
 
 freeswitch:
-  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:release-d33adeada11b6cbb9fdeb541c9328d9c9594b6ed-1710834447
+  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:release-7fa8d31ce6595313ecb4cc36475d7e1a07eb5ed1-1709572279
   imagePullPolicy: IfNotPresent
   logLevel: info
   username: Cognigy
@@ -860,7 +856,7 @@ freeswitch:
     # - --codec-answer-generous
     # - --g711-only
     # - --rtp-range-start the starting UDP port for RTP traffic
-    # - --rtp-range-end the ending UDP port for RTP traffic    
+    # - --rtp-range-end the ending UDP port for RTP traffic  
   tmpCacheAudioFolder: "/tmp/"
   resources:
     requests:
@@ -1056,7 +1052,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:release-1d1d7843c0f8cf4ad739be9c6743f9f902d1cab5-1709658890
+  image: cognigy.azurecr.io/vg-webapp:release-d423c3714975e7930561a515a7924e926ed02ba7-1709031089
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1342,7 +1338,7 @@ hpa:
               ##
               averageUtilization: 70
       behavior: {}
-    api:
+    apiServer:
       enabled: true
       name: api-server
       scaleTargetRef:

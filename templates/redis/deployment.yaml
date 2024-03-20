@@ -18,6 +18,7 @@ spec:
       labels:
         app: redis
     spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.redis.affinity }}
       affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.redis.affinity "context" $) | nindent 8 }}
       {{- end }}
