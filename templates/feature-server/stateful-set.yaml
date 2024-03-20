@@ -148,7 +148,7 @@ spec:
             - freeswitch
             - --username
             - {{ .Values.freeswitch.username | quote }}
-            - -l
+            - --log-level
             - {{ .Values.freeswitch.logLevel | quote }}
             - --sip-port
             - {{ .Values.freeswitch.ports.sip | quote }}
