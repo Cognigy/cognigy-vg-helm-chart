@@ -843,7 +843,7 @@ featureServer:
       memory: 500Mi
 
 freeswitch:
-  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:release-d33adeada11b6cbb9fdeb541c9328d9c9594b6ed-1710834447
+  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:release-1cb9662523b9f0a4f04449941e178f8ae7b6258e-1705918145
   imagePullPolicy: IfNotPresent
   logLevel: info
   username: Cognigy
@@ -857,7 +857,8 @@ freeswitch:
     # - --codec-answer-generous
     # - --g711-only
     # - --rtp-range-start the starting UDP port for RTP traffic
-    # - --rtp-range-end the ending UDP port for RTP traffic    
+    # - --rtp-range-end the ending UDP port for RTP traffic
+    # - --log-level debug (available from R71 freeSWITCH-mrf image)
   tmpCacheAudioFolder: "/tmp/"
   resources:
     requests:

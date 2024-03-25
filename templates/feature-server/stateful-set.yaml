@@ -147,9 +147,7 @@ spec:
           args:
             - freeswitch
             - --username
-            - {{ .Values.freeswitch.username | quote }}
-            - --log-level
-            - {{ .Values.freeswitch.logLevel | quote }}
+            - {{ .Values.freeswitch.username | quote }}            
             - --sip-port
             - {{ .Values.freeswitch.ports.sip | quote }}
             - --tls-port
