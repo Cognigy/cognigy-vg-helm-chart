@@ -331,7 +331,9 @@ spec:
             - name: JAMBONES_EAGERLY_PRE_CACHE_AUDIO
               value: {{ .Values.featureServer.preCacheAudio | quote }}
             - name: JAMBONES_DISABLE_TTS_STREAMING
-              value: {{ not .Values.webapp.enableTtsElevenlabsStreaming | quote }}            
+              value: {{ not .Values.webapp.enableTtsElevenlabsStreaming | quote }}
+            - name: ANCHOR_MEDIA_ALWAYS
+              value: {{ .Values.featureServer.anchorMediaAlways | quote }}
           envFrom:
             - configMapRef:
                 name: cognigy-env

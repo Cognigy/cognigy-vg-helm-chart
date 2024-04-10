@@ -797,7 +797,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/jambonz-feature-server:release-af94c0a8efb5f9cd7789e8d9fdbe0d81c90a353b-1711009871
+  image: cognigy.azurecr.io/jambonz-feature-server:release-2df5ceddc517748fb972506d265e3159c01dbe1b-1712768644
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -830,7 +830,8 @@ featureServer:
   # Sets the max memory size of V8's old memory section - size in Megabytes
   nodeOptions: "--max-old-space-size=450"
   # Pre cache audio - default: true
-  preCacheAudio: true  
+  preCacheAudio: true
+  anchorMediaAlways: false
   ports:
     tcp: 3000
     udp: 5060
@@ -843,7 +844,7 @@ featureServer:
       memory: 500Mi
 
 freeswitch:
-  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:release-1cb9662523b9f0a4f04449941e178f8ae7b6258e-1705918145
+  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:4.69.1
   imagePullPolicy: IfNotPresent
   logLevel: info
   username: Cognigy
