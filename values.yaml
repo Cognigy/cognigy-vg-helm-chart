@@ -331,7 +331,7 @@ sbc:
 dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
-  image: cognigy.azurecr.io/db-create:release-878be7fcf670311c8eed3f3e2cd8643ce8446998-1710753886
+  image: cognigy.azurecr.io/db-create:release-297a0ac3f8e183b4bd20bfb3877fc6f339371651-1712598903
   imagePullPolicy: IfNotPresent
   logCollectorEnabled: false
 
@@ -689,7 +689,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:release-338dd0d042b74b7099fc6907fa3587cc43a0ab41-1707207601
 
 api:
-  image: cognigy.azurecr.io/api-server:release-5b9a9dda61098b2426453fc7aa1b5ed187a7e31e-1711356478
+  image: cognigy.azurecr.io/api-server:release-297a0ac3f8e183b4bd20bfb3877fc6f339371651-1712598903
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   logLevel: info
@@ -829,8 +829,8 @@ featureServer:
   freeswitchConnection: "127.0.0.1:8021:JambonzR0ck$"
   # Sets the max memory size of V8's old memory section - size in Megabytes
   nodeOptions: "--max-old-space-size=450"
-  # Pre cache audio - default: true
-  preCacheAudio: true
+  # Pre cache audio - default: false
+  preCacheAudio: false
   anchorMediaAlways: false
   ports:
     tcp: 3000
@@ -872,6 +872,7 @@ freeswitch:
 rtpEngine:
   image: cognigy.azurecr.io/docker-rtpengine:release-be70cea88c549b07dd241f1a170ba42146e7d262-1692285009
   imagePullPolicy: IfNotPresent  
+  # During runtime, the log level can be decreased by sending the signal SIGURS1 to the daemon and can be increased with the signal SIGUSR2
   logLevel: 5
   port: 22222
   startPort: 40000
