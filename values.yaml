@@ -331,7 +331,7 @@ sbc:
 dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
-  image: cognigy.azurecr.io/db-create:release-878be7fcf670311c8eed3f3e2cd8643ce8446998-1710753886
+  image: cognigy.azurecr.io/db-create:release-297a0ac3f8e183b4bd20bfb3877fc6f339371651-1712598903
   imagePullPolicy: IfNotPresent
   logCollectorEnabled: false
 
@@ -689,7 +689,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:release-338dd0d042b74b7099fc6907fa3587cc43a0ab41-1707207601
 
 api:
-  image: cognigy.azurecr.io/api-server:release-878be7fcf670311c8eed3f3e2cd8643ce8446998-1710753886
+  image: cognigy.azurecr.io/api-server:release-297a0ac3f8e183b4bd20bfb3877fc6f339371651-1712598903
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   logLevel: info
@@ -731,7 +731,7 @@ api:
 
 apiBan:
   enabled: true
-  image: cognigy.azurecr.io/api-ban:release-80d03f7a534d1cedc02550219c40447d9f3fef27-1708004652
+  image: cognigy.azurecr.io/api-ban:release-a7935caf56eb9d83f084f5a85d299de024b7c72a-1711356469
   imagePullPolicy: IfNotPresent
   endpoint: https://apiban.org/api
   redisSetKey: apiban:ips
@@ -749,7 +749,7 @@ apiBan:
 
 billingApp:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:release-313239a384c7c5cedc20997a96f1c2998adf1b37-1708951886
+  image: cognigy.azurecr.io/voicegateway-billing-app:release-8da2e2a5b63bcb13d1ea84ce6281dea81ea68d27-1711384177
   imagePullPolicy: IfNotPresent
   replicasCount: 1
   affinity: {}
@@ -797,12 +797,12 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/jambonz-feature-server:release-f2e4564276b2d785fa2152e234295337a7271945-1709630929
+  image: cognigy.azurecr.io/jambonz-feature-server:release-1398044e6a630c06d6b1e34e023d44f385d95112-1714464086
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
   sofiaLoglevel: "3"
-  trimTts: true
+  trimTts: false
   serviceName: feature-server
   affinity:
     podAntiAffinity:
@@ -829,8 +829,9 @@ featureServer:
   freeswitchConnection: "127.0.0.1:8021:JambonzR0ck$"
   # Sets the max memory size of V8's old memory section - size in Megabytes
   nodeOptions: "--max-old-space-size=450"
-  # Pre cache audio - default: true
-  preCacheAudio: true  
+  # Pre cache audio - default: false
+  preCacheAudio: false
+  anchorMediaAlways: false
   ports:
     tcp: 3000
     udp: 5060
@@ -843,7 +844,7 @@ featureServer:
       memory: 500Mi
 
 freeswitch:
-  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:4.69.1
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:4.69.1
   imagePullPolicy: IfNotPresent
   logLevel: info
   username: Cognigy
@@ -869,8 +870,9 @@ freeswitch:
       memory: 3Gi
 
 rtpEngine:
-  image: cognigy.azurecr.io/docker-rtpengine:release-be70cea88c549b07dd241f1a170ba42146e7d262-1692285009
+  image: cognigy.azurecr.io/docker-rtpengine:release-92c344ade44c5ec033f0360f44fdb4f5bbefc9f1-1711624152
   imagePullPolicy: IfNotPresent  
+  # During runtime, the log level can be decreased by sending the signal SIGURS1 to the daemon and can be increased with the signal SIGUSR2
   logLevel: 5
   port: 22222
   startPort: 40000
@@ -968,7 +970,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:release-8ed22eacf6d2b9978c009f431d013c7aa6c19062-1708344303
+  image: cognigy.azurecr.io/sbc-outbound:release-fe22059bffb6d57b3dc9e66cfa15dc0c3f707e23-1711458158
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1017,7 +1019,7 @@ sbcSipSidecar:
 
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-test-call-manager:release-6beeb55a8490eea5b043cbe6a44efdccfbe5d48c-1708004699
+  image: cognigy.azurecr.io/voicegateway-test-call-manager:release-20fb46cda598582d0e0e9f708e42cb6a885c1081-1711356455
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1090,7 +1092,7 @@ webapp:
   enableSms: false
   enableTtsElevenlabs: true
   enableTtsElevenlabsOptions: false
-  enableTtsElevenlabsStreaming: true
+  enableTtsElevenlabsStreaming: false
   enableTtsDeepgram: true
   enableOnPremisesDeepgram: false
   enableOnPremisesNuance: false
