@@ -797,7 +797,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/jambonz-feature-server:release-1398044e6a630c06d6b1e34e023d44f385d95112-1714464086
+  image: cognigy.azurecr.io/jambonz-feature-server:4.74.1
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -844,7 +844,7 @@ featureServer:
       memory: 500Mi
 
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:4.69.1
+  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:4.69.1
   imagePullPolicy: IfNotPresent
   logLevel: info
   username: Cognigy
@@ -870,7 +870,7 @@ freeswitch:
       memory: 3Gi
 
 rtpEngine:
-  image: cognigy.azurecr.io/docker-rtpengine:release-92c344ade44c5ec033f0360f44fdb4f5bbefc9f1-1711624152
+  image: cognigy.azurecr.io/docker-rtpengine:release-be70cea88c549b07dd241f1a170ba42146e7d262-1692285009
   imagePullPolicy: IfNotPresent  
   # During runtime, the log level can be decreased by sending the signal SIGURS1 to the daemon and can be increased with the signal SIGUSR2
   logLevel: 5
