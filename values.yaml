@@ -782,7 +782,7 @@ billingApp:
       memory: 300Mi
 
 drachtio:
-  image: cognigy.azurecr.io/drachtio-server:release-6890140709d9715b4d31aa275af0211fb63295a9-1708619998
+  image: cognigy.azurecr.io/vg-drachtio-server:0.8.25
   imagePullPolicy: IfNotPresent
   port: 9022
   homerId: 10
