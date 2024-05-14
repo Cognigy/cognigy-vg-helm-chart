@@ -92,15 +92,15 @@ spec:
             - name: ENABLE_TTS_ELEVENLABS
               value: {{ .Values.webapp.enableTtsElevenlabs | quote }}
             - name: ENABLE_TTS_ELEVENLABS_OPTIONS
-              value: {{ .Values.webapp.enableTtsElevenlabsOptions | quote }}
-            - name: ENABLE_TTS_ELEVENLABS_STREAMING
-              value: {{ .Values.webapp.enableTtsElevenlabsStreaming | quote }}
+              value: {{ .Values.webapp.enableTtsElevenlabsOptions | quote }}            
             - name: ENABLE_TTS_DEEPGRAM
               value: {{ .Values.webapp.enableTtsDeepgram | quote }}            
             - name: ENABLE_ON_PREMISES_DEEPGRAM
               value: {{ .Values.webapp.enableOnPremisesDeepgram | quote }}
             - name: ENABLE_ON_PREMISES_NUANCE
               value: {{ .Values.webapp.enableOnPremisesNuance | quote }}
+            - name: ENABLE_ON_PREM_AZURE_SPEECH
+              value: {{ .Values.webapp.enableOnPremisesAzureSpeech | quote }}
           envFrom:
             - configMapRef:
                 name: cognigy-env

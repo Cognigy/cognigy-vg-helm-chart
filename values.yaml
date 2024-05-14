@@ -331,12 +331,12 @@ sbc:
 dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
-  image: cognigy.azurecr.io/db-create:release-297a0ac3f8e183b4bd20bfb3877fc6f339371651-1712598903
+  image: cognigy.azurecr.io/db-create:4.76.0
   imagePullPolicy: IfNotPresent
   logCollectorEnabled: false
 
 influxdb:
-  image: cognigy.azurecr.io/vg-influx:release-ded56799f93fb2c6035f8a4582b56d7e6d7aaac0-1689255770
+  image: cognigy.azurecr.io/vg-influx:1.8-alpine
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -359,7 +359,7 @@ influxdb:
       cpu: "1"
       memory: 1.5Gi
 
-## Bitnami Chart, image info: bitnami/mysql:8.0.34-debian-11-r75
+## Bitnami Chart, image info: bitnami/mysql:8.0.37-debian-12-r0
 mysql:
   enabled: true
   global:
@@ -375,7 +375,7 @@ mysql:
     existingSecret: voicegateway-mysql-password
   image:
     repository: mysql
-    tag: 8.0.34-debian-11-r75
+    tag: 8.0.37-debian-12-r0
   primary:
     priorityClassName: ""
     persistence:
@@ -453,7 +453,7 @@ postgresql:
   port: 5432
 
 redis:
-  image: cognigy.azurecr.io/redis:7.2.4-debian-11-r3
+  image: cognigy.azurecr.io/redis:7.2.4-debian-12-r11
   imagePullPolicy: IfNotPresent  
   replicaCount: 1
   host: redis
@@ -481,7 +481,7 @@ redisHa:
   image:
     registry: cognigy.azurecr.io
     repository: redis
-    tag: 7.2.4-debian-11-r3
+    tag: 7.2.4-debian-12-r11
   auth:
     enabled: false
     sentinel: false
@@ -524,7 +524,7 @@ redisHa:
     image:
       registry: cognigy.azurecr.io
       repository: redis-sentinel
-      tag: 7.2.4-debian-11-r4
+      tag: 7.2.4-debian-12-r9
     automateClusterRecovery: true
     downAfterMilliseconds: 2000
     failoverTimeout: 10000
@@ -557,7 +557,7 @@ redisHa:
 
 heplifyServer:
   ## The "latest" tag is the only one available
-  image: cognigy.azurecr.io/vg-heplify:release-1071b4404ff17c8cee54fd118394fb058c7ad868-1689255787
+  image: cognigy.azurecr.io/vg-heplify:4.76.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -587,7 +587,7 @@ heplifyServer:
 
 homer:
   ## The "latest" tag is the only one available
-  image: cognigy.azurecr.io/vg-homer:release-3fdeac08d35a6747920bba905d39a7fb4a59a79c-1689255776
+  image: cognigy.azurecr.io/vg-homer:4.76.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -612,7 +612,7 @@ homer:
       memory: 150Mi
 
 jaeger:
-  image: cognigy.azurecr.io/vg-jaeger:release-9fdf4df7958a244246780105690776ee6fd01f89-1708936855
+  image: cognigy.azurecr.io/vg-jaeger:1.57-all-in-one
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -645,7 +645,7 @@ health:
   port: 8001
 
 telegraf:
-  image: cognigy.azurecr.io/vg-telegraf:release-f560abcc37d6d01f49cb3dfd32668f94625cf8d9-1689255793
+  image: cognigy.azurecr.io/vg-telegraf:1.30-alpine
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -689,7 +689,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:release-338dd0d042b74b7099fc6907fa3587cc43a0ab41-1707207601
 
 api:
-  image: cognigy.azurecr.io/api-server:release-297a0ac3f8e183b4bd20bfb3877fc6f339371651-1712598903
+  image: cognigy.azurecr.io/api-server:4.76.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   logLevel: info
@@ -797,7 +797,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/jambonz-feature-server:4.74.1
+  image: cognigy.azurecr.io/feature-server:4.76.0-private-endpoint
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -844,7 +844,7 @@ featureServer:
       memory: 500Mi
 
 freeswitch:
-  image: cognigy.azurecr.io/docker-drachtio-freeswitch-mrf:4.69.1
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:4.69.1
   imagePullPolicy: IfNotPresent
   logLevel: info
   username: Cognigy
@@ -870,7 +870,7 @@ freeswitch:
       memory: 3Gi
 
 rtpEngine:
-  image: cognigy.azurecr.io/docker-rtpengine:release-be70cea88c549b07dd241f1a170ba42146e7d262-1692285009
+  image: cognigy.azurecr.io/docker-rtpengine:0.1.11
   imagePullPolicy: IfNotPresent  
   # During runtime, the log level can be decreased by sending the signal SIGURS1 to the daemon and can be increased with the signal SIGUSR2
   logLevel: 5
@@ -931,7 +931,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:release-901e35aedaf4b24e9d9caf721f84fa8b0768ab2a-1708336283
+  image: cognigy.azurecr.io/sbc-inbound:4.76.1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -970,7 +970,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:release-fe22059bffb6d57b3dc9e66cfa15dc0c3f707e23-1711458158
+  image: cognigy.azurecr.io/sbc-outbound:4.76.1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1091,11 +1091,12 @@ webapp:
   enableMsTeamsRouting: false
   enableSms: false
   enableTtsElevenlabs: true
-  enableTtsElevenlabsOptions: false
-  enableTtsElevenlabsStreaming: false
+  enableTtsElevenlabsOptions: false  
+  enableTtsStreaming: false
   enableTtsDeepgram: true
   enableOnPremisesDeepgram: false
   enableOnPremisesNuance: false
+  enableOnPremisesAzureSpeech: false
   resources:
     requests:
       cpu: "0.1"

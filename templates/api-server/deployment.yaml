@@ -206,7 +206,7 @@ spec:
             - name: ENABLE_PREPARE_COGNIGY_DATA
               value: {{ .Values.api.enablePrepareCognigyData | quote }}
             - name: JAMBONES_DISABLE_TTS_STREAMING
-              value: {{ not .Values.webapp.enableTtsElevenlabsStreaming | quote }}
+              value: {{ not .Values.webapp.enableTtsStreaming | quote }}
           envFrom:
             - configMapRef:
                 name: cognigy-env
