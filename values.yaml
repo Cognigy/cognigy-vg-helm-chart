@@ -331,7 +331,7 @@ sbc:
 dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
-  image: cognigy.azurecr.io/db-create:4.76.0
+  image: cognigy.azurecr.io/db-create:4.76.1
   imagePullPolicy: IfNotPresent
   logCollectorEnabled: false
 
@@ -689,7 +689,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:release-338dd0d042b74b7099fc6907fa3587cc43a0ab41-1707207601
 
 api:
-  image: cognigy.azurecr.io/api-server:4.76.0
+  image: cognigy.azurecr.io/api-server:4.76.1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   logLevel: info
@@ -797,7 +797,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/feature-server:4.76.0-private-endpoint
+  image: cognigy.azurecr.io/jambonz-feature-server:4.76.1
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
