@@ -172,6 +172,8 @@ spec:
               value: {{ .Values.tracing.environment | quote }}
             - name: COGNIGY_AI_VERSION
               value: {{ .Chart.Version | trunc 6 | quote }}
+            - name: PRIVATE_VOIP_NETWORK_CIDR
+              value: {{ .Values.global.privateVoipNetworkCidr | quote }}
           envFrom:
             - configMapRef:
                 name: cognigy-env

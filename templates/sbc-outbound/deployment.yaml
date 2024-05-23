@@ -161,6 +161,8 @@ spec:
               value: {{ .Values.sbcOutbound.padCrypto | quote }}
             - name: JAMBONES_USE_BEST_EFFORT_TLS
               value: {{ if .Values.sbcOutbound.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            - name: PRIVATE_VOIP_NETWORK_CIDR
+              value: {{ .Values.global.privateVoipNetworkCidr | quote }}
           envFrom:
             - configMapRef:
                 name: cognigy-env

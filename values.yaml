@@ -15,6 +15,8 @@ global:
     accountCalls: true
     applicationCalls: true
     serviceProviderCalls: true
+  ## private network that feature server is running in (e.g. '172.31.0.0/16')
+  privateVoipNetworkCidr: ""
 
 ###############
 # Cognigy ENV #
@@ -331,7 +333,7 @@ sbc:
 dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
-  image: cognigy.azurecr.io/db-create:4.76.1
+  image: cognigy.azurecr.io/db-create:4.76.2
   imagePullPolicy: IfNotPresent
   logCollectorEnabled: false
 
@@ -689,7 +691,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:release-338dd0d042b74b7099fc6907fa3587cc43a0ab41-1707207601
 
 api:
-  image: cognigy.azurecr.io/api-server:4.76.1
+  image: cognigy.azurecr.io/api-server:4.76.2
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   logLevel: info
@@ -718,7 +720,7 @@ api:
   debounceQuantity: 50
   disableRateLimit: false
   rateLimitMinutes: 4
-  rateLimit: 400
+  rateLimit: 1000
   enablePrepareCognigyData: true
   protocol: https
   resources:
@@ -782,7 +784,7 @@ billingApp:
       memory: 300Mi
 
 drachtio:
-  image: cognigy.azurecr.io/vg-drachtio-server:0.8.25
+  image: cognigy.azurecr.io/vg-drachtio-server:0.8.26-rc1
   imagePullPolicy: IfNotPresent
   port: 9022
   homerId: 10
@@ -797,7 +799,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/jambonz-feature-server:4.76.1
+  image: cognigy.azurecr.io/jambonz-feature-server:4.76.2
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
