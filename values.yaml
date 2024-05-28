@@ -15,7 +15,7 @@ global:
     accountCalls: true
     applicationCalls: true
     serviceProviderCalls: true
-  ## private network that feature server is running in (e.g. '172.31.0.0/16')
+  ## private network - IPs of the SBC (e.g. '172.31.0.0/16')
   privateVoipNetworkCidr: ""
 
 ###############
@@ -333,7 +333,7 @@ sbc:
 dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
-  image: cognigy.azurecr.io/db-create:4.76.2
+  image: cognigy.azurecr.io/db-create:4.77.0
   imagePullPolicy: IfNotPresent
   logCollectorEnabled: false
 
@@ -559,7 +559,7 @@ redisHa:
 
 heplifyServer:
   ## The "latest" tag is the only one available
-  image: cognigy.azurecr.io/vg-heplify:4.76.0
+  image: cognigy.azurecr.io/vg-heplify:4.77.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -589,7 +589,7 @@ heplifyServer:
 
 homer:
   ## The "latest" tag is the only one available
-  image: cognigy.azurecr.io/vg-homer:4.76.0
+  image: cognigy.azurecr.io/vg-homer:4.77.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -691,7 +691,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:release-338dd0d042b74b7099fc6907fa3587cc43a0ab41-1707207601
 
 api:
-  image: cognigy.azurecr.io/api-server:4.76.2
+  image: cognigy.azurecr.io/api-server:4.77.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   logLevel: info
@@ -718,7 +718,7 @@ api:
   enableDebounceMiddleware: true
   debounceTimeInSeconds: 5
   debounceQuantity: 50
-  disableRateLimit: false
+  disableRateLimit: true
   rateLimitMinutes: 4
   rateLimit: 1000
   enablePrepareCognigyData: true
@@ -733,7 +733,7 @@ api:
 
 apiBan:
   enabled: true
-  image: cognigy.azurecr.io/api-ban:release-a7935caf56eb9d83f084f5a85d299de024b7c72a-1711356469
+  image: cognigy.azurecr.io/api-ban:release-6ad2984f77fff90b2e401b4b71e8fe32c69c6211-1714051609
   imagePullPolicy: IfNotPresent
   endpoint: https://apiban.org/api
   redisSetKey: apiban:ips
@@ -751,7 +751,7 @@ apiBan:
 
 billingApp:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:release-8da2e2a5b63bcb13d1ea84ce6281dea81ea68d27-1711384177
+  image: cognigy.azurecr.io/voicegateway-billing-app:release-5d27cc4b80b558e57a88564da8d77171f6efee07-1715848500
   imagePullPolicy: IfNotPresent
   replicasCount: 1
   affinity: {}
@@ -799,7 +799,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/jambonz-feature-server:4.76.2
+  image: cognigy.azurecr.io/jambonz-feature-server:4.77.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -846,7 +846,7 @@ featureServer:
       memory: 500Mi
 
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:4.69.1
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:0.9.0-2
   imagePullPolicy: IfNotPresent
   logLevel: info
   username: Cognigy
@@ -863,6 +863,11 @@ freeswitch:
     # - --rtp-range-end the ending UDP port for RTP traffic
     # - --log-level debug (available from R71 freeSWITCH-mrf image)
   tmpCacheAudioFolder: "/tmp/"
+  serviceThreads: 1
+  bufferSecs: 3
+  deepgramSttUseSingleConnection: true
+  ## it is recommended to force HTTP/1 for streaming since there might be some issues with HTTP/2
+  disableHttp2ForTtsStreaming: true
   resources:
     requests:
       cpu: "2.5"
@@ -889,7 +894,7 @@ rtpEngine:
       memory: 250Mi
 
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:release-5c99e60855fadf99e2f416fe868705535b0bd755-1708344578
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:release-b9731a314b3d01e5eed363fa17c85bc1e730ef36-1714049409
   imagePullPolicy: IfNotPresent  
   logLevel: info
   ports:
@@ -903,7 +908,7 @@ rtpEngineSidecar:
       memory: 200Mi
 
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:release-6295ca1e67956345d4d6357d39f137efe4d58a6f-1708344314
+  image: cognigy.azurecr.io/sbc-call-router:release-388783bc1271f59bdab43ddd986f0e57c6b0986c-1715853385
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -933,7 +938,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:4.76.1
+  image: cognigy.azurecr.io/sbc-inbound:4.77.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -972,7 +977,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:4.76.1
+  image: cognigy.azurecr.io/sbc-outbound:4.77.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1008,7 +1013,7 @@ sbcOutbound:
   supportBestEffortTls: false
 
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:release-ad05b438dfdb27c72cca4733fa84bd77acead4c7-1708344611
+  image: cognigy.azurecr.io/sbc-sip-sidecar:release-8fd50fc03dc94104047bcfe2d86ad200cc1a14d3-1714047939
   imagePullPolicy: IfNotPresent  
   logLevel: info
   resources:
@@ -1021,7 +1026,7 @@ sbcSipSidecar:
 
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-test-call-manager:release-20fb46cda598582d0e0e9f708e42cb6a885c1081-1711356455
+  image: cognigy.azurecr.io/voicegateway-test-call-manager:release-463dbeb1ead9594c1ca3c8cb62f59f8ab319d588-1715848430
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1058,7 +1063,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:release-1d1d7843c0f8cf4ad739be9c6743f9f902d1cab5-1709658890
+  image: cognigy.azurecr.io/vg-webapp:release-36aca688db43cfbf711c0ba3a4cd2eb0cb93deac-1714038991
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1093,12 +1098,12 @@ webapp:
   enableMsTeamsRouting: false
   enableSms: false
   enableTtsElevenlabs: true
-  enableTtsElevenlabsOptions: false  
+  enableTtsElevenlabsOptions: false
   enableTtsStreaming: false
   enableTtsDeepgram: true
-  enableOnPremisesDeepgram: false
-  enableOnPremisesNuance: false
-  enableOnPremisesAzureSpeech: false
+  enableOnPremisesAzureSpeech: true
+  enableOnPremisesDeepgram: true
+  enableOnPremisesNuance: true
   resources:
     requests:
       cpu: "0.1"
