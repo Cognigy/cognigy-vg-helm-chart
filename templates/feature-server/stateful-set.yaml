@@ -107,6 +107,8 @@ spec:
               value: "1"
             - name: DRACHTIO_SUPPORT_BEST_EFFORT_TLS
               value: {{ if .Values.drachtio.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            - name: PRIVATE_IP_ONLY
+              value: {{ .Values.drachtio.privateIpOnly | quote }}
           lifecycle:
             preStop:
               exec:

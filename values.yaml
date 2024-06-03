@@ -784,12 +784,14 @@ billingApp:
       memory: 300Mi
 
 drachtio:
-  image: cognigy.azurecr.io/vg-drachtio-server:0.8.26-rc1
+  image: cognigy.azurecr.io/vg-drachtio-server:0.8.26-rc2
   imagePullPolicy: IfNotPresent
   port: 9022
   homerId: 10
   supportBestEffortTls: false
   rejectRegisterWithNoRealm: true
+  ## if true - do advertise private IPs only
+  privateIpOnly: false
   resources:
     requests:
       cpu: "0.250"
