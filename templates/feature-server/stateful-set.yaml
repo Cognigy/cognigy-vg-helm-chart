@@ -107,6 +107,8 @@ spec:
               value: "1"
             - name: DRACHTIO_SUPPORT_BEST_EFFORT_TLS
               value: {{ if .Values.drachtio.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            - name: PRIVATE_IP_ONLY
+              value: {{ .Values.drachtio.privateIpOnly | quote }}
           lifecycle:
             preStop:
               exec:
@@ -161,15 +163,11 @@ spec:
             - name: MOD_AUDIO_FORK_SUBPROTOCOL_NAME
               value: audio.jambonz.org
             - name: MOD_AUDIO_FORK_SERVICE_THREADS
-              value: {{ .Values.freeswitch.serviceThreads | quote }}
+              value: "1"
             - name: MOD_AUDIO_FORK_BUFFER_SECS
-              value: {{ .Values.freeswitch.bufferSecs | quote }}
+              value: "3"
             - name: JAMBONZ_TMP_CACHE_FOLDER
               value: {{ .Values.freeswitch.tmpCacheAudioFolder | quote }}
-            - name: DEEPGRAM_SPEECH_USE_SINGLE_CONNECTION
-              value: {{ if .Values.freeswitch.deepgramSttUseSingleConnection }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
-            - name: DISABLE_HTTP2_FOR_TTS_STREAMING
-              value: {{ if .Values.freeswitch.disableHttp2ForTtsStreaming }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
           lifecycle:
             preStop:
               exec:
