@@ -21,19 +21,19 @@ spec:
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.telegraf.affinity }}
-      affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.telegraf.affinity "context" $) | nindent 8 }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.telegraf.affinity "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.telegraf.nodeSelector }}
-      nodeSelector: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.telegraf.nodeSelector "context" $) | nindent 8 }}
+      nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" .Values.telegraf.nodeSelector "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.telegraf.priorityClassName }}
       priorityClassName: {{ .Values.telegraf.priorityClassName }}
       {{- end }}
       {{- if .Values.telegraf.podSecurityContext }}
-      securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.telegraf.podSecurityContext "context" $) | nindent 8 }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.telegraf.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.telegraf.tolerations }}
-      tolerations: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.telegraf.tolerations "context" $) | nindent 8 }}
+      tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.telegraf.tolerations "context" $) | nindent 8 }}
       {{- end }}
       containers:
         - name: telegraf

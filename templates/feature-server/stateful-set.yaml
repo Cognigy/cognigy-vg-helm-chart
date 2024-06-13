@@ -25,30 +25,30 @@ spec:
       terminationGracePeriodSeconds: {{ .Values.featureServer.terminationGracePeriodSeconds }}
       {{- end }}
       {{- if .Values.featureServer.affinity }}
-      affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.featureServer.affinity "context" $) | nindent 8 }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.affinity "context" $) | nindent 8 }}
       {{- end }}
       {{- if or (.Values.featureServer.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector))}}
       nodeSelector:
         {{- if .Values.featureServer.nodeSelector }}
-          {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.featureServer.nodeSelector "context" $) | nindent 8 }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.nodeSelector "context" $) | nindent 8 }}
         {{- end }}
         {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
-          {{- include "cognigyvg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
+          {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
       {{- if .Values.featureServer.priorityClassName }}
       priorityClassName: {{ .Values.featureServer.priorityClassName }}
       {{- end }}
       {{- if .Values.featureServer.podSecurityContext }}
-      securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.featureServer.podSecurityContext "context" $) | nindent 8 }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
       {{- if or (.Values.featureServer.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
       tolerations: 
         {{- if or (.Values.featureServer.tolerations) }}
-          {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.featureServer.tolerations "context" $) | nindent 8 }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.tolerations "context" $) | nindent 8 }}
         {{- end }}
         {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
-          {{- include "cognigyvg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
+          {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
       topologySpreadConstraints:
@@ -85,6 +85,9 @@ spec:
             - name: drachtio
               containerPort: {{ .Values.drachtio.port }}
               protocol: TCP
+            - name: drachtiometrics
+              containerPort: {{ .Values.drachtio.metricsPort }}
+              protocol: TCP
           env: 
             - name: CLOUD 
               value: {{ .Values.cloud | quote }}
@@ -109,6 +112,9 @@ spec:
               value: {{ if .Values.drachtio.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: PRIVATE_IP_ONLY
               value: {{ .Values.drachtio.privateIpOnly | quote }}
+            {{- if .Values.drachtio.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.drachtio.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
           lifecycle:
             preStop:
               exec:
@@ -126,6 +132,8 @@ spec:
             - {{ .Values.featureServer.logLevel | quote }}
             - --sofia-loglevel
             - {{ .Values.featureServer.sofiaLoglevel | quote }}
+            - --prometheus-scrape-port
+            - {{ .Values.drachtio.metricsPort | quote }}
           {{- else }}
           args: 
             - drachtio
@@ -137,7 +145,12 @@ spec:
             - {{ .Values.featureServer.logLevel | quote }}
             - --sofia-loglevel
             - {{ .Values.featureServer.sofiaLoglevel | quote }}
+            - --prometheus-scrape-port
+            - {{ .Values.drachtio.metricsPort | quote }}
           {{- end }}
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
         - name: freeswitch
           image: {{ .Values.freeswitch.image }}
           imagePullPolicy: {{ .Values.freeswitch.imagePullPolicy }}
@@ -172,6 +185,9 @@ spec:
               value: {{ if .Values.freeswitch.deepgramSttUseSingleConnection }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: DISABLE_HTTP2_FOR_TTS_STREAMING
               value: {{ if .Values.freeswitch.disableHttp2ForTtsStreaming }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            {{- if .Values.freeswitch.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.freeswitch.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
           lifecycle:
             preStop:
               exec:
@@ -183,6 +199,9 @@ spec:
           volumeMounts:
             - mountPath: /tmp 
               name: temp-audio-volume
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
         - name: feature-server 
           image: {{ .Values.featureServer.image }}
           imagePullPolicy: {{ .Values.featureServer.imagePullPolicy }}
@@ -335,12 +354,17 @@ spec:
               value: {{ .Values.tracing.callTracingEnabled | quote }}
             - name: NODE_OPTIONS
               value: {{ .Values.featureServer.nodeOptions | quote }}
-            - name: JAMBONES_EAGERLY_PRE_CACHE_AUDIO
+            - name: VG_EAGERLY_PRE_CACHE_AUDIO
               value: {{ .Values.featureServer.preCacheAudio | quote }}
             - name: JAMBONES_DISABLE_TTS_STREAMING
               value: {{ not .Values.webapp.enableTtsStreaming | quote }}
             - name: ANCHOR_MEDIA_ALWAYS
               value: {{ .Values.featureServer.anchorMediaAlways | quote }}
+            - name: VG_DISABLE_DIAL_PAI_HEADER
+              value: {{ .Values.featureServer.disableDialPaiHeader | quote }}
+            {{- if .Values.featureServer.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env

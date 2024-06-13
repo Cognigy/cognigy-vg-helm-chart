@@ -24,30 +24,30 @@ spec:
       terminationGracePeriodSeconds: {{ .Values.sbcOutbound.terminationGracePeriodSeconds }}
       {{- end }}
       {{- if .Values.sbcOutbound.affinity }}
-      affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbcOutbound.affinity "context" $) | nindent 8 }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcOutbound.affinity "context" $) | nindent 8 }}
       {{- end }}
       {{- if or (.Values.sbcOutbound.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector))}}
       nodeSelector:
         {{- if .Values.sbcOutbound.nodeSelector }}
-          {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbcOutbound.nodeSelector "context" $) | nindent 8 }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcOutbound.nodeSelector "context" $) | nindent 8 }}
         {{- end }}
         {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
-          {{- include "cognigyvg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
+          {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
       {{- if .Values.sbcOutbound.priorityClassName }}
       priorityClassName: {{ .Values.sbcOutbound.priorityClassName }}
       {{- end }}
       {{- if .Values.sbcOutbound.podSecurityContext }}
-      securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbcOutbound.podSecurityContext "context" $) | nindent 8 }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcOutbound.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
       {{- if or (.Values.sbcOutbound.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
       tolerations: 
         {{- if or (.Values.sbcOutbound.tolerations) }}
-          {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbcOutbound.tolerations "context" $) | nindent 8 }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcOutbound.tolerations "context" $) | nindent 8 }}
         {{- end }}
         {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
-          {{- include "cognigyvg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
+          {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
       containers:
@@ -163,6 +163,9 @@ spec:
               value: {{ if .Values.sbcOutbound.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: PRIVATE_VOIP_NETWORK_CIDR
               value: {{ .Values.global.privateVoipNetworkCidr | quote }}
+            {{- if .Values.sbcOutbound.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcOutbound.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env

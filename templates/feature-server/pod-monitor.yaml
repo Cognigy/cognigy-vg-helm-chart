@@ -13,6 +13,8 @@ spec:
   podMetricsEndpoints:
     - path: /metrics
       port: metrics
+    - path: /metrics
+      port: drachtiometrics
   selector:
     matchLabels:
       app: feature-server

@@ -19,19 +19,19 @@ spec:
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.jaeger.affinity }}
-      affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.jaeger.affinity "context" $) | nindent 8 }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.jaeger.affinity "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.jaeger.nodeSelector }}
-      nodeSelector: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.jaeger.nodeSelector "context" $) | nindent 8 }}
+      nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" .Values.jaeger.nodeSelector "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.jaeger.priorityClassName }}
       priorityClassName: {{ .Values.jaeger.priorityClassName }}
       {{- end }}
       {{- if .Values.jaeger.podSecurityContext }}
-      securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.jaeger.podSecurityContext "context" $) | nindent 8 }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.jaeger.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.jaeger.tolerations }}
-      tolerations: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.jaeger.tolerations "context" $) | nindent 8 }}
+      tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.jaeger.tolerations "context" $) | nindent 8 }}
       {{- end }}
       containers:
         - name: jaeger

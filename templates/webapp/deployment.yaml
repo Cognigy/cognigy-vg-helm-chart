@@ -17,19 +17,19 @@ spec:
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.webapp.affinity }}
-      affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.webapp.affinity "context" $) | nindent 8 }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.webapp.affinity "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.webapp.nodeSelector }}
-      nodeSelector: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.webapp.nodeSelector "context" $) | nindent 8 }}
+      nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" .Values.webapp.nodeSelector "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.webapp.priorityClassName }}
       priorityClassName: {{ .Values.webapp.priorityClassName }}
       {{- end }}
       {{- if .Values.webapp.podSecurityContext }}
-      securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.webapp.podSecurityContext "context" $) | nindent 8 }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.webapp.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.webapp.tolerations }}
-      tolerations: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.webapp.tolerations "context" $) | nindent 8 }}
+      tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.webapp.tolerations "context" $) | nindent 8 }}
       {{- end }}
       containers:
         - name: webapp
@@ -101,6 +101,11 @@ spec:
               value: {{ .Values.webapp.enableOnPremisesNuance | quote }}
             - name: ENABLE_ON_PREM_AZURE_SPEECH
               value: {{ .Values.webapp.enableOnPremisesAzureSpeech | quote }}
+            - name: ENABLE_PING_OPTIONS
+              value: {{ .Values.webapp.enablePingOptions | quote }}
+            {{- if .Values.webapp.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.webapp.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env

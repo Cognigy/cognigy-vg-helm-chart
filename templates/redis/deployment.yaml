@@ -20,19 +20,19 @@ spec:
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.redis.affinity }}
-      affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.redis.affinity "context" $) | nindent 8 }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.redis.affinity "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.redis.nodeSelector }}
-      nodeSelector: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.redis.nodeSelector "context" $) | nindent 8 }}
+      nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" .Values.redis.nodeSelector "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.redis.priorityClassName }}
       priorityClassName: {{ .Values.redis.priorityClassName }}
       {{- end }}
       {{- if .Values.redis.podSecurityContext }}
-      securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.redis.podSecurityContext "context" $) | nindent 8 }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.redis.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.redis.tolerations }}
-      tolerations: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.redis.tolerations "context" $) | nindent 8 }}
+      tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.redis.tolerations "context" $) | nindent 8 }}
       {{- end }}
       restartPolicy: Always
       containers:

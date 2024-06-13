@@ -20,19 +20,19 @@ spec:
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.heplifyServer.affinity }}
-      affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.heplifyServer.affinity "context" $) | nindent 8 }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.heplifyServer.affinity "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.heplifyServer.nodeSelector }}
-      nodeSelector: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.heplifyServer.nodeSelector "context" $) | nindent 8 }}
+      nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" .Values.heplifyServer.nodeSelector "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.heplifyServer.priorityClassName }}
       priorityClassName: {{ .Values.heplifyServer.priorityClassName }}
       {{- end }}
       {{- if .Values.heplifyServer.podSecurityContext }}
-      securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.heplifyServer.podSecurityContext "context" $) | nindent 8 }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.heplifyServer.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.heplifyServer.tolerations }}
-      tolerations: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.heplifyServer.tolerations "context" $) | nindent 8 }}
+      tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.heplifyServer.tolerations "context" $) | nindent 8 }}
       {{- end }}
       containers:
         - name: heplify-server
@@ -50,7 +50,10 @@ spec:
             - name: HEPLIFYSERVER_DBUSER
               value: {{ .Values.postgresql.auth.postgresUsername | quote }}
             - name: HEPLIFYSERVER_DBPASS
-              value: {{ .Values.postgresql.auth.postgresPassword | quote }}          
+              value: {{ .Values.postgresql.auth.postgresPassword | quote }}
+            {{- if .Values.heplifyServer.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.heplifyServer.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
           args: ['./heplify-server', '-config', '/etc/heplify-server.toml']
           volumeMounts:
             - name: heplify-server-config

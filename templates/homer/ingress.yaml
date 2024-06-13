@@ -9,13 +9,7 @@ metadata:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     {{- else }}
     traefik.ingress.kubernetes.io/router.entrypoints: web
-    {{- end }}
-    {{- if .Values.ingress.homer.ipWhiteListMiddleware.enabled }}
-    traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-ipwhitelisthomer@kubernetescrd
-    {{- end }}
-    {{- if .Values.ingress.homer.basicAuthMiddleware.enabled }}
-    traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-homerauth@kubernetescrd
-    {{- end }}
+    {{- end }}    
 spec:
   ingressClassName: traefik
   {{- include "tlsCertificate.secretName.render" $ | nindent 2 }}

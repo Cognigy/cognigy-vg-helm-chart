@@ -9,11 +9,11 @@ metadata:
     # resource is considered part of the release.
     "helm.sh/hook": {{ .Values.dbCreate.hook | quote }}
     "helm.sh/hook-weight": "-1"
-    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded,hook-failed"
+    "helm.sh/hook-delete-policy": {{ .Values.dbCreate.hookDeletePolicy | quote }}
     {{- end }}
 spec:
   backoffLimit: 10
-  ttlSecondsAfterFinished: 180
+  ttlSecondsAfterFinished: 86400 # 1 day
   template:
     metadata:
       name: db-create
@@ -44,6 +44,9 @@ spec:
               value: {{ .Values.redis.port | quote }}
             - name: JAMBONES_TIME_SERIES_HOST
               value: {{ .Values.influxdb.host }}
+            {{- if .Values.dbCreate.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.dbCreate.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
         {{- if .Values.dbCreate.logCollectorEnabled }}
         - name: log-collector
           image: fluentd

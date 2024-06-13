@@ -53,9 +53,9 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{/*
 Renders a value that contains template.
 Usage:
-{{ include "cognigyvg.common.tplvalues.render" ( dict "value" .Values.path.to.the.Value "context" $) }}
+{{ include "vg.common.tplvalues.render" ( dict "value" .Values.path.to.the.Value "context" $) }}
 */}}
-{{- define "cognigyvg.common.tplvalues.render" -}}
+{{- define "vg.common.tplvalues.render" -}}
     {{- if typeIs "string" .value }}
         {{- tpl .value .context }}
     {{- else }}

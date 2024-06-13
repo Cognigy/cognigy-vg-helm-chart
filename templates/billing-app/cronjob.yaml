@@ -28,6 +28,9 @@ spec:
                     secretKeyRef:
                       name: billing-app-api-secret
                       key: secret
+                {{- if .Values.billingApp.extraEnvVars }}
+                {{- include "vg.common.tplvalues.render" (dict "value" .Values.billingApp.extraEnvVars "context" $) | nindent 12 }}
+                {{- end }}
               args:
                 - /bin/sh
                 - -c

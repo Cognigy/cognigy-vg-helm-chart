@@ -20,19 +20,19 @@ spec:
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.billingApp.affinity }}
-      affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.billingApp.affinity "context" $) | nindent 8 }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.billingApp.affinity "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.billingApp.nodeSelector }}
-      nodeSelector: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.billingApp.nodeSelector "context" $) | nindent 8 }}
+      nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" .Values.billingApp.nodeSelector "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.billingApp.priorityClassName }}
       priorityClassName: {{ .Values.billingApp.priorityClassName }}
       {{- end }}
       {{- if .Values.billingApp.podSecurityContext }}
-      securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.billingApp.podSecurityContext "context" $) | nindent 8 }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.billingApp.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.billingApp.tolerations }}
-      tolerations: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.billingApp.tolerations "context" $) | nindent 8 }}
+      tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.billingApp.tolerations "context" $) | nindent 8 }}
       {{- end }}
       restartPolicy: Always
       containers:
@@ -115,6 +115,9 @@ spec:
                 secretKeyRef:
                   name: {{- include "billingAppUserCreds" $ | indent 1 }}
                   key: user
+            {{- if .Values.billingApp.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.billingApp.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env

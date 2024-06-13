@@ -34,6 +34,9 @@ spec:
                   value: {{ .Values.redis.host }}
                 - name: REDIS_PORT
                   value: {{ .Values.redis.port | quote }}
+                {{- if .Values.apiBan.extraEnvVars }}
+                {{- include "vg.common.tplvalues.render" (dict "value" .Values.apiBan.extraEnvVars "context" $) | nindent 12 }}
+                {{- end }}
               envFrom:
                 - configMapRef:
                     name: cognigy-env

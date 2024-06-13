@@ -24,19 +24,19 @@ spec:
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
       {{- if .Values.sbc.sip.affinity }}
-      affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbc.sip.affinity "context" $) | nindent 8 }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbc.sip.affinity "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.sbc.sip.nodeSelector }}
-      nodeSelector: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbc.sip.nodeSelector "context" $) | nindent 8 }}
+      nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbc.sip.nodeSelector "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.sbc.sip.priorityClassName }}
       priorityClassName: {{ .Values.sbc.sip.priorityClassName }}
       {{- end }}
       {{- if .Values.sbc.sip.podSecurityContext }}
-      securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbc.sip.podSecurityContext "context" $) | nindent 8 }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbc.sip.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.sbc.sip.tolerations }}
-      tolerations: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.sbc.sip.tolerations "context" $) | nindent 8 }}
+      tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbc.sip.tolerations "context" $) | nindent 8 }}
       {{- end }}
       restartPolicy: Always
       initContainers:
@@ -87,7 +87,10 @@ spec:
               protocol: UDP
             - name: sip-tcp
               containerPort: {{ .Values.sbc.sip.ports.tcp }}
-              protocol: TCP            
+              protocol: TCP
+            - name: drachtiometrics
+              containerPort: {{ .Values.drachtio.metricsPort }}
+              protocol: TCP
           args: 
             - drachtio
             {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
@@ -103,6 +106,8 @@ spec:
             - {{ .Values.heplifyServer.serviceName }}:{{ .Values.heplifyServer.ports.udp }}
             - --homer-id
             - {{ .Values.drachtio.homerId | quote }}
+            - --prometheus-scrape-port
+            - {{ .Values.drachtio.metricsPort | quote }}
           {{- if .Values.apiBan.enabled }}
           {{- if eq .Values.cognigyEnv.FEATURE_REDIS_SENTINEL_MODE_ENABLED "true" }}
             - --blacklist-redis-sentinels
@@ -158,12 +163,18 @@ spec:
               value: {{ if .Values.drachtio.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: PRIVATE_IP_ONLY
               value: {{ .Values.drachtio.privateIpOnly | quote }}
+            {{- if .Values.drachtio.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.drachtio.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
           volumeMounts:
             - mountPath: /etc/letsencrypt/
               name: drachtio-certs
             - mountPath: /etc/drachtio.conf.xml
               name: sbc-sip-config
               subPath: drachtio.conf.xml
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
         - name: sbc-sip-sidecar
           image: {{ .Values.sbcSipSidecar.image }}
           imagePullPolicy: {{ .Values.sbcSipSidecar.imagePullPolicy }}
@@ -259,6 +270,9 @@ spec:
               value: {{ .Values.tracing.environment | quote }}
             - name: COGNIGY_AI_VERSION
               value: {{ .Chart.Version | trunc 6 | quote }}
+            {{- if .Values.sbcSipSidecar.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcSipSidecar.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env

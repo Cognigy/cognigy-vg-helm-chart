@@ -19,30 +19,30 @@ spec:
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.api.affinity }}
-      affinity: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.api.affinity "context" $) | nindent 8 }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.api.affinity "context" $) | nindent 8 }}
       {{- end }}
       {{- if or (.Values.api.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector))}}
       nodeSelector:
         {{- if .Values.api.nodeSelector }}
-          {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.api.nodeSelector "context" $) | nindent 8 }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.api.nodeSelector "context" $) | nindent 8 }}
         {{- end }}
         {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
-          {{- include "cognigyvg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
+          {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
       {{- if .Values.api.priorityClassName }}
       priorityClassName: {{ .Values.api.priorityClassName }}
       {{- end }}
       {{- if .Values.api.podSecurityContext }}
-      securityContext: {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.api.podSecurityContext "context" $) | nindent 8 }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.api.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
       {{- if or (.Values.api.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
       tolerations: 
         {{- if or (.Values.api.tolerations) }}
-          {{- include "cognigyvg.common.tplvalues.render" (dict "value" .Values.api.tolerations "context" $) | nindent 8 }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.api.tolerations "context" $) | nindent 8 }}
         {{- end }}
         {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
-          {{- include "cognigyvg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
+          {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
       restartPolicy: Always
@@ -207,6 +207,9 @@ spec:
               value: {{ .Values.api.enablePrepareCognigyData | quote }}
             - name: JAMBONES_DISABLE_TTS_STREAMING
               value: {{ not .Values.webapp.enableTtsStreaming | quote }}
+            {{- if .Values.api.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.api.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env
