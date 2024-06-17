@@ -809,7 +809,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/jambonz-feature-server:4.78.0
+  image: cognigy.azurecr.io/vg-feature-server:4.78.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
