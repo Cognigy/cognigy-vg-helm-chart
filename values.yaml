@@ -6,7 +6,7 @@ global:
   ## Indication that is a Kubernetes deployment
   k8s: true
   ## Node environment
-  nodeEnv: ""  
+  nodeEnv: ""
   ## Default local host IP
   localhost: 127.0.0.1
   ## Collect stats variables
@@ -53,7 +53,7 @@ cloud: ""
 
 aws:
   ## Set to true, if using IMDSv2
-  useIMDSv2: true  
+  useIMDSv2: true
   influxdb:
     storageClassName: "influxdb"
     provisionerName: "ebs.csi.aws.com"
@@ -68,7 +68,7 @@ aws:
     awsEBSVolumeType: "gp3"
 
 azure:
-  useLoadBalancerIMDS: true  
+  useLoadBalancerIMDS: true
   influxdb:
     storageClassName: "influxdb"
     provisionerName: "disk.csi.azure.com"
@@ -82,7 +82,7 @@ azure:
     provisionerName: "disk.csi.azure.com"
     azureStorageAccountType: "StandardSSD_LRS"
 
-gcp:  
+gcp:
   influxdb:
     storageClassName: "influxdb"
     provisionerName: "pd.csi.storage.gke.io"
@@ -158,7 +158,7 @@ tracing:
   environment: ""
   # enable call tracing with sentry
   callTracingEnabled: false
-  apiBaseUrl: ""  
+  apiBaseUrl: ""
   # sentry project e.g 'vg-dev'
   apiProject: ""
   secret: "vg-sentry-api-token"
@@ -189,10 +189,10 @@ ingress:
         sourceRange:
           - 0.0.0.0/0
         ipStrategy:
-          depth: 0 
+          depth: 0
   homer:
     enabled: false
-    host: ""    
+    host: ""
     basicAuthMiddleware:
       enabled: true
     ipWhiteListMiddleware:
@@ -331,7 +331,7 @@ sbc:
 #############
 
 dbCreate:
-  hookEnabled: false  
+  hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
   image: cognigy.azurecr.io/db-create:4.78.0
@@ -457,7 +457,7 @@ postgresql:
 
 redis:
   image: cognigy.azurecr.io/redis:7.2.4-debian-12-r11
-  imagePullPolicy: IfNotPresent  
+  imagePullPolicy: IfNotPresent
   replicaCount: 1
   host: redis
   port: 6379
@@ -474,7 +474,7 @@ redis:
 redisHa:
   ## Enable Redis HA Deployment
   ## Note: This is only to enable Redis HA deployment, to enable Redis Sentinel usage,
-  ## please also set the variables below on "cognigyEnv" section: 
+  ## please also set the variables below on "cognigyEnv" section:
   ## "REDIS_SENTINEL_MASTER_NAME", "REDIS_SENTINEL_HOST", "REDIS_SENTINEL_PORT"
   enabled: false
   global:
@@ -674,7 +674,6 @@ podMonitors:
   ## The namespace for the pod-monitor should be the same namespace where your prometheus instance is running
   namespace: "monitoring"
 
-
 #################
 # Cognigy Login #
 #################
@@ -710,7 +709,7 @@ api:
                 - key: app
                   operator: In
                   values:
-                  - api-server
+                    - api-server
             topologyKey: kubernetes.io/hostname
   nodeSelector: {}
   priorityClassName: ""
@@ -809,7 +808,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:4.78.0
+  image: cognigy.azurecr.io/vg-feature-server:4.78.2
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -827,7 +826,7 @@ featureServer:
                 - key: app
                   operator: In
                   values:
-                  - feature-server
+                    - feature-server
             topologyKey: kubernetes.io/hostname
   nodeSelector: {}
   priorityClassName: ""
@@ -864,13 +863,13 @@ freeswitch:
   imagePullPolicy: IfNotPresent
   logLevel: info
   username: Cognigy
-  ports: 
+  ports:
     sip: 5080
     tls: 5081
     eventSocket: 8021
   ## Argument "--codec-answer-generous" is commented because we are looking into a DTMF recognition issue using Firefox, in the Interaction Panel Call,
   ## and until we don't have a solution we will force a specific codec for it. Once we have defintive solution, we uncomment this.
-  args:    
+  args:
     # - --codec-answer-generous
     # - --g711-only
     # - --rtp-range-start the starting UDP port for RTP traffic
@@ -893,7 +892,7 @@ freeswitch:
 
 rtpEngine:
   image: cognigy.azurecr.io/docker-rtpengine:0.1.11
-  imagePullPolicy: IfNotPresent  
+  imagePullPolicy: IfNotPresent
   # During runtime, the log level can be decreased by sending the signal SIGURS1 to the daemon and can be increased with the signal SIGUSR2
   logLevel: 5
   port: 22222
@@ -911,8 +910,8 @@ rtpEngine:
 
 rtpEngineSidecar:
   image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.78.0
-  imagePullPolicy: IfNotPresent  
-  logLevel: info  
+  imagePullPolicy: IfNotPresent
+  logLevel: info
   extraEnvVars: []
   ports:
     dtmf: 22223
@@ -938,7 +937,7 @@ sbcCallRouter:
                 - key: app
                   operator: In
                   values:
-                  - sbc-call-router
+                    - sbc-call-router
             topologyKey: kubernetes.io/hostname
   nodeSelector: {}
   priorityClassName: ""
@@ -969,7 +968,7 @@ sbcInbound:
                 - key: app
                   operator: In
                   values:
-                  - sbc-inbound
+                    - sbc-inbound
             topologyKey: kubernetes.io/hostname
   nodeSelector: {}
   priorityClassName: ""
@@ -1009,7 +1008,7 @@ sbcOutbound:
                 - key: app
                   operator: In
                   values:
-                  - sbc-outbound
+                    - sbc-outbound
             topologyKey: kubernetes.io/hostname
   nodeSelector: {}
   priorityClassName: ""
@@ -1034,7 +1033,7 @@ sbcOutbound:
 
 sbcSipSidecar:
   image: cognigy.azurecr.io/sbc-sip-sidecar:4.78.0
-  imagePullPolicy: IfNotPresent  
+  imagePullPolicy: IfNotPresent
   logLevel: info
   extraEnvVars: []
   resources:
@@ -1098,7 +1097,7 @@ webapp:
                 - key: app
                   operator: In
                   values:
-                  - webapp
+                    - webapp
             topologyKey: kubernetes.io/hostname
   nodeSelector: {}
   priorityClassName: ""
@@ -1210,7 +1209,7 @@ traefik:
       # Trust forwarded  headers information (X-Forwarded-*).
       forwardedHeaders:
         trustedIPs: []
-        insecure: true  
+        insecure: true
       # Enable the Proxy Protocol header parsing for the entry point
       proxyProtocol:
         trustedIPs: []
@@ -1245,7 +1244,6 @@ traefik:
 ## For the SecurityContext config of traefik, please refer to the official values.yaml file of the traefik
 ## This is the link for chart v23.1.0 for example
 ## https://github.com/traefik/traefik-helm-chart/blob/6df869b8e8bcd6757e7934b554b97d925350c9fa/traefik/values.yaml#L882-L901
-
 
 ## Optionally create priorityClass
 ## ref: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#priorityclass
@@ -1312,7 +1310,7 @@ hpa:
   ##
   hpaNodeSelector:
     "node-role": "autoscaler"
-  ## HorizontalPodAutoscaler (HPA) managed services 
+  ## HorizontalPodAutoscaler (HPA) managed services
   ##
   services:
     featureServer:
@@ -1440,5 +1438,3 @@ hpa:
               type: Utilization
               averageUtilization: 70
       behavior: {}
-
-
