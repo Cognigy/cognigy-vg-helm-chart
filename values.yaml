@@ -334,7 +334,7 @@ dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:4.78.0
+  image: cognigy.azurecr.io/db-create:4.79.0
   imagePullPolicy: Always
   logCollectorEnabled: false
 
@@ -560,7 +560,7 @@ redisHa:
 
 heplifyServer:
   ## We build and tag this image by ourselves
-  image: cognigy.azurecr.io/vg-heplify-server:4.78.0
+  image: cognigy.azurecr.io/vg-heplify-server:1.59.7
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -591,7 +591,7 @@ heplifyServer:
 
 homer:
   ## We build and tag this image by ourselves
-  image: cognigy.azurecr.io/vg-homer:4.78.0
+  image: cognigy.azurecr.io/vg-homer:1.5.2
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -650,7 +650,7 @@ health:
   port: 8001
 
 telegraf:
-  image: cognigy.azurecr.io/vg-telegraf:1.30-alpine
+  image: cognigy.azurecr.io/vg-telegraf:1.31-alpine
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -693,7 +693,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:3.18.6
 
 api:
-  image: cognigy.azurecr.io/api-server:4.78.0
+  image: cognigy.azurecr.io/api-server:4.79.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -736,7 +736,7 @@ api:
 
 apiBan:
   enabled: true
-  image: cognigy.azurecr.io/api-ban:4.78.0
+  image: cognigy.azurecr.io/api-ban:4.79.0
   imagePullPolicy: IfNotPresent
   endpoint: https://apiban.org/api
   redisSetKey: apiban:ips
@@ -755,7 +755,7 @@ apiBan:
 
 billingApp:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:4.78.0
+  image: cognigy.azurecr.io/voicegateway-billing-app:4.79.0
   imagePullPolicy: IfNotPresent
   replicasCount: 1
   affinity: {}
@@ -808,7 +808,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:4.78.2
+  image: cognigy.azurecr.io/vg-feature-server:4.79.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -841,8 +841,8 @@ featureServer:
   freeswitchConnection: "127.0.0.1:8021:JambonzR0ck$"
   # Sets the max memory size of V8's old memory section - size in Megabytes
   nodeOptions: "--max-old-space-size=450"
-  # Pre cache audio - default: false
-  preCacheAudio: false
+  # Pre cache audio
+  preCacheAudio: true
   anchorMediaAlways: false
   ## Disable the 'P-Asserted-Identity' header
   disableDialPaiHeader: false
@@ -909,7 +909,7 @@ rtpEngine:
       memory: 250Mi
 
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.78.0
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.79.0
   imagePullPolicy: IfNotPresent
   logLevel: info
   extraEnvVars: []
@@ -924,7 +924,7 @@ rtpEngineSidecar:
       memory: 200Mi
 
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:4.78.0
+  image: cognigy.azurecr.io/sbc-call-router:4.79.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -955,7 +955,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:4.78.0
+  image: cognigy.azurecr.io/sbc-inbound:4.79.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -995,7 +995,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:4.78.0
+  image: cognigy.azurecr.io/sbc-outbound:4.79.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1032,7 +1032,7 @@ sbcOutbound:
   supportBestEffortTls: false
 
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:4.78.0
+  image: cognigy.azurecr.io/sbc-sip-sidecar:4.79.0
   imagePullPolicy: IfNotPresent
   logLevel: info
   extraEnvVars: []
@@ -1046,7 +1046,7 @@ sbcSipSidecar:
 
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-test-call-manager:4.78.0
+  image: cognigy.azurecr.io/vg-test-call-manager:4.79.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1084,7 +1084,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:4.78.0
+  image: cognigy.azurecr.io/vg-webapp:4.79.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
