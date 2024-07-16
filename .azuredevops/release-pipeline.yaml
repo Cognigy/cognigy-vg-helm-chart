@@ -32,18 +32,17 @@ variables:
     why: Manual
   ${{ else }}:
     why: CD
-  isTag: $[startsWith(variables['Build.SourceBranch'], 'refs/tags/')]
 
 
 pool:
   vmImage: ubuntu-20.04
 
 stages:
-  - stage: helm_chart_release
+  - stage: helmChartRelease
     displayName: Create a New Release Tag and Helm Chart Release
-    condition: and(succeeded(), eq(variables.isTag, true))
+    condition: startsWith(variables['Build.SourceBranch'], 'refs/tags/')
     jobs:
-      - job: create_oci_fragment
+      - job: createOciRelease
         displayName: Publish Helm Chart OCI Fragment
         steps:
           - task: HelmInstaller@0
@@ -65,9 +64,7 @@ stages:
               helm package --dependency-update  . 
               helm push ./$(ChartName)-$helmChartVersion.tgz oci://$(ACRName)/$(ACRPath)
       
-      - job: create_github_release
-        dependsOn:
-          - create_oci_fragment
+      - job: createGithubRelease
         displayName: Publish Helm Chart Github Repo
         steps:
           - task: HelmInstaller@0

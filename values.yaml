@@ -280,13 +280,6 @@ sbc:
         operator: "Exists"
         effect: "NoSchedule"
     logLevel: info
-    ## 0 - fatal errors, panic
-    ## 1 - critical errors, minimal progress at subsystem level
-    ## 2 - non-critical errors
-    ## 3 - warnings, progress messages
-    ## 5 - signaling protocol actions (incoming packets, ...)
-    ## 7 - media protocol actions (incoming packets, ...)
-    ## 9 - entering/exiting functions, very verbatim progress
     sofiaLoglevel: "3"
     ports:
       tcp: 5060
@@ -341,7 +334,7 @@ dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:4.80.0
+  image: cognigy.azurecr.io/db-create:4.78.0
   imagePullPolicy: Always
   logCollectorEnabled: false
 
@@ -369,7 +362,7 @@ influxdb:
       cpu: "1"
       memory: 1.5Gi
 
-## Bitnami Chart, image info: bitnami/mysql:8.0.37-debian-12-r5
+## Bitnami Chart, image info: bitnami/mysql:8.0.37-debian-12-r0
 mysql:
   enabled: true
   global:
@@ -385,7 +378,7 @@ mysql:
     existingSecret: voicegateway-mysql-password
   image:
     repository: mysql
-    tag: 8.0.37-debian-12-r5
+    tag: 8.0.37-debian-12-r0
   primary:
     priorityClassName: ""
     persistence:
@@ -416,7 +409,7 @@ mysql:
   host: mysql
   port: 3306
 
-## Bitnami Chart, image info: bitnami/postgresql:14.12.0-debian-12-r15
+## Bitnami Chart, image info: bitnami/postgresql:14.9.0-debian-11-r58
 ## Used only internally by heplify-server and homer to store sip captures
 postgresql:
   enabled: true
@@ -433,23 +426,23 @@ postgresql:
     database: homer_config
   image:
     repository: postgres
-    tag: 14.12.0-debian-12-r15
+    tag: 14.9.0-debian-11-r58
   primary:
     priorityClassName: ""
     persistence:
       size: "30Gi"
     resources:
       requests:
-        cpu: "1"
-        memory: 4Gi
+        cpu: "0.500"
+        memory: 3Gi
       limits:
-        cpu: "1"
-        memory: 4Gi
+        cpu: "0.500"
+        memory: 3Gi
   metrics:
     enabled: true
     image:
       repository: postgres-exporter
-      tag: 0.15.0-debian-12-r17
+      tag: 0.12.0-debian-11-r91
     resources:
       requests:
         cpu: "0.200"
@@ -567,7 +560,7 @@ redisHa:
 
 heplifyServer:
   ## We build and tag this image by ourselves
-  image: cognigy.azurecr.io/vg-heplify-server:1.59.7
+  image: cognigy.azurecr.io/vg-heplify-server:4.78.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -598,7 +591,7 @@ heplifyServer:
 
 homer:
   ## We build and tag this image by ourselves
-  image: cognigy.azurecr.io/vg-homer:1.5.2
+  image: cognigy.azurecr.io/vg-homer:4.78.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -657,7 +650,7 @@ health:
   port: 8001
 
 telegraf:
-  image: cognigy.azurecr.io/vg-telegraf:1.31-alpine
+  image: cognigy.azurecr.io/vg-telegraf:1.30-alpine
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -700,7 +693,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:3.18.6
 
 api:
-  image: cognigy.azurecr.io/api-server:4.80.0
+  image: cognigy.azurecr.io/api-server:4.78.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -743,7 +736,7 @@ api:
 
 apiBan:
   enabled: true
-  image: cognigy.azurecr.io/api-ban:4.80.0
+  image: cognigy.azurecr.io/api-ban:4.78.0
   imagePullPolicy: IfNotPresent
   endpoint: https://apiban.org/api
   redisSetKey: apiban:ips
@@ -762,7 +755,7 @@ apiBan:
 
 billingApp:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:4.80.0
+  image: cognigy.azurecr.io/voicegateway-billing-app:4.78.0
   imagePullPolicy: IfNotPresent
   replicasCount: 1
   affinity: {}
@@ -815,17 +808,10 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:4.80.0
+  image: cognigy.azurecr.io/vg-feature-server:4.78.2
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
-  ## 0 - fatal errors, panic
-  ## 1 - critical errors, minimal progress at subsystem level
-  ## 2 - non-critical errors
-  ## 3 - warnings, progress messages
-  ## 5 - signaling protocol actions (incoming packets, ...)
-  ## 7 - media protocol actions (incoming packets, ...)
-  ## 9 - entering/exiting functions, very verbatim progress
   sofiaLoglevel: "3"
   ## Microsoft only - Trims trailing silence (zero-amplitude samples) from the end of an audio file
   trimTts: true
@@ -855,8 +841,8 @@ featureServer:
   freeswitchConnection: "127.0.0.1:8021:JambonzR0ck$"
   # Sets the max memory size of V8's old memory section - size in Megabytes
   nodeOptions: "--max-old-space-size=450"
-  # Pre cache audio
-  preCacheAudio: true
+  # Pre cache audio - default: false
+  preCacheAudio: false
   anchorMediaAlways: false
   ## Disable the 'P-Asserted-Identity' header
   disableDialPaiHeader: false
@@ -923,7 +909,7 @@ rtpEngine:
       memory: 250Mi
 
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.80.0
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.78.0
   imagePullPolicy: IfNotPresent
   logLevel: info
   extraEnvVars: []
@@ -938,7 +924,7 @@ rtpEngineSidecar:
       memory: 200Mi
 
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:4.80.0
+  image: cognigy.azurecr.io/sbc-call-router:4.78.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -969,7 +955,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:4.80.0
+  image: cognigy.azurecr.io/sbc-inbound:4.78.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1009,7 +995,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:4.80.0
+  image: cognigy.azurecr.io/sbc-outbound:4.78.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1046,7 +1032,7 @@ sbcOutbound:
   supportBestEffortTls: false
 
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:4.80.0
+  image: cognigy.azurecr.io/sbc-sip-sidecar:4.78.0
   imagePullPolicy: IfNotPresent
   logLevel: info
   extraEnvVars: []
@@ -1060,7 +1046,7 @@ sbcSipSidecar:
 
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-test-call-manager:4.80.0
+  image: cognigy.azurecr.io/vg-test-call-manager:4.78.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1098,7 +1084,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:4.80.0
+  image: cognigy.azurecr.io/vg-webapp:4.78.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
