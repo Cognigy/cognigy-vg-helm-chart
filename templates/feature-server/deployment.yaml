@@ -182,8 +182,6 @@ spec:
               value: {{ .Values.freeswitch.tmpCacheAudioFolder | quote }}
             - name: DEEPGRAM_SPEECH_USE_SINGLE_CONNECTION
               value: {{ if .Values.freeswitch.deepgramSttUseSingleConnection }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
-            - name: AZURE_SPEECH_USE_SINGLE_CONNECTION
-              value: {{ if .Values.freeswitch.azureSttUseSingleConnection }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: DISABLE_HTTP2_FOR_TTS_STREAMING
               value: {{ if .Values.freeswitch.disableHttp2ForTtsStreaming }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             {{- if .Values.freeswitch.extraEnvVars }}

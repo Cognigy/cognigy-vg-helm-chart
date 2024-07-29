@@ -341,7 +341,7 @@ dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:4.81.0
+  image: cognigy.azurecr.io/db-create:4.80.1
   imagePullPolicy: Always
   logCollectorEnabled: false
 
@@ -700,7 +700,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:3.18.6
 
 api:
-  image: cognigy.azurecr.io/api-server:4.81.0
+  image: cognigy.azurecr.io/api-server:4.80.1
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -743,7 +743,7 @@ api:
 
 apiBan:
   enabled: true
-  image: cognigy.azurecr.io/api-ban:4.81.0
+  image: cognigy.azurecr.io/api-ban:4.80.0
   imagePullPolicy: IfNotPresent
   endpoint: https://apiban.org/api
   redisSetKey: apiban:ips
@@ -762,7 +762,7 @@ apiBan:
 
 billingApp:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:4.81.0
+  image: cognigy.azurecr.io/voicegateway-billing-app:4.80.0
   imagePullPolicy: IfNotPresent
   replicasCount: 1
   affinity: {}
@@ -815,7 +815,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:4.81.0
+  image: cognigy.azurecr.io/vg-feature-server:4.80.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -873,7 +873,7 @@ featureServer:
       memory: 500Mi
 
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:0.9.1
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:0.9.0-2
   imagePullPolicy: IfNotPresent
   logLevel: info
   username: Cognigy
@@ -891,9 +891,8 @@ freeswitch:
     # - --log-level debug (available from R71 freeSWITCH-mrf image)
   tmpCacheAudioFolder: "/tmp/"
   serviceThreads: 1
-  bufferSecs: 5
+  bufferSecs: 3
   deepgramSttUseSingleConnection: true
-  azureSttUseSingleConnection: true
   ## it is recommended to force HTTP/1 for streaming since there might be some issues with HTTP/2
   disableHttp2ForTtsStreaming: true
   extraEnvVars: []
@@ -924,7 +923,7 @@ rtpEngine:
       memory: 250Mi
 
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.81.0
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.80.0
   imagePullPolicy: IfNotPresent
   logLevel: info
   extraEnvVars: []
@@ -939,7 +938,7 @@ rtpEngineSidecar:
       memory: 200Mi
 
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:4.81.0
+  image: cognigy.azurecr.io/sbc-call-router:4.80.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -970,7 +969,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:4.81.0
+  image: cognigy.azurecr.io/sbc-inbound:4.80.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1010,7 +1009,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:4.81.0
+  image: cognigy.azurecr.io/sbc-outbound:4.80.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1047,7 +1046,7 @@ sbcOutbound:
   supportBestEffortTls: false
 
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:4.81.0
+  image: cognigy.azurecr.io/sbc-sip-sidecar:4.80.0
   imagePullPolicy: IfNotPresent
   logLevel: info
   extraEnvVars: []
@@ -1061,7 +1060,7 @@ sbcSipSidecar:
 
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-test-call-manager:4.81.0
+  image: cognigy.azurecr.io/vg-test-call-manager:4.80.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1099,7 +1098,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:4.81.0
+  image: cognigy.azurecr.io/vg-webapp:4.80.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
