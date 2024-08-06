@@ -55,6 +55,42 @@ spec:
                   key: awsSecretKey
                   name: {{ .Values.sbc.ec2EipAllocator.vgOperatorUser }}
         {{- end }}
+        {{- if and (.Values.sbc.sipDnsUpdaterAzure.enabled) (eq .Values.cloud "azure") }}
+        - image: {{ .Values.sbc.sipDnsUpdaterAzure.image }}
+          name: sip-dns-updater-azure
+          env:
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SP_TENANT
+              valueFrom:
+                secretKeyRef:
+                  name: {{- include "sipDnsUpdaterAzure" $ | indent 1 }}
+                  key: tenantId
+            - name: SP_APPID
+              valueFrom:
+                secretKeyRef:
+                  name: {{- include "sipDnsUpdaterAzure" $ | indent 1 }}
+                  key: appId
+            - name: SP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{- include "sipDnsUpdaterAzure" $ | indent 1 }}
+                  key: appPassword
+            - name: DNS_RG
+              value: {{ .Values.sbc.sipDnsUpdaterAzure.dnsZoneRg | quote }}
+            - name: DNS_ZONE_NAME
+              value: {{ .Values.sbc.sipDnsUpdaterAzure.dnsZoneName | quote}}
+            - name: DNS_RECORD_TTL
+              value: {{ .Values.sbc.sipDnsUpdaterAzure.dnsRecordTtl | quote}}
+            - name: DNS_BASE_NAME
+              value: {{ .Values.sbc.sipDnsUpdaterAzure.dnsBaseName | quote }}
+        {{- end }}
         - image: kanisterio/mysql-sidecar:0.40.0
           name: db-create-wait
           env:

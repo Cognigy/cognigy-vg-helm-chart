@@ -18,7 +18,6 @@ spec:
         app: feature-server
       annotations:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
-        checksum/feature-server: {{ include (print $.Template.BasePath "/feature-server/config-map.yaml") $ | sha256sum }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.featureServer.terminationGracePeriodSeconds }}
@@ -237,9 +236,6 @@ spec:
           volumeMounts:
             - mountPath: /tmp 
               name: temp-audio-volume
-            - mountPath: /etc/voicemail-phraselist.json
-              name: voicemail-phraselist
-              subPath:  voicemail-phraselist.json
           env:
             - name: NODE_ENV
               value: {{ .Values.global.nodeEnv | quote }}
@@ -325,7 +321,8 @@ spec:
                   name: voicegateway-jwt
                   key: jwt
             - name: VMD_HINTS_FILE
-              value: /etc/voicemail-phraselist.json
+              value: |
+                {{ .Values.phraseList | trim | nindent 16 }}
             - name: JAMBONES_OTEL_ENABLED
               value: "true"
             - name: VG_TTS_TRIM_SILENCE
@@ -373,10 +370,4 @@ spec:
       volumes:
         - name: temp-audio-volume
           emptyDir: {}
-        - name: voicemail-phraselist
-          configMap:
-            name: voicemail-phraselist
-            items:
-              - key: voicemail-phraselist.json
-                path: voicemail-phraselist.json
 {{- end }}

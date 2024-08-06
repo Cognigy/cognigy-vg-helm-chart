@@ -134,6 +134,29 @@ Return the proper interaction panel service provider info
 {{- end -}}
 
 {{/*
+Return the proper Azure SIP DNS updater credentials
+*/}}
+{{- define "sipDnsUpdaterAzure" -}}
+  {{- $sipDnsUpdaterAzureInfo := "" -}}
+
+  {{- if .Values.sbc.sipDnsUpdaterAzure.enabled -}}
+    {{- if .Values.sbc.sipDnsUpdaterAzure.servicePrincipal.existingSecret -}}
+      {{- $sipDnsUpdaterAzureInfo = .Values.sbc.sipDnsUpdaterAzure.servicePrincipal.existingSecret  -}}
+    {{- else if and (.Values.sbc.sipDnsUpdaterAzure.servicePrincipal.tenantId) (.Values.sbc.sipDnsUpdaterAzure.servicePrincipal.appId) (.Values.sbc.sipDnsUpdaterAzure.servicePrincipal.appPassword) -}}
+      {{- $sipDnsUpdaterAzureInfo = "sip-dns-updater-azure" -}}
+    {{- else -}}
+      {{ required "A valid value for .Values.sbc.sipDnsUpdaterAzure.servicePrincipal.tenantId is required!" .Values.sbc.sipDnsUpdaterAzure.servicePrincipal.tenantId }}
+      {{ required "A valid value for .Values.sbc.sipDnsUpdaterAzure.servicePrincipal.appId is required!" .Values.sbc.sipDnsUpdaterAzure.servicePrincipal.appId }}
+      {{ required "A valid value for .Values.sbc.sipDnsUpdaterAzure.servicePrincipal.appPassword is required!" .Values.sbc.sipDnsUpdaterAzure.servicePrincipal.appPassword }}
+    {{- end -}}
+  {{- end -}}
+
+  {{- if (not (empty $sipDnsUpdaterAzureInfo)) -}}
+    {{- printf "%s" (tpl $sipDnsUpdaterAzureInfo $) | indent 1 -}}
+  {{- end -}}
+{{- end -}}
+
+{{/*
 Return the proper Docker Image Registry Auth Credentials
 */}}
 {{- define "image.pullSecrets" -}}
