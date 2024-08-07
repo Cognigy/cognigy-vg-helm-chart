@@ -993,7 +993,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:4.82.0
+  image: cognigy.azurecr.io/sbc-inbound:4.82.1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
