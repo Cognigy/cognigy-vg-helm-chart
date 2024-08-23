@@ -838,7 +838,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:4.83.0
+  image: cognigy.azurecr.io/vg-feature-server:4.83.1
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -916,7 +916,7 @@ freeswitch:
   serviceThreads: 1
   bufferSecs: 5
   deepgramSttUseSingleConnection: true
-  azureSttUseSingleConnection: true
+  azureSttUseSingleConnection: false
   ## it is recommended to force HTTP/1 for streaming since there might be some issues with HTTP/2
   disableHttp2ForTtsStreaming: true
   extraEnvVars: []
