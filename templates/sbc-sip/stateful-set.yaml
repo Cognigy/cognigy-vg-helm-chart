@@ -306,6 +306,8 @@ spec:
               value: {{ .Values.tracing.environment | quote }}
             - name: COGNIGY_AI_VERSION
               value: {{ .Chart.Version | trunc 6 | quote }}
+            - name: FEAT_COMPATIBILITY_RFC3261
+              value: {{ .Values.sbcSipSidecar.registerRfc3261 | quote }}
             {{- if .Values.sbcSipSidecar.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcSipSidecar.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
