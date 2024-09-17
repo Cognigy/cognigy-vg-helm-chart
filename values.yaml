@@ -325,10 +325,14 @@ sbc:
   ec2EipAllocator:
     ## Only for AWS
     enabled: false
-    image: cognigy.azurecr.io/ec2-eip-allocator:1.1.1
-    ## Tag for the SIP EIP Node Pool
+    image: cognigy.azurecr.io/ec2-eip-allocator:1.1.2
+    ## Tag key for the SIP EIP Node Pool
+    sipEipGroupRoleKey: "role"
+    ## Tag value for the SIP EIP Node Pool
     sipEipGroupRole: ""
-    ## Tag for the RTP EIP Node Pool
+    ## Tag key for the RTP EIP Node Pool
+    rtpEipGroupRoleKey: "role"
+    ## Tag value for the RTP EIP Node Pool
     rtpEipGroupRole: ""
     ## User to reallocate static EIPs
     vgOperatorUser: ""
@@ -364,7 +368,7 @@ dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:4.84.0
+  image: cognigy.azurecr.io/db-create:4.85.0
   imagePullPolicy: Always
   logCollectorEnabled: false
 
@@ -592,6 +596,7 @@ heplifyServer:
   ## We build and tag this image by ourselves
   image: cognigy.azurecr.io/vg-heplify-server:1.59.7
   imagePullPolicy: IfNotPresent
+  ## It is not recommended to scale HEPlify-server horizontally since this might take additional load balancing or db queries
   replicaCount: 1
   affinity: {}
   nodeSelector: {}
@@ -623,6 +628,7 @@ homer:
   ## We build and tag this image by ourselves
   image: cognigy.azurecr.io/vg-homer:1.5.2
   imagePullPolicy: IfNotPresent
+  ## It is not recommended to scale HOMER horizontally since this might take additional load balancing or db queries
   replicaCount: 1
   affinity: {}
   nodeSelector: {}
@@ -723,7 +729,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:3.18.6
 
 api:
-  image: cognigy.azurecr.io/api-server:4.84.0
+  image: cognigy.azurecr.io/api-server:4.85.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -785,7 +791,7 @@ apiBan:
 
 billingApp:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:4.84.0
+  image: cognigy.azurecr.io/voicegateway-billing-app:4.85.0
   imagePullPolicy: IfNotPresent
   replicasCount: 1
   affinity: {}
@@ -838,7 +844,7 @@ drachtio:
       memory: 250Mi
 
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:4.84.0
+  image: cognigy.azurecr.io/vg-feature-server:4.85.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -947,7 +953,7 @@ rtpEngine:
       memory: 250Mi
 
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.84.0
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.85.0
   imagePullPolicy: IfNotPresent
   logLevel: info
   extraEnvVars: []
@@ -962,7 +968,7 @@ rtpEngineSidecar:
       memory: 200Mi
 
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:4.84.0
+  image: cognigy.azurecr.io/sbc-call-router:4.85.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -993,7 +999,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:4.84.0
+  image: cognigy.azurecr.io/sbc-inbound:4.85.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1033,7 +1039,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:4.84.0
+  image: cognigy.azurecr.io/sbc-outbound:4.85.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1070,7 +1076,7 @@ sbcOutbound:
   supportBestEffortTls: false
 
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:4.84.0
+  image: cognigy.azurecr.io/sbc-sip-sidecar:4.85.0
   imagePullPolicy: IfNotPresent
   logLevel: info
   registerRfc3261: false
@@ -1085,7 +1091,7 @@ sbcSipSidecar:
 
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-test-call-manager:4.84.0
+  image: cognigy.azurecr.io/vg-test-call-manager:4.85.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1123,7 +1129,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:4.84.0
+  image: cognigy.azurecr.io/vg-webapp:4.85.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:

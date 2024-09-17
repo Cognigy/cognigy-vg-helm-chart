@@ -44,6 +44,8 @@ spec:
           env:
             - name: AWS_EIP_NODE_GROUP_ROLE
               value: {{ .Values.sbc.ec2EipAllocator.sipEipGroupRole }}
+            - name: AWS_EIP_NODE_GROUP_ROLE_KEY
+              value: {{ .Values.sbc.ec2EipAllocator.sipEipGroupRoleKey }}
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:

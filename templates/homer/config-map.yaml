@@ -6,6 +6,8 @@ metadata:
 data:
   bootstrapped: |
     bootstrapping
+  ## https://github.com/sipcapture/homer-app/blob/master/etc/webapp_config.json
+  ## https://github.com/sipcapture/homer-app/blob/master/CONFIGURE.md
   webapp_config.json: |
     {
       "auth_settings": {

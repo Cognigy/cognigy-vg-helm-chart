@@ -4,6 +4,7 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   name: heplify-server
 data:
+  ## https://github.com/sipcapture/homer/wiki/HEPLIFY-SERVER-Settings
   heplify-server.toml: |
     HEPAddr               = "0.0.0.0:9060"
     HEPTCPAddr            = ""
@@ -30,6 +31,7 @@ data:
     DBBulk                = 200
     DBTimer               = 4
     DBBuffer              = 400000
+    # Set DBWorker equal to the number of CPUs in the system
     DBWorker              = 8
     DBRotate              = true
     DBPartLog             = "2h"
@@ -45,12 +47,12 @@ data:
     DBPercentageUsage     = "80%"
     DBMaxSize             = "30MB"
     Dedup                 = false
-    DiscardMethod         = []
+    DiscardMethod         = ["OPTIONS","NOTIFY"]
     AlegIDs               = ["X-CID"]
     CustomHeader          = ["X-Application-Sid", "X-Originating-Carrier", "X-MS-Teams-Tenant-FQDN", "X-Authenticated-User"]
     SIPHeader             = []
-    LogDbg                = ""
-    LogLvl                = "info"
+    LogDbg                = "hep,sql"
+    LogLvl                = "warning"
     LogStd                = true
     LogSys                = false
     Config                = "./heplify-server.toml"
@@ -67,7 +69,7 @@ data:
     # PromTargetIP    = "10.1.2.111,10.1.2.4,10.1.2.5,10.1.2.6,10.12.44.222"
     # PromTargetName  = "sbc_access,sbc_core,kamailio,asterisk,pstn_gateway"
     # AlegIDs         = ["X-CID","P-Charging-Vector,icid-value=\"?(.*?)(?:\"|;|$)","X-BroadWorks-Correlation-Info"]
-    # DiscardMethod   = ["OPTIONS","NOTIFY"]
+    # DiscardMethod   = []
     # CustomHeader    = ["X-CustomerIP","X-Billing"]
     # SIPHeader       = ["callid","callid_aleg","method","ruri_user","ruri_domain","from_user","from_domain","from_tag","to_user","to_domain","to_tag","via","contact_user"]
     # LogDbg          = "hep,sql,loki"
