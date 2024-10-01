@@ -35,7 +35,7 @@ spec:
       {{- end }}
       containers:
         - name: jaeger
-          image: {{ .Values.jaeger.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.jaeger.image) }}
           imagePullPolicy: {{ .Values.jaeger.imagePullPolicy }}
           resources: {{- toYaml .Values.jaeger.resources | nindent 12 }}
           ports:

@@ -14,7 +14,7 @@ spec:
     - path: /metrics
       port: metrics
     - path: /metrics
-      port: drachtiometrics
+      port: fs-drachtio
   selector:
     matchLabels:
       app: feature-server

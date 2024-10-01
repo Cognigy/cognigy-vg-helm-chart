@@ -17,6 +17,9 @@ global:
     serviceProviderCalls: true
   ## private network - IPs of the SBC (e.g. '172.31.0.0/16')
   privateVoipNetworkCidr: ""
+  ## Global Docker image registry for Cognigy images
+  ##
+  imageRegistry: ""
 
 ###############
 # Cognigy ENV #
@@ -172,8 +175,11 @@ tracing:
 ## By default it is always enabled.
 ingress:
   enabled: true
+  ingressClassName: traefik
+
   api:
     host: ""
+    extraAnnotations: {}
     ipWhiteListMiddleware:
       enabled: false
       ipWhiteList:
@@ -183,6 +189,7 @@ ingress:
           depth: 0
   billingApp:
     host: ""
+    extraAnnotations: {}
     ipWhiteListMiddleware:
       enabled: false
       ipWhiteList:
@@ -193,6 +200,7 @@ ingress:
   homer:
     enabled: false
     host: ""
+    extraAnnotations: {}
     basicAuthMiddleware:
       enabled: true
     ipWhiteListMiddleware:
@@ -205,6 +213,7 @@ ingress:
   jaeger:
     enabled: false
     host: ""
+    extraAnnotations: {}
     basicAuthMiddleware:
       enabled: true
     ipWhiteListMiddleware:
@@ -216,6 +225,7 @@ ingress:
           depth: 0
   testCallManager:
     host: ""
+    extraAnnotations: {}
     ipWhiteListMiddleware:
       enabled: false
       ipWhiteList:
@@ -225,6 +235,7 @@ ingress:
           depth: 0
   webapp:
     host: ""
+    extraAnnotations: {}
     ipWhiteListMiddleware:
       enabled: false
       ipWhiteList:
@@ -368,12 +379,12 @@ dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:4.85.0
+  image: cognigy.azurecr.io/db-create:4.86.0
   imagePullPolicy: Always
   logCollectorEnabled: false
 
 influxdb:
-  image: cognigy.azurecr.io/vg-influx:1.8-alpine
+  image: cognigy.azurecr.io/vg-influx:1.8.10-alpine
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -396,11 +407,10 @@ influxdb:
       cpu: "1"
       memory: 1.5Gi
 
-## Bitnami Chart, image info: bitnami/mysql:8.0.37-debian-12-r5
+## Bitnami Chart, image info: bitnami/mysql:8.0.39-debian-12-r5
 mysql:
   enabled: true
   global:
-    imageRegistry: cognigy.azurecr.io
     imagePullSecrets:
       - cognigy-registry-token
     storageClass: mysql
@@ -411,8 +421,9 @@ mysql:
     username: jambones
     existingSecret: voicegateway-mysql-password
   image:
+    registry: cognigy.azurecr.io
     repository: mysql
-    tag: 8.0.37-debian-12-r5
+    tag: 8.0.39-debian-12-r5
   primary:
     priorityClassName: ""
     persistence:
@@ -427,8 +438,9 @@ mysql:
   metrics:
     enabled: true
     image:
+      registry: cognigy.azurecr.io
       repository: mysqld-exporter
-      tag: 0.14.0-debian-11-r116
+      tag: 0.15.1-debian-12-r34
     resources:
       requests:
         cpu: "0.400"
@@ -438,6 +450,17 @@ mysql:
         memory: 400Mi
     serviceMonitor:
       enabled: false
+    args:
+      # Use the username flag with just the username (no password)
+      - --mysqld.username=jambones
+      # Use the address flag with host:port
+      - --mysqld.address=mysql:3306
+    env:
+      - name: MYSQLD_EXPORTER_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: voicegateway-mysql-password
+            key: mysql-password
   database:
     name: jambones
   host: mysql
@@ -449,7 +472,6 @@ postgresql:
   enabled: true
   replicaCount: 1
   global:
-    imageRegistry: cognigy.azurecr.io
     imagePullSecrets:
       - cognigy-registry-token
     storageClass: postgres
@@ -459,6 +481,7 @@ postgresql:
     postgresPassword: homer7Seven
     database: homer_config
   image:
+    registry: cognigy.azurecr.io
     repository: postgres
     tag: 14.12.0-debian-12-r15
   primary:
@@ -475,8 +498,9 @@ postgresql:
   metrics:
     enabled: true
     image:
+      registry: cognigy.azurecr.io
       repository: postgres-exporter
-      tag: 0.15.0-debian-12-r17
+      tag: 0.15.0-debian-12-r43
     resources:
       requests:
         cpu: "0.200"
@@ -490,7 +514,7 @@ postgresql:
   port: 5432
 
 redis:
-  image: cognigy.azurecr.io/redis:7.2.4-debian-12-r11
+  image: cognigy.azurecr.io/redis:7.4.0-debian-12-r4
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   host: redis
@@ -518,7 +542,7 @@ redisHa:
   image:
     registry: cognigy.azurecr.io
     repository: redis
-    tag: 7.2.4-debian-12-r11
+    tag: 7.4.0-debian-12-r4
   auth:
     enabled: false
     sentinel: false
@@ -561,29 +585,29 @@ redisHa:
     image:
       registry: cognigy.azurecr.io
       repository: redis-sentinel
-      tag: 7.2.4-debian-12-r9
+      tag: 7.4.0-debian-12-r4
     automateClusterRecovery: true
     downAfterMilliseconds: 2000
     failoverTimeout: 10000
     resources:
       requests:
-        cpu: "0.150"
-        memory: 300Mi
+        cpu: 25m
+        memory: 32Mi
       limits:
-        cpu: "0.150"
-        memory: 300Mi
+        cpu: 200m
+        memory: 200Mi
   metrics:
     enabled: true
     image:
       registry: cognigy.azurecr.io
       repository: redis-exporter
-      tag: 1.56.0-debian-11-r1
+      tag: 1.63.0-debian-12-r0
     resources:
       requests:
-        cpu: "0.200"
-        memory: 200Mi
+        cpu: 25m
+        memory: 32Mi
       limits:
-        cpu: "0.200"
+        cpu: 200m
         memory: 200Mi
     serviceMonitor:
       enabled: false
@@ -594,7 +618,7 @@ redisHa:
 
 heplifyServer:
   ## We build and tag this image by ourselves
-  image: cognigy.azurecr.io/vg-heplify-server:1.59.7
+  image: cognigy.azurecr.io/vg-heplify-server:1.59.7-1
   imagePullPolicy: IfNotPresent
   ## It is not recommended to scale HEPlify-server horizontally since this might take additional load balancing or db queries
   replicaCount: 1
@@ -626,7 +650,7 @@ heplifyServer:
 
 homer:
   ## We build and tag this image by ourselves
-  image: cognigy.azurecr.io/vg-homer:1.5.2
+  image: cognigy.azurecr.io/vg-homer:1.5.3
   imagePullPolicy: IfNotPresent
   ## It is not recommended to scale HOMER horizontally since this might take additional load balancing or db queries
   replicaCount: 1
@@ -653,7 +677,7 @@ homer:
       memory: 150Mi
 
 jaeger:
-  image: cognigy.azurecr.io/vg-jaeger:1.57-all-in-one
+  image: cognigy.azurecr.io/vg-jaeger:1.61.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -729,7 +753,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:3.18.6
 
 api:
-  image: cognigy.azurecr.io/api-server:4.85.0
+  image: cognigy.azurecr.io/api-server:4.86.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -772,7 +796,7 @@ api:
 
 apiBan:
   enabled: true
-  image: cognigy.azurecr.io/api-ban:1.0.0
+  image: cognigy.azurecr.io/api-ban:1.1.0
   imagePullPolicy: IfNotPresent
   endpoint: https://apiban.org/api
   redisSetKey: apiban:ips
@@ -791,7 +815,7 @@ apiBan:
 
 billingApp:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:4.85.0
+  image: cognigy.azurecr.io/voicegateway-billing-app:4.86.0
   imagePullPolicy: IfNotPresent
   replicasCount: 1
   affinity: {}
@@ -837,14 +861,14 @@ drachtio:
   extraEnvVars: []
   resources:
     requests:
-      cpu: "0.250"
-      memory: 250Mi
+      cpu: "0.5"
+      memory: 500Mi
     limits:
-      cpu: "0.250"
-      memory: 250Mi
+      cpu: "0.5"
+      memory: 500Mi
 
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:4.85.0
+  image: cognigy.azurecr.io/vg-feature-server:4.86.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -902,7 +926,7 @@ featureServer:
       memory: 500Mi
 
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:0.9.1
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:0.9.3
   imagePullPolicy: IfNotPresent
   logLevel: info
   username: Cognigy
@@ -914,7 +938,8 @@ freeswitch:
   ## and until we don't have a solution we will force a specific codec for it. Once we have defintive solution, we uncomment this.
   args:
     # - --codec-answer-generous
-    # - --g711-only
+    # - --g711-only OR
+    # - --g711-only-alaw-preferred (this is recommended for clusters running in EU)
     # - --rtp-range-start the starting UDP port for RTP traffic
     # - --rtp-range-end the ending UDP port for RTP traffic
     # - --log-level debug (available from R71 freeSWITCH-mrf image)
@@ -946,14 +971,14 @@ rtpEngine:
   extraEnvVars: []
   resources:
     requests:
-      cpu: "2"
-      memory: 250Mi
+      cpu: "3"
+      memory: 1Gi
     limits:
-      cpu: "2"
-      memory: 250Mi
+      cpu: "3"
+      memory: 1Gi
 
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.85.0
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.86.0
   imagePullPolicy: IfNotPresent
   logLevel: info
   extraEnvVars: []
@@ -968,7 +993,7 @@ rtpEngineSidecar:
       memory: 200Mi
 
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:4.85.0
+  image: cognigy.azurecr.io/sbc-call-router:4.86.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -999,7 +1024,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:4.85.0
+  image: cognigy.azurecr.io/sbc-inbound:4.86.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1039,7 +1064,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:4.85.0
+  image: cognigy.azurecr.io/sbc-outbound:4.86.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1076,7 +1101,7 @@ sbcOutbound:
   supportBestEffortTls: false
 
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:4.85.0
+  image: cognigy.azurecr.io/sbc-sip-sidecar:4.86.0
   imagePullPolicy: IfNotPresent
   logLevel: info
   registerRfc3261: false
@@ -1091,7 +1116,7 @@ sbcSipSidecar:
 
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-test-call-manager:4.85.0
+  image: cognigy.azurecr.io/vg-test-call-manager:4.86.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1129,7 +1154,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:4.85.0
+  image: cognigy.azurecr.io/vg-webapp:4.86.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1489,189 +1514,189 @@ hpa:
 ###########
 
 phraseList: |
-    {
-      "en-US": [
-        "call has been forwarded",
-        "at the beep",
-        "at the tone",
-        "leave a message",
-        "leave me a message",
-        "not available",
-        "can't take your call",
-        "will get back to you",
-        "I'll get back to you",
-        "we are unable",
-        "Unable to take your call now",
-        "I'll reply soon",
-        "I'll call back",
-        "I'll reach out to you as soon as possible",
-        "Leave a message",
-        "Away from phone",
-        "Not available now",
-        "I'll return call",
-        "On another call",
-        "Currently on another call",
-        "I will return call later",
-        "Busy please leave message",
-        "Message will be returned promptly",
-        "Currently unavailable to answer",
-        "Planning to return your call soon",
-        "Apologies for missing your call",
-        "Not by the phone at the moment",
-        "Expecting to return your call",
-        "Currently not accessible",
-        "Intend to call back",
-        "Appreciate your patience!",
-        "Engaged in another conversation",
-        "I Will respond promptly",
-        "Kindly leave a message",
-        "Currently occupied leave a message",
-        "Unfortunately unable to answer right now",
-        "Occupied at the moment",
-        "Not present leave a message",
-        "Regrettably unavailable kindly leave a message",
-        "Will ensure a prompt response to your message",
-        "Currently engaged",
-        "Will return your call at the earliest opportunity",
-        "Your message will receive my prompt attention",
-        "I'll respond as soon as I can",
-        "Your message is important please leave it after the beep",
-        "Away from the phone at the moment",
-        "Unable to answer right now",
-        "Engaged in another task",
-        "Not by the phone presently",
-        "I'll respond at my earliest convenience",
-        "Away from the phone momentarily",
-        "I'll return your call shortly",
-        "Currently not able to answer",
-        "Your message is important please leave it after the tone",
-        "I'm unable to take your call right now",
-        "Please leave your message for me",
-        "I'll get back to you soon",
-        "Your call has been missed",
-        "Please leave a detailed message for me to respond to",
-        "Leave a message I'll make sure to respond",
-        "Feel free to leave a message",
-        "Your call is important to me",
-        "I'll get back to you shortly",
-        "Your message will be attended to promptly",
-        "Not available at the moment",
-        "I'll be sure to get back to you",
-        "I'll call you back soon",
-        "I'll ensure a prompt response",
-        "Sorry for the inconvenience",
-        "I'll return your call",
-        "I'll make sure to get back to you",
-        "I'll call you back shortly",
-        "I'll return your call as soon as possible",
-        "Apologies for the inconvenience leave your message",
-        "Your call is appreciated",
-        "I'm unavailable to answer",
-        "I'm currently away",
-        "I'll return your call as soon as I can",
-        "I'm away from the phone",
-        "I'm currently unavailable to take your call",
-        "Sorry for missing your call",
-        "I'll ensure it receives my immediate attention",
-        "I'm away from the phone momentarily",
-        "I'll reach out to you shortly",
-        "Apologies for the inconvenience",
-        "Currently occupied",
-        "Unable to answer your call at the moment",
-        "I'll make sure to follow up with you",
-        "Sorry for not being available",
-        "I'll reach out to you as soon as I can",
-        "I'm currently engaged",
-        "I'm currently busy",
-        "I'm currently unavailable",
-        "I'll respond to you at my earliest convenience",
-        "Your message is appreciated",
-        "I'll get back to you promptly",
-        "I'll get back to you without delay",
-        "Currently away from the phone",
-        "I'll return your call at my earliest opportunity",
-        "Sorry for the missed call",
-        "I'll make sure to address your concerns",
-        "Please provide your details for a callback",
-        "I'll make every effort to respond promptly",
-        "I'll ensure it's attended to promptly",
-        "Away from the phone temporarily",
-        "I'll get back to you as soon as I return",
-        "Currently not in a position to answer your call",
-        "Your call cannot be answered at the moment",
-        "I'll ensure to respond as soon as I'm able",
-        "Your call is important please leave a message",
-        "Unable to answer right now please leave your message",
-        "Currently not accessible intending to return your call",
-        "I'll respond promptly to your message",
-        "leave a memo",
-        "please leave a memo"
-      ],
-      "de-DE": [
-        "nicht erreichbar",
-        "derzeit nicht erreichbar",
-        "im Moment nicht erreichbar",
-        "anruf wurde weitergeleitet",
-        "anruf weitergeleitet",
-        "beim piepsen",
-        "beim piepton",
-        "nach dem ton",
-        "am ton",
-        "nach dem signal",
-        "eine nachricht hinterlassen",
-        "hinterlasse mir eine Nachricht",
-        "hinterlassen Sie eine Nachricht",
-        "sprechen Sie nach dem Ton",
-        "nicht verfügbar",
-        "zurzeit nicht verfügbar",
-        "kann ihren anruf nicht entgegennehmen",
-        "kann Ihren Anruf leider nicht persönlich entgegennehmen",
-        "wird sich bei Ihnen melden",
-        "ruft Sie zurück",
-        "ich melde mich bei dir",
-        "melde mich später",
-        "wir können nicht",
-        "wir können Ihren Anruf leider nicht entgegennehmen",
-        "Mobilbox",
-        "Mailbox",
-        "mobilbox",
-        "mailbox",
-        "Anrufbeantworter",
-        "Combox"
-      ],
-      "es-ES": [
-        "le pasamos la llamada",
-        "después del bip",
-        "después del tono",
-        "deja un mensaje",
-        "déjame un mensaje",
-        "no estamos disponibles",
-        "no estoy disponible",
-        "ahora no puedo",
-        "no puedo contestar",
-        "no le puedo contestar",
-        "me pondré en contacto",
-        "nos pondremos en contacto",
-        "ahora no estamos disponibles",
-        "no estamos disponibles"
-      ],
-      "ca-ES": [
-        "passem la seva trucada",
-        "després del bip",
-        "després del to",
-        "deixi un missatge",
-        "deixa un missatge",
-        "deixim un missatge",
-        "no estem disponibles",
-        "no estem a l'oficina",
-        "no estic disponible",
-        "ara no puc",
-        "no puc contestar",
-        "no puc respondre",
-        "no li puc respondre",
-        "em posaré en contacte",
-        "ens posarem en contacto",
-        "ara no estem disponibles",
-        "no hi som"
-      ]
-    }
+  {
+    "en-US": [
+      "call has been forwarded",
+      "at the beep",
+      "at the tone",
+      "leave a message",
+      "leave me a message",
+      "not available",
+      "can't take your call",
+      "will get back to you",
+      "I'll get back to you",
+      "we are unable",
+      "Unable to take your call now",
+      "I'll reply soon",
+      "I'll call back",
+      "I'll reach out to you as soon as possible",
+      "Leave a message",
+      "Away from phone",
+      "Not available now",
+      "I'll return call",
+      "On another call",
+      "Currently on another call",
+      "I will return call later",
+      "Busy please leave message",
+      "Message will be returned promptly",
+      "Currently unavailable to answer",
+      "Planning to return your call soon",
+      "Apologies for missing your call",
+      "Not by the phone at the moment",
+      "Expecting to return your call",
+      "Currently not accessible",
+      "Intend to call back",
+      "Appreciate your patience!",
+      "Engaged in another conversation",
+      "I Will respond promptly",
+      "Kindly leave a message",
+      "Currently occupied leave a message",
+      "Unfortunately unable to answer right now",
+      "Occupied at the moment",
+      "Not present leave a message",
+      "Regrettably unavailable kindly leave a message",
+      "Will ensure a prompt response to your message",
+      "Currently engaged",
+      "Will return your call at the earliest opportunity",
+      "Your message will receive my prompt attention",
+      "I'll respond as soon as I can",
+      "Your message is important please leave it after the beep",
+      "Away from the phone at the moment",
+      "Unable to answer right now",
+      "Engaged in another task",
+      "Not by the phone presently",
+      "I'll respond at my earliest convenience",
+      "Away from the phone momentarily",
+      "I'll return your call shortly",
+      "Currently not able to answer",
+      "Your message is important please leave it after the tone",
+      "I'm unable to take your call right now",
+      "Please leave your message for me",
+      "I'll get back to you soon",
+      "Your call has been missed",
+      "Please leave a detailed message for me to respond to",
+      "Leave a message I'll make sure to respond",
+      "Feel free to leave a message",
+      "Your call is important to me",
+      "I'll get back to you shortly",
+      "Your message will be attended to promptly",
+      "Not available at the moment",
+      "I'll be sure to get back to you",
+      "I'll call you back soon",
+      "I'll ensure a prompt response",
+      "Sorry for the inconvenience",
+      "I'll return your call",
+      "I'll make sure to get back to you",
+      "I'll call you back shortly",
+      "I'll return your call as soon as possible",
+      "Apologies for the inconvenience leave your message",
+      "Your call is appreciated",
+      "I'm unavailable to answer",
+      "I'm currently away",
+      "I'll return your call as soon as I can",
+      "I'm away from the phone",
+      "I'm currently unavailable to take your call",
+      "Sorry for missing your call",
+      "I'll ensure it receives my immediate attention",
+      "I'm away from the phone momentarily",
+      "I'll reach out to you shortly",
+      "Apologies for the inconvenience",
+      "Currently occupied",
+      "Unable to answer your call at the moment",
+      "I'll make sure to follow up with you",
+      "Sorry for not being available",
+      "I'll reach out to you as soon as I can",
+      "I'm currently engaged",
+      "I'm currently busy",
+      "I'm currently unavailable",
+      "I'll respond to you at my earliest convenience",
+      "Your message is appreciated",
+      "I'll get back to you promptly",
+      "I'll get back to you without delay",
+      "Currently away from the phone",
+      "I'll return your call at my earliest opportunity",
+      "Sorry for the missed call",
+      "I'll make sure to address your concerns",
+      "Please provide your details for a callback",
+      "I'll make every effort to respond promptly",
+      "I'll ensure it's attended to promptly",
+      "Away from the phone temporarily",
+      "I'll get back to you as soon as I return",
+      "Currently not in a position to answer your call",
+      "Your call cannot be answered at the moment",
+      "I'll ensure to respond as soon as I'm able",
+      "Your call is important please leave a message",
+      "Unable to answer right now please leave your message",
+      "Currently not accessible intending to return your call",
+      "I'll respond promptly to your message",
+      "leave a memo",
+      "please leave a memo"
+    ],
+    "de-DE": [
+      "nicht erreichbar",
+      "derzeit nicht erreichbar",
+      "im Moment nicht erreichbar",
+      "anruf wurde weitergeleitet",
+      "anruf weitergeleitet",
+      "beim piepsen",
+      "beim piepton",
+      "nach dem ton",
+      "am ton",
+      "nach dem signal",
+      "eine nachricht hinterlassen",
+      "hinterlasse mir eine Nachricht",
+      "hinterlassen Sie eine Nachricht",
+      "sprechen Sie nach dem Ton",
+      "nicht verfügbar",
+      "zurzeit nicht verfügbar",
+      "kann ihren anruf nicht entgegennehmen",
+      "kann Ihren Anruf leider nicht persönlich entgegennehmen",
+      "wird sich bei Ihnen melden",
+      "ruft Sie zurück",
+      "ich melde mich bei dir",
+      "melde mich später",
+      "wir können nicht",
+      "wir können Ihren Anruf leider nicht entgegennehmen",
+      "Mobilbox",
+      "Mailbox",
+      "mobilbox",
+      "mailbox",
+      "Anrufbeantworter",
+      "Combox"
+    ],
+    "es-ES": [
+      "le pasamos la llamada",
+      "después del bip",
+      "después del tono",
+      "deja un mensaje",
+      "déjame un mensaje",
+      "no estamos disponibles",
+      "no estoy disponible",
+      "ahora no puedo",
+      "no puedo contestar",
+      "no le puedo contestar",
+      "me pondré en contacto",
+      "nos pondremos en contacto",
+      "ahora no estamos disponibles",
+      "no estamos disponibles"
+    ],
+    "ca-ES": [
+      "passem la seva trucada",
+      "després del bip",
+      "després del to",
+      "deixi un missatge",
+      "deixa un missatge",
+      "deixim un missatge",
+      "no estem disponibles",
+      "no estem a l'oficina",
+      "no estic disponible",
+      "ara no puc",
+      "no puc contestar",
+      "no puc respondre",
+      "no li puc respondre",
+      "em posaré en contacte",
+      "ens posarem en contacto",
+      "ara no estem disponibles",
+      "no hi som"
+    ]
+  }

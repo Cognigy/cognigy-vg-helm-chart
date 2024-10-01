@@ -40,8 +40,8 @@ spec:
       restartPolicy: Always
       initContainers:
         {{- if and (.Values.sbc.ec2EipAllocator.enabled) (eq .Values.cloud "aws") }}
-        - image: {{ .Values.sbc.ec2EipAllocator.image }}
-          name: ec2-eip-allocator
+        - name: ec2-eip-allocator
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.sbc.ec2EipAllocator.image) }}
           env:
             - name: AWS_EIP_NODE_GROUP_ROLE
               value: {{ .Values.sbc.ec2EipAllocator.rtpEipGroupRole }}
@@ -76,7 +76,7 @@ spec:
               done
       containers:
         - name: rtp-engine 
-          image: {{ .Values.rtpEngine.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.rtpEngine.image) }}
           imagePullPolicy: {{ .Values.rtpEngine.imagePullPolicy }}
           resources: {{- toYaml .Values.rtpEngine.resources | nindent 12 }}
           ports:
@@ -120,7 +120,7 @@ spec:
             - configMapRef:
                 name: cognigy-env
         - name: rtp-engine-sidecar
-          image: {{ .Values.rtpEngineSidecar.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.rtpEngineSidecar.image) }}
           imagePullPolicy:  {{ .Values.rtpEngineSidecar.imagePullPolicy }}
           resources: {{- toYaml .Values.rtpEngineSidecar.resources | nindent 12 }}
           ports:

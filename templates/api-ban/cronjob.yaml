@@ -18,7 +18,7 @@ spec:
         spec:
           containers:
             - name: api-ban
-              image: {{ .Values.apiBan.image }}
+              image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.apiBan.image) }}
               imagePullPolicy: {{ .Values.apiBan.imagePullPolicy }}
               env:
                 - name: API_BAN_API_KEY

@@ -77,14 +77,14 @@ spec:
               done
       containers:
         - name: drachtio
-          image: {{ .Values.drachtio.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.drachtio.image) }}
           imagePullPolicy: {{ .Values.drachtio.imagePullPolicy }}
           resources: {{- toYaml .Values.drachtio.resources | nindent 12 }}
           ports:
             - name: drachtio
               containerPort: {{ .Values.drachtio.port }}
               protocol: TCP
-            - name: drachtiometrics
+            - name: fs-drachtio
               containerPort: {{ .Values.drachtio.metricsPort }}
               protocol: TCP
           env: 
@@ -151,7 +151,7 @@ spec:
             - configMapRef:
                 name: cognigy-env
         - name: freeswitch
-          image: {{ .Values.freeswitch.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.freeswitch.image) }}
           imagePullPolicy: {{ .Values.freeswitch.imagePullPolicy }}
           resources: {{- toYaml .Values.freeswitch.resources | nindent 12 }}
           ports:
@@ -203,8 +203,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: cognigy-env
-        - name: feature-server 
-          image: {{ .Values.featureServer.image }}
+        - name: feature-server
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.featureServer.image) }}
           imagePullPolicy: {{ .Values.featureServer.imagePullPolicy }}
           resources: {{- toYaml .Values.featureServer.resources | nindent 12 }}
           ports:

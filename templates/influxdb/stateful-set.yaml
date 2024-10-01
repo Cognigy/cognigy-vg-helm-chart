@@ -36,7 +36,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: influxdb
-          image: {{ .Values.influxdb.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.influxdb.image) }}
           imagePullPolicy: {{ .Values.influxdb.imagePullPolicy }}
           resources: {{- toYaml .Values.influxdb.resources | nindent 12 }}
           ports:

@@ -5,14 +5,19 @@ metadata:
   name: homer
   namespace: {{ $.Release.Namespace | quote }}
   annotations:
+  {{- if eq .Values.ingress.ingressClassName "traefik" }}
     {{- if .Values.tls.enabled }}
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     {{- else }}
     traefik.ingress.kubernetes.io/router.entrypoints: web
-    {{- end }}    
+    {{- end }}
+  {{- end }}
+  {{- if .Values.ingress.homer.extraAnnotations }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.ingress.homer.extraAnnotations "context" $) | nindent 4 }}
+  {{- end }}
 spec:
-  ingressClassName: traefik
-  {{- include "tlsCertificate.secretName.render" $ | nindent 2 }}
+  ingressClassName: {{ .Values.ingress.ingressClassName }}
+  {{- include "vg.tlsCertificate.secretName.render" $ | nindent 2 }}
   rules:
     - host: {{ .Values.ingress.homer.host }}
       http:

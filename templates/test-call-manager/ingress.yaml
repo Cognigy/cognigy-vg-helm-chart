@@ -5,6 +5,7 @@ metadata:
   name: test-call-manager
   namespace: {{ $.Release.Namespace | quote }}
   annotations:
+  {{- if eq .Values.ingress.ingressClassName "traefik" }}
     {{- if .Values.tls.enabled }}
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     {{- else }}
@@ -13,9 +14,13 @@ metadata:
     {{- if .Values.ingress.testCallManager.ipWhiteListMiddleware.enabled }}
     traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-ipwhitelisttestcallmanager@kubernetescrd
     {{- end }}
+  {{- end }}
+  {{- if .Values.ingress.testCallManager.extraAnnotations }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.ingress.testCallManager.extraAnnotations "context" $) | nindent 4 }}
+  {{- end }}
 spec:
-  ingressClassName: traefik
-  {{- include "tlsCertificate.secretName.render" $ | nindent 2 }}
+  ingressClassName: {{ .Values.ingress.ingressClassName }}
+  {{- include "vg.tlsCertificate.secretName.render" $ | nindent 2 }}
   rules:
     - host: {{ .Values.ingress.testCallManager.host }}
       http:

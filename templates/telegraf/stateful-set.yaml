@@ -37,7 +37,7 @@ spec:
       {{- end }}
       containers:
         - name: telegraf
-          image: {{ .Values.telegraf.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.telegraf.image) }}
           imagePullPolicy: {{ .Values.telegraf.imagePullPolicy }}
           resources: {{- toYaml .Values.telegraf.resources | nindent 12 }}
           ports:

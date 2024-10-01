@@ -35,7 +35,7 @@ spec:
       {{- end }}
       containers:
         - name: homer
-          image: {{ .Values.homer.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.homer.image) }}
           imagePullPolicy: {{ .Values.homer.imagePullPolicy }}
           resources: {{- toYaml .Values.homer.resources | nindent 12 }}
           ports:

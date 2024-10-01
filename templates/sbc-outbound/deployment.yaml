@@ -52,7 +52,7 @@ spec:
       {{- end }}
       containers:
         - name: sbc-outbound
-          image: {{ .Values.sbcOutbound.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.sbcOutbound.image) }}
           imagePullPolicy: {{ .Values.sbcOutbound.imagePullPolicy }}
           resources: {{- toYaml .Values.sbcOutbound.resources | nindent 12 }}
           ports:

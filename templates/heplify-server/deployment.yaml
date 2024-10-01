@@ -36,7 +36,7 @@ spec:
       {{- end }}
       containers:
         - name: heplify-server
-          image: {{ .Values.heplifyServer.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.heplifyServer.image) }}
           imagePullPolicy: {{ .Values.heplifyServer.imagePullPolicy }}
           resources: {{- toYaml .Values.heplifyServer.resources | nindent 12 }}
           ports:

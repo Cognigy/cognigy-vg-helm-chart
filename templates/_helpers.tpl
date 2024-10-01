@@ -66,10 +66,10 @@ Usage:
 {{/*
 Return the proper tls certificate Secret Name
 */}}
-{{- define "tlsCertificate.secretName.render" -}}
+{{- define "vg.tlsCertificate.secretName.render" -}}
   {{- $tlsCertificateSecretName := "" -}}
 
-  {{- if and (.Values.tls.enabled) (.Values.traefik.enabled) -}}
+  {{- if (.Values.tls.enabled) -}}
     {{- if .Values.tls.existingSecret -}}
       {{- $tlsCertificateSecretName = .Values.tls.existingSecret -}}
     {{- else if and (.Values.tls.crt) (.Values.tls.key) -}}

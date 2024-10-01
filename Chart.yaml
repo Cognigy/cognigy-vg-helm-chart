@@ -1,7 +1,7 @@
 apiVersion: v2
 name: voicegateway
 description: A Helm Chart for Cognigy VoiceGateway
-version: "4.85.0"
+version: "4.86.0"
 appVersion: "0.9.1"
 kubeVersion: ">=v1.23.0-0,<v1.31.0-0"
 home: https://cognigy.com
@@ -22,7 +22,7 @@ dependencies:
     repository: "https://raw.githubusercontent.com/bitnami/charts/archive-full-index/bitnami"
     condition: postgresql.enabled
   - name: mysql
-    version: "9.10.1"
+    version: "9.18.0"
     repository: "https://raw.githubusercontent.com/bitnami/charts/archive-full-index/bitnami"
     condition: mysql.enabled
   - name: redis

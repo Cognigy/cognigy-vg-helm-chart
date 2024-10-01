@@ -35,7 +35,7 @@ spec:
       {{- end }}
       containers:
         - name: sbc-call-router
-          image: {{ .Values.sbcCallRouter.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.sbcCallRouter.image) }}
           imagePullPolicy: {{ .Values.sbcCallRouter.imagePullPolicy }}
           resources: {{- toYaml .Values.sbcCallRouter.resources | nindent 12 }}
           ports:

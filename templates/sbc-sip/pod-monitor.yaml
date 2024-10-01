@@ -14,7 +14,7 @@ spec:
     - path: /metrics
       port: metrics
     - path: /metrics
-      port: drachtiometrics
+      port: sip-drachtio
   selector:
     matchLabels:
       app: sbc-sip

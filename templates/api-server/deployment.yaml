@@ -65,7 +65,7 @@ spec:
               done
       containers:
         - name: api-server
-          image: {{ .Values.api.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.api.image) }}
           imagePullPolicy: {{ .Values.api.imagePullPolicy }}
           resources: {{- toYaml .Values.api.resources | nindent 12 }}
           ports:

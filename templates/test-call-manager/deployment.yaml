@@ -34,7 +34,7 @@ spec:
       {{- end }}
       containers:
         - name: test-call-manager
-          image: {{ .Values.testCallManager.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.testCallManager.image) }}
           imagePullPolicy: {{ .Values.testCallManager.imagePullPolicy }}
           resources: {{- toYaml .Values.testCallManager.resources | nindent 12 }}
           ports:

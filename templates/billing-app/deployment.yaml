@@ -37,7 +37,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: billing-app
-          image: {{ .Values.billingApp.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.billingApp.image) }}
           imagePullPolicy: {{ .Values.billingApp.imagePullPolicy }}
           resources: {{- toYaml .Values.billingApp.resources | nindent 12 }}
           ports:

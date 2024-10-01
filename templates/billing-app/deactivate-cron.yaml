@@ -13,7 +13,7 @@ spec:
         spec:
           containers:
             - name: deactivate-account-billing
-              image: {{ .Values.jobs.image }}
+              image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.jobs.image) }}
               imagePullPolicy: IfNotPresent
               env:
                 - name: URL

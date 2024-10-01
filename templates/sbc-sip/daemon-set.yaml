@@ -39,8 +39,8 @@ spec:
       restartPolicy: Always
       initContainers:
         {{- if and (.Values.sbc.ec2EipAllocator.enabled) (eq .Values.cloud "aws") }}
-        - image: {{ .Values.sbc.ec2EipAllocator.image }}
-          name: ec2-eip-allocator
+        - name: ec2-eip-allocator
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.sbc.ec2EipAllocator.image) }}
           env:
             - name: AWS_EIP_NODE_GROUP_ROLE
               value: {{ .Values.sbc.ec2EipAllocator.sipEipGroupRole }}
@@ -58,8 +58,8 @@ spec:
                   name: {{ .Values.sbc.ec2EipAllocator.vgOperatorUser }}
         {{- end }}
         {{- if and (.Values.sbc.sipDnsUpdaterAzure.enabled) (eq .Values.cloud "azure") }}
-        - image: {{ .Values.sbc.sipDnsUpdaterAzure.image }}
-          name: sip-dns-updater-azure
+        - name: sip-dns-updater-azure
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.sbc.sipDnsUpdaterAzure.image) }}
           env:
             - name: MY_POD_NAME
               valueFrom:
@@ -111,7 +111,7 @@ spec:
               done
       containers:
         - name: drachtio
-          image: {{ .Values.drachtio.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.drachtio.image) }}
           imagePullPolicy: {{ .Values.drachtio.imagePullPolicy }}
           resources: {{- toYaml .Values.drachtio.resources | nindent 12 }}
           ports:
@@ -212,7 +212,7 @@ spec:
             - configMapRef:
                 name: cognigy-env
         - name: sbc-sip-sidecar
-          image: {{ .Values.sbcSipSidecar.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.sbcSipSidecar.image) }}
           imagePullPolicy: {{ .Values.sbcSipSidecar.imagePullPolicy }}
           resources: {{- toYaml .Values.sbcSipSidecar.resources | nindent 12 }}
           ports:

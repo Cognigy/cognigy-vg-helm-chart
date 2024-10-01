@@ -13,7 +13,7 @@ spec:
         spec:
           containers:
             - name: update-call-history
-              image: {{ .Values.jobs.image }}
+              image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.jobs.image) }}
               imagePullPolicy: IfNotPresent
               env:
                 - name: URL

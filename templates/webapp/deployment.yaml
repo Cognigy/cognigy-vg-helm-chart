@@ -33,7 +33,7 @@ spec:
       {{- end }}
       containers:
         - name: webapp
-          image: {{ .Values.webapp.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.webapp.image) }}
           imagePullPolicy: {{ .Values.webapp.imagePullPolicy }}
           resources: {{- toYaml .Values.webapp.resources | nindent 12 }}
           ports:

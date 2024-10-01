@@ -36,8 +36,8 @@ spec:
       {{- end }}
       restartPolicy: Always
       containers:
-        - name: redis 
-          image: {{ .Values.redis.image }}
+        - name: redis
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.redis.image) }}
           imagePullPolicy: {{ .Values.redis.imagePullPolicy }}
           resources: {}
           ports:

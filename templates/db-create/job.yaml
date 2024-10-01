@@ -24,7 +24,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: db-init
-          image: {{ .Values.dbCreate.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.dbCreate.image) }}
           imagePullPolicy: {{ .Values.dbCreate.imagePullPolicy }}
           env:
             - name: JAMBONES_MYSQL_HOST
