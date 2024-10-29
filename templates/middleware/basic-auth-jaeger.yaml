@@ -6,6 +6,6 @@ metadata:
   name: jaegerauth
   namespace: {{ $.Release.Namespace | quote }}
 spec:
-    basicAuth:
-        secret: {{ default "jaeger-auth" .Values.jaeger.existingSecret }}
+  basicAuth:
+    secret: {{ default "jaeger-auth" .Values.jaeger.existingSecret }}
 {{- end }}

@@ -6,6 +6,6 @@ metadata:
   name: homerauth
   namespace: {{ $.Release.Namespace | quote }}
 spec:
-    basicAuth:
-        secret: {{ default "homer-auth" .Values.homer.existingSecret }}
+  basicAuth:
+    secret: {{ default "homer-auth" .Values.homer.existingSecret }}
 {{- end }}
