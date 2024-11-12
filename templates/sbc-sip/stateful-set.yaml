@@ -310,6 +310,12 @@ spec:
               value: {{ .Chart.Version | trunc 6 | quote }}
             - name: FEAT_COMPATIBILITY_RFC3261
               value: {{ .Values.sbcSipSidecar.registerRfc3261 | quote }}
+            {{- if .Values.sbc.sip.registerAllSbcs }}
+            - name: JAMBONES_CLUSTER_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            {{- end }}
             {{- if .Values.sbcSipSidecar.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcSipSidecar.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
