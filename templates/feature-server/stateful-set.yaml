@@ -200,6 +200,8 @@ spec:
           volumeMounts:
             - mountPath: /tmp 
               name: temp-audio-volume
+            - mountPath: /coredumps
+              name: fs-core-dumps
           envFrom:
             - configMapRef:
                 name: cognigy-env
@@ -370,4 +372,7 @@ spec:
       volumes:
         - name: temp-audio-volume
           emptyDir: {}
+        - name: fs-core-dumps
+          emptyDir:
+            sizeLimit: "2Gi"
 {{- end }}

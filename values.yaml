@@ -386,7 +386,7 @@ dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:4.89.0
+  image: cognigy.azurecr.io/db-create:4.90.0
   imagePullPolicy: Always
   logCollectorEnabled: false
 
@@ -757,10 +757,10 @@ cognigyLogin:
 ###########################
 
 jobs:
-  image: cognigy.azurecr.io/vg-alpine-curl:3.18.6
+  image: cognigy.azurecr.io/vg-alpine-curl:3.20
 
 api:
-  image: cognigy.azurecr.io/api-server:4.89.0
+  image: cognigy.azurecr.io/api-server:4.90.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -822,7 +822,7 @@ apiBan:
 
 billingApp:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:4.89.0
+  image: cognigy.azurecr.io/voicegateway-billing-app:4.90.0
   imagePullPolicy: IfNotPresent
   replicasCount: 1
   affinity: {}
@@ -856,7 +856,7 @@ billingApp:
       memory: 300Mi
 
 drachtio:
-  image: cognigy.azurecr.io/vg-drachtio-server:0.8.26-rc4
+  image: cognigy.azurecr.io/vg-drachtio-server:0.8.26
   imagePullPolicy: IfNotPresent
   port: 9022
   metricsPort: 8088
@@ -875,7 +875,7 @@ drachtio:
       memory: 500Mi
 
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:4.89.0
+  image: cognigy.azurecr.io/vg-feature-server:4.90.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
@@ -985,7 +985,7 @@ rtpEngine:
       memory: 1Gi
 
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.89.0
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.90.0
   imagePullPolicy: IfNotPresent
   logLevel: info
   extraEnvVars: []
@@ -1000,7 +1000,7 @@ rtpEngineSidecar:
       memory: 200Mi
 
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:4.89.0
+  image: cognigy.azurecr.io/sbc-call-router:4.90.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1031,7 +1031,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:4.89.0
+  image: cognigy.azurecr.io/sbc-inbound:4.90.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1071,7 +1071,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:4.89.0
+  image: cognigy.azurecr.io/sbc-outbound:4.90.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1108,7 +1108,7 @@ sbcOutbound:
   supportBestEffortTls: false
 
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:4.89.0
+  image: cognigy.azurecr.io/sbc-sip-sidecar:4.90.0
   imagePullPolicy: IfNotPresent
   logLevel: info
   registerRfc3261: false
@@ -1123,7 +1123,7 @@ sbcSipSidecar:
 
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-test-call-manager:4.89.0
+  image: cognigy.azurecr.io/vg-test-call-manager:4.90.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1161,7 +1161,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:4.89.0
+  image: cognigy.azurecr.io/vg-webapp:4.90.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:

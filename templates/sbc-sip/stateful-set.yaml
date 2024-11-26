@@ -239,6 +239,14 @@ spec:
           env:
             - name: K8S 
               value: {{ .Values.global.k8s | quote }}
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: K8S_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             - name: NODE_ENV
               value: {{ .Values.global.nodeEnv | quote }}
             - name: DRACHTIO_HOST
@@ -257,10 +265,6 @@ spec:
                 secretKeyRef:
                   name: voicegateway-jwt
                   key: jwt
-            - name: K8S_POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
             - name: STATS_TAGS
               value: "pod:$(K8S_POD_NAME)"
             - name: STATS_PROTOCOL
