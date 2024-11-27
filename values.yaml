@@ -856,7 +856,7 @@ billingApp:
       memory: 300Mi
 
 drachtio:
-  image: cognigy.azurecr.io/vg-drachtio-server:0.8.26
+  image: cognigy.azurecr.io/vg-drachtio-server:0.8.26-rc4
   imagePullPolicy: IfNotPresent
   port: 9022
   metricsPort: 8088
