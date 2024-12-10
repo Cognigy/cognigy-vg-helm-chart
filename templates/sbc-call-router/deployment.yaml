@@ -45,6 +45,9 @@ spec:
             - name: health
               containerPort: {{ .Values.health.port }}
               protocol: TCP
+            - name: sbc-call-router
+              containerPort: {{ .Values.sbcCallRouter.port }}
+              protocol: TCP
           livenessProbe:
             httpGet:
               path: /health/liveness
