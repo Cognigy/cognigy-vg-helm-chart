@@ -195,7 +195,7 @@ spec:
                 command: [
                   "/bin/sh",
                   "-c",
-                  "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
+                  "fs_cli -p JambonzR0ck$ -x 'fsctl shutdown elegant restart'"
                 ]
           volumeMounts:
             - mountPath: /tmp 

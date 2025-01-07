@@ -163,6 +163,8 @@ spec:
               value: {{ if .Values.sbcOutbound.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: PRIVATE_VOIP_NETWORK_CIDR
               value: {{ .Values.global.privateVoipNetworkCidr | quote }}
+            - name: FEAT_COMPATIBILITY_RFC3261
+              value: {{ .Values.sbcOutbound.registerRfc3261 | quote }}
             {{- if .Values.sbcOutbound.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcOutbound.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
