@@ -875,7 +875,7 @@ drachtio:
       memory: 500Mi
 
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:4.92.0
+  image: cognigy.azurecr.io/vg-feature-server:4.92.1
   imagePullPolicy: Always
   replicaCount: 2
   logLevel: info
