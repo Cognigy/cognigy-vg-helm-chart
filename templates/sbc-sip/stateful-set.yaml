@@ -136,7 +136,7 @@ spec:
             - "sip:*:5062;transport=tcp"
             {{- end }}
             - --loglevel
-            - {{ if .Values.sbc.sip.logLevel }}{{ .Values.sbc.sip.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+            - {{ .Values.sbc.sip.logLevel | quote }}
             - --cloud-deployment
             - --sofia-loglevel
             - {{ .Values.sbc.sip.sofiaLoglevel | quote }}
@@ -278,7 +278,7 @@ spec:
             - name: STATS_SAMPLE_RATE
               value:  {{ .Values.stats.sampleRate | quote }}
             - name: JAMBONES_LOGLEVEL
-              value: {{ if .Values.sbcSipSidecar.logLevel }}{{ .Values.sbcSipSidecar.logLevel }}{{ else }}{{ .Values.global.logLevel }}{{ end }}
+              value: {{ .Values.sbcSipSidecar.logLevel }}
             - name: JAMBONES_MYSQL_HOST
               value: {{ .Values.mysql.host }}
             - name: JAMBONES_MYSQL_DATABASE

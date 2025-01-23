@@ -66,7 +66,7 @@ spec:
             - name: HTTP_PORT
               value: {{ .Values.sbcCallRouter.port | quote }}
             - name: JAMBONES_LOGLEVEL
-              value: {{ if .Values.sbcCallRouter.logLevel }}{{ .Values.sbcCallRouter.logLevel }}{{ else }}{{ .Values.global.logLevel }}{{ end }}
+              value: {{ .Values.sbcCallRouter.logLevel }}
             - name: K8S 
               value: {{ .Values.global.k8s | quote }}
             - name: K8S_SBC_INBOUND_SERVICE_NAME

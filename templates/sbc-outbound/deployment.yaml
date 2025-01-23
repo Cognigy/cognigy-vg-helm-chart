@@ -96,7 +96,7 @@ spec:
             - name: DTMF_LISTEN_PORT
               value: {{ .Values.sbcOutbound.ports.dtmf | quote }}
             - name: JAMBONES_LOGLEVEL
-              value: {{ if .Values.sbcOutbound.logLevel }}{{ .Values.sbcOutbound.logLevel }}{{ else }}{{ .Values.global.logLevel }}{{ end }}
+              value: {{ .Values.sbcOutbound.logLevel }}
             - name: JAMBONES_TRACK_ACCOUNT_CALLS
               value: {{ .Values.global.track.accountCalls | quote }}
             - name: JAMBONES_TRACK_APP_CALLS

@@ -45,7 +45,7 @@ spec:
               protocol: TCP
           env:
             - name: INFLUXDB_LOGGING_LEVEL
-              value: {{ if .Values.influxdb.logLevel }}{{ .Values.influxdb.logLevel }}{{ else }}{{ .Values.global.logLevel }}{{ end }}
+              value: {{ .Values.influxdb.logLevel }}
           livenessProbe:
             httpGet:
               path: /ping

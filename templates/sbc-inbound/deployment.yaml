@@ -104,7 +104,7 @@ spec:
             - name: DTMF_LISTEN_PORT
               value: {{ .Values.sbcInbound.ports.dtmf | quote }}
             - name: JAMBONES_LOGLEVEL
-              value: {{ if .Values.sbcInbound.logLevel }}{{ .Values.sbcInbound.logLevel }}{{ else }}{{ .Values.global.logLevel }}{{ end }}
+              value: {{ .Values.sbcInbound.logLevel }}
             - name: JAMBONES_TRACK_ACCOUNT_CALLS
               value: {{ .Values.global.track.accountCalls | quote }}
             - name: JAMBONES_TRACK_APP_CALLS
