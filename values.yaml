@@ -20,6 +20,8 @@ global:
   ## Global Docker image registry for Cognigy images
   ##
   imageRegistry: ""
+  ## Global Log Level valid choices are debug, error, info, warn (sbc.sip: warning)
+  logLevel: info
 
 ###############
 # Cognigy ENV #
@@ -295,6 +297,8 @@ sbc:
       - key: "voip-edge"
         operator: "Exists"
         effect: "NoSchedule"
+    ## sbc-sip drachtio log level
+    ## valid choices are debug, info, notice, error, warning
     logLevel: info
     ## 0 - fatal errors, panic
     ## 1 - critical errors, minimal progress at subsystem level
@@ -386,7 +390,7 @@ dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:4.92.0
+  image: cognigy.azurecr.io/db-create:4.94.0
   imagePullPolicy: Always
   logCollectorEnabled: false
 
@@ -401,7 +405,7 @@ influxdb:
   tolerations: []
   storage: 20Gi
   storageClassName: influxdb
-  logLevel: info
+  logLevel:
   database:
     name: call_counts
   host: influxdb
@@ -760,10 +764,11 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:3.20
 
 api:
-  image: cognigy.azurecr.io/api-server:4.92.0
+  image: cognigy.azurecr.io/api-server:4.94.0
   imagePullPolicy: Always
   replicaCount: 2
-  logLevel: info
+  ## valid choices are debug, info, error, warn
+  logLevel:
   port: 3000
   serviceName: api-server
   affinity:
@@ -822,7 +827,7 @@ apiBan:
 
 billingApp:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:4.92.0
+  image: cognigy.azurecr.io/voicegateway-billing-app:4.94.0
   imagePullPolicy: IfNotPresent
   replicasCount: 1
   affinity: {}
@@ -866,6 +871,9 @@ drachtio:
   ## if true - do not advertise public IPs
   privateIpOnly: false
   extraEnvVars: []
+  ## feature-server drachtio log level
+  ## valid choices are debug, info, notice, error, warning
+  logLevel:
   resources:
     requests:
       cpu: "0.5"
@@ -875,10 +883,11 @@ drachtio:
       memory: 500Mi
 
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:4.92.2
+  image: cognigy.azurecr.io/vg-feature-server:4.94.0
   imagePullPolicy: Always
   replicaCount: 2
-  logLevel: info
+  ## valid choices are debug, info, error, warn
+  logLevel:
   ## 0 - fatal errors, panic
   ## 1 - critical errors, minimal progress at subsystem level
   ## 2 - non-critical errors
@@ -935,7 +944,8 @@ featureServer:
 freeswitch:
   image: cognigy.azurecr.io/vg-freeswitch-mrf:0.9.3
   imagePullPolicy: IfNotPresent
-  logLevel: info
+  ## valid choices are debug, info, error, warn
+  logLevel:
   username: Cognigy
   ports:
     sip: 5080
@@ -967,10 +977,10 @@ freeswitch:
       memory: 3Gi
 
 rtpEngine:
-  image: cognigy.azurecr.io/docker-rtpengine:0.1.11
+  image: cognigy.azurecr.io/vg-rtpengine:11.5.1.24
   imagePullPolicy: IfNotPresent
-  # During runtime, the log level can be decreased by sending the signal SIGURS1 to the daemon and can be increased with the signal SIGUSR2
-  logLevel: 5
+  # During runtime, the log level can be decreased by sending the signal SIGURS1 to the daemon and can be increased with the signal SIGUSR2  
+  logLevel: 3
   port: 22222
   startPort: 40000
   endPort: 60000
@@ -985,9 +995,10 @@ rtpEngine:
       memory: 1Gi
 
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.92.0
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.94.0
   imagePullPolicy: IfNotPresent
-  logLevel: info
+  ## valid choices are debug, info, error, warn
+  logLevel:
   extraEnvVars: []
   ports:
     dtmf: 22223
@@ -1000,9 +1011,11 @@ rtpEngineSidecar:
       memory: 200Mi
 
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:4.92.0
+  image: cognigy.azurecr.io/sbc-call-router:4.94.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
+  ## valid choices are debug, info, error, warn
+  logLevel:
   affinity:
     podAntiAffinity:
       preferredDuringSchedulingIgnoredDuringExecution:
@@ -1019,7 +1032,6 @@ sbcCallRouter:
   priorityClassName: ""
   podSecurityContext: {}
   tolerations: []
-  logLevel: info
   extraEnvVars: []
   port: 3000
   resources:
@@ -1031,7 +1043,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:4.92.0
+  image: cognigy.azurecr.io/sbc-inbound:4.94.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1050,7 +1062,8 @@ sbcInbound:
   priorityClassName: ""
   podSecurityContext: {}
   tolerations: []
-  logLevel: info
+  ## valid choices are debug, info, error, warn
+  logLevel:
   terminationGracePeriodSeconds: 900
   ## Enables Feature Server Signaling Transport as TCP, instead UDP (default)
   ##
@@ -1071,7 +1084,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:4.92.0
+  image: cognigy.azurecr.io/sbc-outbound:4.94.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1090,7 +1103,8 @@ sbcOutbound:
   priorityClassName: ""
   podSecurityContext: {}
   tolerations: []
-  logLevel: info
+  ## valid choices are debug, info, error, warn
+  logLevel:
   terminationGracePeriodSeconds: 900
   extraEnvVars: []
   ports:
@@ -1109,9 +1123,10 @@ sbcOutbound:
   registerRfc3261: false
 
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:4.92.0
+  image: cognigy.azurecr.io/sbc-sip-sidecar:4.94.0
   imagePullPolicy: IfNotPresent
-  logLevel: info
+  ## valid choices are debug, info, error, warn
+  logLevel:
   registerRfc3261: false
   extraEnvVars: []
   resources:
@@ -1162,7 +1177,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:4.92.0
+  image: cognigy.azurecr.io/vg-webapp:4.94.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1345,6 +1360,12 @@ traefik:
                 values:
                   - "set"
           topologyKey: "topology.kubernetes.io/zone"
+
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
 
   updateStrategy:
     type: RollingUpdate

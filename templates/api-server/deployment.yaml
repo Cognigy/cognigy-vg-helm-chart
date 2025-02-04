@@ -114,7 +114,7 @@ spec:
             - name: JAMBONES_AUTH_USE_JWT
               value: {{ .Values.api.jwtAuth | quote }}
             - name: JAMBONES_LOGLEVEL
-              value: {{ .Values.api.logLevel }}
+              value: {{ if .Values.api.logLevel }}{{ .Values.api.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
             - name: JAMBONES_MYSQL_HOST
               value: {{ .Values.mysql.host }}
             - name: JAMBONES_MYSQL_DATABASE

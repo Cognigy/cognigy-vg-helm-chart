@@ -127,7 +127,7 @@ spec:
             - --contact
             - 'sip:*:5060;transport=udp,tcp'
             - --loglevel
-            - {{ .Values.featureServer.logLevel | quote }}
+            - {{ if .Values.featureServer.logLevel }}{{ .Values.featureServer.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
             - --sofia-loglevel
             - {{ .Values.featureServer.sofiaLoglevel | quote }}
             - --prometheus-scrape-port
@@ -140,7 +140,7 @@ spec:
             - --mtu ## max packet size for UDP
             - '4096'
             - --loglevel
-            - {{ .Values.featureServer.logLevel | quote }}
+            - {{ if .Values.featureServer.logLevel }}{{ .Values.featureServer.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
             - --sofia-loglevel
             - {{ .Values.featureServer.sofiaLoglevel | quote }}
             - --prometheus-scrape-port
@@ -294,9 +294,9 @@ spec:
                   name: voicegateway-drachtio-secret
                   key: secret
             - name: LOG_LEVEL
-              value: {{ .Values.featureServer.logLevel }}
+              value: {{ if .Values.featureServer.logLevel }}{{ .Values.featureServer.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
             - name: JAMBONES_LOGLEVEL
-              value: {{ .Values.featureServer.logLevel }}
+              value: {{ if .Values.featureServer.logLevel }}{{ .Values.featureServer.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
             - name: JAMBONES_MYSQL_HOST
               value: {{ .Values.mysql.host }}
             - name: JAMBONES_MYSQL_DATABASE

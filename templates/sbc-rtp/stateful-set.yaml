@@ -98,7 +98,7 @@ spec:
             - --homer-id
             - {{ .Values.rtpEngine.homerId | quote }}
             - --log-level
-            - {{ .Values.rtpEngine.logLevel | quote }}
+            - {{ if .Values.rtpEngine.logLevel }}{{ .Values.rtpEngine.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
           env:
             - name: NODE_ENV
               value: {{ .Values.global.nodeEnv | quote }}
@@ -152,7 +152,7 @@ spec:
             - name: NODE_ENV
               value: {{ .Values.global.nodeEnv | quote }}
             - name: JAMBONES_LOGLEVEL
-              value: {{ .Values.rtpEngineSidecar.logLevel }}
+              value: {{ if .Values.rtpEngineSidecar.logLevel }}{{ .Values.rtpEngineSidecar.logLevel }}{{ else }}{{ .Values.global.logLevel }}{{ end }}
             - name: JAMBONES_REDIS_HOST
               value: {{ .Values.redis.host }}
             - name: JAMBONES_REDIS_PORT
