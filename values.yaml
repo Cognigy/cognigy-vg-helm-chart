@@ -421,6 +421,7 @@ influxdb:
 ## Bitnami Chart, image info: bitnami/mysql:8.0.39-debian-12-r5
 mysql:
   enabled: true
+  createSecret: true
   global:
     imagePullSecrets:
       - cognigy-registry-token
