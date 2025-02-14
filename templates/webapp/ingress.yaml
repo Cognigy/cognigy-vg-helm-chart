@@ -16,7 +16,7 @@ metadata:
     {{- end }}
   {{- end }}
   {{- if .Values.ingress.webapp.extraAnnotations }}
-    {{- include "vgcommon.tplvalues.render" (dict "value" .Values.ingress.webapp.extraAnnotations "context" $) | nindent 4 }}
+    {{- include "vg.common.tplvalues.render" (dict "value" .Values.ingress.webapp.extraAnnotations "context" $) | nindent 4 }}
   {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.ingressClassName }}
