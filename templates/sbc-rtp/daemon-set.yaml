@@ -70,7 +70,7 @@ spec:
             - sh 
             - -c 
             - |
-              until mysql -u {{ .Values.mysql.auth.username }} -D {{ .Values.mysql.database.name }} -h mysql -p${PASSWORD} --protocol=tcp -e "select count(*) from accounts";
+              until mysql -u {{ .Values.mysql.auth.username }} -D {{ .Values.mysql.database.name }} -h {{ .Values.mysql.host }} -p${PASSWORD} --protocol=tcp -e "select count(*) from accounts";
               do 
                 sleep 5
               done
