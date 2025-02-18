@@ -206,7 +206,7 @@ spec:
             - name: ENABLE_PREPARE_COGNIGY_DATA
               value: {{ .Values.api.enablePrepareCognigyData | quote }}
             - name: JAMBONES_DISABLE_TTS_STREAMING
-              value: {{ not .Values.webapp.enableTtsStreaming | quote }}
+              value: {{ not .Values.global.enableTtsStreaming | quote }}
             {{- if .Values.api.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.api.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

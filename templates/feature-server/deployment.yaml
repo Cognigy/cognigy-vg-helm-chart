@@ -355,7 +355,7 @@ spec:
             - name: VG_EAGERLY_PRE_CACHE_AUDIO
               value: {{ .Values.featureServer.preCacheAudio | quote }}
             - name: JAMBONES_DISABLE_TTS_STREAMING
-              value: {{ not .Values.webapp.enableTtsStreaming | quote }}
+              value: {{ not .Values.global.enableTtsStreaming | quote }}
             - name: ANCHOR_MEDIA_ALWAYS
               value: {{ .Values.featureServer.anchorMediaAlways | quote }}
             - name: VG_DISABLE_DIAL_PAI_HEADER

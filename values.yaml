@@ -22,6 +22,7 @@ global:
   imageRegistry: ""
   ## Global Log Level valid choices are debug, error, info, warn (sbc.sip: warning)
   logLevel: info
+  enableTtsStreaming: true
 
 ###############
 # Cognigy ENV #
@@ -390,7 +391,7 @@ dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:4.94.0
+  image: cognigy.azurecr.io/db-create:4.95.0
   imagePullPolicy: Always
   logCollectorEnabled: false
 
@@ -764,7 +765,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:3.20
 
 api:
-  image: cognigy.azurecr.io/api-server:4.94.0
+  image: cognigy.azurecr.io/api-server:4.95.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -827,7 +828,7 @@ apiBan:
 
 billingApp:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:4.94.0
+  image: cognigy.azurecr.io/voicegateway-billing-app:4.95.0
   imagePullPolicy: IfNotPresent
   replicasCount: 1
   affinity: {}
@@ -883,7 +884,7 @@ drachtio:
       memory: 500Mi
 
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:4.94.1
+  image: cognigy.azurecr.io/vg-feature-server:4.95.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -979,7 +980,7 @@ freeswitch:
 rtpEngine:
   image: cognigy.azurecr.io/vg-rtpengine:11.5.1.24
   imagePullPolicy: IfNotPresent
-  # During runtime, the log level can be decreased by sending the signal SIGURS1 to the daemon and can be increased with the signal SIGUSR2  
+  # During runtime, the log level can be decreased by sending the signal SIGURS1 to the daemon and can be increased with the signal SIGUSR2
   logLevel: 3
   port: 22222
   startPort: 40000
@@ -995,7 +996,7 @@ rtpEngine:
       memory: 1Gi
 
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.94.0
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.95.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1011,7 +1012,7 @@ rtpEngineSidecar:
       memory: 200Mi
 
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:4.94.0
+  image: cognigy.azurecr.io/sbc-call-router:4.95.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1043,7 +1044,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:4.94.0
+  image: cognigy.azurecr.io/sbc-inbound:4.95.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1084,7 +1085,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:4.94.0
+  image: cognigy.azurecr.io/sbc-outbound:4.95.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1123,7 +1124,7 @@ sbcOutbound:
   registerRfc3261: false
 
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:4.94.0
+  image: cognigy.azurecr.io/sbc-sip-sidecar:4.95.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1177,7 +1178,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:4.94.0
+  image: cognigy.azurecr.io/vg-webapp:4.95.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1213,7 +1214,6 @@ webapp:
   enableSms: false
   enableTtsElevenlabs: true
   enableTtsElevenlabsOptions: false
-  enableTtsStreaming: false
   enableDeepgram: true
   enableOnPremisesAzureSpeech: true
   enableOnPremisesDeepgram: true
@@ -1360,12 +1360,6 @@ traefik:
                 values:
                   - "set"
           topologyKey: "topology.kubernetes.io/zone"
-
-  updateStrategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 1
-      maxSurge: 0
 
   updateStrategy:
     type: RollingUpdate
