@@ -19,7 +19,7 @@ metadata:
     {{- end }}
   {{- end }}
   {{- if .Values.ingress.jaeger.extraAnnotations }}
-    {{- include "common.tplvalues.render" (dict "value" .Values.ingress.jaeger.extraAnnotations "context" $) | nindent 4 }}
+    {{- include "vg.common.tplvalues.render" (dict "value" .Values.ingress.jaeger.extraAnnotations "context" $) | nindent 4 }}
   {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.ingressClassName }}
