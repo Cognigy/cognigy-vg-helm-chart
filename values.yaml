@@ -391,7 +391,7 @@ dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:4.96.0
+  image: cognigy.azurecr.io/db-create:4.97.0
   imagePullPolicy: Always
   logCollectorEnabled: false
 
@@ -766,7 +766,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:3.20
 
 api:
-  image: cognigy.azurecr.io/api-server:4.96.0
+  image: cognigy.azurecr.io/api-server:4.97.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -829,7 +829,7 @@ apiBan:
 
 billingApp:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:4.96.0
+  image: cognigy.azurecr.io/voicegateway-billing-app:4.97.0
   imagePullPolicy: IfNotPresent
   replicasCount: 1
   affinity: {}
@@ -885,7 +885,7 @@ drachtio:
       memory: 500Mi
 
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:4.96.0
+  image: cognigy.azurecr.io/vg-feature-server:4.97.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -931,6 +931,8 @@ featureServer:
   anchorMediaAlways: false
   ## Disable the 'P-Asserted-Identity' header
   disableDialPaiHeader: false
+  ## list of comma-separated vendors that should not be pre-cached. Valid values are aws, deepgram, elevenlabs, google, ibm, microsoft, nuance, wellsaid, whisper, playh
+  preCacheIgnoreList: "deepgram"
   extraEnvVars: []
   ports:
     tcp: 3000
@@ -979,7 +981,7 @@ freeswitch:
       memory: 3Gi
 
 rtpEngine:
-  image: cognigy.azurecr.io/vg-rtpengine:11.5.1.24
+  image: cognigy.azurecr.io/vg-rtpengine:13.1.1.5
   imagePullPolicy: IfNotPresent
   # During runtime, the log level can be decreased by sending the signal SIGURS1 to the daemon and can be increased with the signal SIGUSR2
   logLevel: 3
@@ -997,7 +999,7 @@ rtpEngine:
       memory: 1Gi
 
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.96.0
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.97.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1013,7 +1015,7 @@ rtpEngineSidecar:
       memory: 200Mi
 
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:4.96.0
+  image: cognigy.azurecr.io/sbc-call-router:4.97.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1045,7 +1047,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:4.96.0
+  image: cognigy.azurecr.io/sbc-inbound:4.97.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1086,7 +1088,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:4.96.0
+  image: cognigy.azurecr.io/sbc-outbound:4.97.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1125,7 +1127,7 @@ sbcOutbound:
   registerRfc3261: false
 
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:4.96.0
+  image: cognigy.azurecr.io/sbc-sip-sidecar:4.97.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1141,7 +1143,7 @@ sbcSipSidecar:
 
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-test-call-manager:4.89.0
+  image: cognigy.azurecr.io/vg-test-call-manager:4.97.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1179,7 +1181,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:4.96.0
+  image: cognigy.azurecr.io/vg-webapp:4.97.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:

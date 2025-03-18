@@ -363,6 +363,8 @@ spec:
               value: {{ .Values.featureServer.anchorMediaAlways | quote }}
             - name: VG_DISABLE_DIAL_PAI_HEADER
               value: {{ .Values.featureServer.disableDialPaiHeader | quote }}
+            - name: PRE_CACHE_IGNORE_LIST
+              value: {{ .Values.featureServer.preCacheIgnoreList | quote }}
             {{- if .Values.featureServer.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
