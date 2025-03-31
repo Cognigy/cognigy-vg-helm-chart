@@ -885,7 +885,7 @@ drachtio:
       memory: 500Mi
 
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:4.97.0
+  image: cognigy.azurecr.io/vg-feature-server:4.97.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -918,7 +918,7 @@ featureServer:
   podSecurityContext: {}
   tolerations: []
   sigtermForceCloseTimeoutMs: ""
-  terminationGracePeriodSeconds: 900
+  terminationGracePeriodSeconds: 300
   ## Please set featureServer.useStatefulSet to false if you don't want to use StatefulSet for Feature Server (headless service)
   ## Setting it to false is not recommended and does not work if Azure cloud.
   useStatefulSet: true
@@ -926,8 +926,8 @@ featureServer:
   freeswitchConnection: "127.0.0.1:8021:JambonzR0ck$"
   # Sets the max memory size of V8's old memory section - size in Megabytes
   nodeOptions: "--max-old-space-size=450"
-  # Pre cache audio
-  preCacheAudio: true
+  # Pre cache audio - disabled with 4.97.1 due to possbible audio static
+  preCacheAudio: false
   anchorMediaAlways: false
   ## Disable the 'P-Asserted-Identity' header
   disableDialPaiHeader: false
@@ -1068,7 +1068,7 @@ sbcInbound:
   tolerations: []
   ## valid choices are debug, info, error, warn
   logLevel:
-  terminationGracePeriodSeconds: 900
+  terminationGracePeriodSeconds: 300
   ## Enables Feature Server Signaling Transport as TCP, instead UDP (default)
   ##
   ## Note: This is an experimental feature. Please do not enable this in a production environment.
@@ -1109,7 +1109,7 @@ sbcOutbound:
   tolerations: []
   ## valid choices are debug, info, error, warn
   logLevel:
-  terminationGracePeriodSeconds: 900
+  terminationGracePeriodSeconds: 300
   extraEnvVars: []
   ports:
     tcp: 4000
