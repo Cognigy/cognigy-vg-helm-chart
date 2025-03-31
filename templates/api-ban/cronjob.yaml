@@ -17,6 +17,7 @@ spec:
             checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
         spec:
           containers:
+            {{- include "image.pullSecrets" $ | nindent 10 }}
             - name: api-ban
               image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.apiBan.image) }}
               imagePullPolicy: {{ .Values.apiBan.imagePullPolicy }}
@@ -41,6 +42,4 @@ spec:
                 - configMapRef:
                     name: cognigy-env
           restartPolicy: Never
-          imagePullSecrets:
-            - name: cognigy-registry-token
 {{- end }}

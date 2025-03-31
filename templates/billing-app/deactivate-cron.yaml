@@ -11,6 +11,7 @@ spec:
       ttlSecondsAfterFinished: {{ .Values.billingApp.deactivateTtlSecondsAfterFinished }}
       template:
         spec:
+          {{- include "image.pullSecrets" $ | nindent 10 }}
           containers:
             - name: deactivate-account-billing
               image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.jobs.image) }}
@@ -36,6 +37,4 @@ spec:
                 - -c
                 - "curl -X POST $URL -H 'x-api-key: '$API_KEY'' -H 'Content-Type: application/json' -d '{\"timestamp\": '$(date +%s)'}'"
           restartPolicy: Never
-          imagePullSecrets:
-            - name: cognigy-registry-token
 {{- end }}

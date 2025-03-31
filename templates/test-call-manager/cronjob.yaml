@@ -11,6 +11,7 @@ spec:
       ttlSecondsAfterFinished: {{ .Values.testCallManager.cronjobTtlSecondsAfterFinished }}
       template:
         spec:
+          {{- include "image.pullSecrets" $ | nindent 10 }}
           containers:
           - name: clean-up
             image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.jobs.image) }}
@@ -32,6 +33,4 @@ spec:
               - -c
               - "curl -X DELETE $URL -H 'x-api-key: '$API_KEY'' -H 'Content-Type: application/json' -d '{\"timestamp\": '$(date +%s000)'}'"
           restartPolicy: Never
-          imagePullSecrets:
-            - name: cognigy-registry-token
 {{- end }}
