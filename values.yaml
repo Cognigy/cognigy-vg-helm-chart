@@ -9,12 +9,17 @@ global:
   nodeEnv: ""
   ## Default local host IP
   localhost: 127.0.0.1
-  ## Collect stats variables
-  ## Tracking call counts by entity level configuration
-  track:
-    accountCalls: true
-    applicationCalls: true
-    serviceProviderCalls: true
+
+  ## Tracking active sessions based on application
+  callCounter:
+    enabled: true
+    # TTL of a call counter session in minutes
+    ttlInMinutes: 5
+    # Update active sessions of an account every minute, in case calls sessions were expired
+    reconcileIntervalSeconds: 60
+    # Interval of the leader election in seconds
+    leaderElectionIntervalSeconds: 60
+
   ## private network - IPs of the SBC (e.g. '172.31.0.0/16')
   privateVoipNetworkCidr: ""
   ## Global Docker image registry for Cognigy images
@@ -391,7 +396,7 @@ dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:4.97.0
+  image: cognigy.azurecr.io/db-create:4.98.0
   imagePullPolicy: Always
   logCollectorEnabled: false
 
@@ -766,7 +771,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:3.20
 
 api:
-  image: cognigy.azurecr.io/api-server:4.97.0
+  image: cognigy.azurecr.io/api-server:4.98.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -791,10 +796,11 @@ api:
   tolerations: []
   ## Prefix used to create some endpoint values [http | https]
   jwtAuth: true
+  ## rate limit
   enableDebounceMiddleware: true
   debounceTimeInSeconds: 5
   debounceQuantity: 50
-  disableRateLimit: true
+  disableRateLimit: true # enable only on shared environments
   rateLimitMinutes: 4
   rateLimit: 1000
   enablePrepareCognigyData: true
@@ -829,7 +835,7 @@ apiBan:
 
 billingApp:
   enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:4.97.0
+  image: cognigy.azurecr.io/voicegateway-billing-app:4.98.0
   imagePullPolicy: IfNotPresent
   replicasCount: 1
   affinity: {}
@@ -885,7 +891,7 @@ drachtio:
       memory: 500Mi
 
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:4.97.1
+  image: cognigy.azurecr.io/vg-feature-server:4.98.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -999,7 +1005,7 @@ rtpEngine:
       memory: 1Gi
 
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.97.0
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.98.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1015,7 +1021,7 @@ rtpEngineSidecar:
       memory: 200Mi
 
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:4.97.0
+  image: cognigy.azurecr.io/sbc-call-router:4.98.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1047,7 +1053,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:4.97.0
+  image: cognigy.azurecr.io/sbc-inbound:4.98.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1088,7 +1094,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:4.97.0
+  image: cognigy.azurecr.io/sbc-outbound:4.98.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1127,7 +1133,7 @@ sbcOutbound:
   registerRfc3261: false
 
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:4.97.0
+  image: cognigy.azurecr.io/sbc-sip-sidecar:4.98.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1143,7 +1149,7 @@ sbcSipSidecar:
 
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-test-call-manager:4.97.0
+  image: cognigy.azurecr.io/vg-test-call-manager:4.98.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1181,7 +1187,7 @@ testCallManager:
       memory: 400Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:4.97.0
+  image: cognigy.azurecr.io/vg-webapp:4.98.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:

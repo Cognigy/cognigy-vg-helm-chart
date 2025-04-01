@@ -36,6 +36,5 @@ spec:
                 - -c
                 - "curl -X POST $URL -H 'x-api-key: '$API_KEY'' -H 'Content-Type: application/json' -d '{\"timestamp\": '$(date -d '-1 hour' +%s)'}'"
           restartPolicy: Never
-          imagePullSecrets:
-            - name: cognigy-registry-token
+          {{- include "image.pullSecrets" $ | nindent 10 }}
 {{- end }}

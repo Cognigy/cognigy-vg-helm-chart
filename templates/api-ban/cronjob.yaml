@@ -41,6 +41,5 @@ spec:
                 - configMapRef:
                     name: cognigy-env
           restartPolicy: Never
-          imagePullSecrets:
-            - name: cognigy-registry-token
+          {{- include "image.pullSecrets" $ | nindent 10 }}
 {{- end }}

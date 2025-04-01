@@ -15,13 +15,13 @@ trigger:
 
 resources:
   repositories:
-  - repository: self
+    - repository: self
 
-  - repository: GitHub
-    type: github
-    endpoint: github.com_mayrbenjamin92
-    name: Cognigy/cognigy-vg-helm-chart
-    ref: main
+    - repository: GitHub
+      type: github
+      endpoint: github.com_mayrbenjamin92
+      name: Cognigy/cognigy-vg-helm-chart
+      ref: main
 
 variables:
   ACRProdReference: "Azure Container Registry Prod"
@@ -34,9 +34,8 @@ variables:
     why: CD
   isTag: $[startsWith(variables['Build.SourceBranch'], 'refs/tags/')]
 
-
 pool:
-  vmImage: ubuntu-20.04
+  vmImage: "ubuntu-latest"
 
 stages:
   - stage: helm_chart_release
@@ -55,7 +54,7 @@ stages:
           - task: Docker@2
             displayName: Login into Container Registry
             inputs:
-              command: 'login'
+              command: "login"
               containerRegistry: $(ACRProdReference)
 
           - bash: |
@@ -64,7 +63,7 @@ stages:
               echo "Helm Chart" $(ChartName) "version:" $helmChartVersion
               helm package --dependency-update  . 
               helm push ./$(ChartName)-$helmChartVersion.tgz oci://$(ACRName)/$(ACRPath)
-      
+
       - job: create_github_release
         dependsOn:
           - create_oci_fragment
@@ -112,4 +111,3 @@ stages:
 
               git push origin main
               git push origin tags/v$helmChartVersion
-              
