@@ -70,3 +70,10 @@ testCallManager:
   interactionPanelServiceProvider:
     id: ""
     apiKey: ""
+
+## Disable vg-connector by default
+vgConnector:
+  enabled: false 
+
+webapp:
+  disableSipClient: true

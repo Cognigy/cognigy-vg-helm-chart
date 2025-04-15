@@ -1,0 +1,117 @@
+{{- if and (.Values.homer.enabled) (not (lookup "v1" "Secret" $.Release.Namespace "vg-homer-password")) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: homer-password-update
+  namespace: {{ $.Release.Namespace | quote }}
+  annotations:
+    {{- if .Values.homer.hookEnabled }}
+    "helm.sh/hook": {{ .Values.homer.hook | quote }}
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": {{ .Values.homer.hookDeletePolicy | quote }}
+    {{- end }}
+spec:
+  backoffLimit: 5
+  ttlSecondsAfterFinished: 86400 # 1 day
+  template:
+    metadata:
+      name: homer-password-update
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-homer-api
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.jobs.image) }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HOMER_SERVICE_URL              
+              value: http://homer.{{ $.Release.Namespace }}.svc.cluster.local:{{ .Values.homer.port }}
+          command: ['sh', '-c']
+          args:
+            - |
+              set -e # Exit script on first error
+              echo "[InitContainer] Starting wait-for-homer-api script..."
+              echo "[InitContainer] Target Homer Service URL: ${HOMER_SERVICE_URL}"
+
+              if [ -z "$HOMER_SERVICE_URL" ]; then
+                echo "[InitContainer] ERROR: HOMER_SERVICE_URL environment variable is not set."
+                exit 1
+              fi
+
+              echo "[InitContainer] Starting wait loop for Homer API..."
+              ATTEMPTS=0
+              MAX_ATTEMPTS=60
+
+              until RESPONSE=$(curl -s ${HOMER_SERVICE_URL}/api/v3/auth); HTTP_CODE=$(curl -s -w "%{http_code}" -o /dev/null ${HOMER_SERVICE_URL}/api/v3/auth); do
+                echo "[InitContainer] Response: $RESPONSE"
+                echo "[InitContainer] HTTP Code: $HTTP_CODE"
+                
+                ATTEMPTS=$((ATTEMPTS+1))
+                if [ $ATTEMPTS -gt $MAX_ATTEMPTS ]; then
+                  echo "[InitContainer] ERROR: Timeout waiting for Homer API at ${HOMER_SERVICE_URL}/api/v3/auth after $MAX_ATTEMPTS attempts."
+                  exit 1
+                fi
+                echo "[InitContainer] Waiting for Homer API (Attempt ${ATTEMPTS}/${MAX_ATTEMPTS})..."
+                sleep 5
+              done
+
+              echo "[InitContainer] Final Response: $RESPONSE"
+              echo "[InitContainer] Final HTTP Code: $HTTP_CODE"
+
+              echo "[InitContainer] Homer API check successful at ${HOMER_SERVICE_URL}/api/v3/auth."
+              echo "[InitContainer] wait-for-homer-api finished successfully."
+              exit 0
+      containers:
+        - name: password-updater
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.jobs.image) }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              HOMER_SERVICE_URL=${HOMER_SERVICE_URL}
+              
+              # Login with default credentials
+              LOGIN_RESPONSE=$(curl -s -X POST ${HOMER_SERVICE_URL}/api/v3/auth \
+                -H "Content-Type: application/json" \
+                -d '{"username":"admin","password":"sipcapture"}')
+              
+              if [ $? -ne 0 ] || [ -z "$LOGIN_RESPONSE" ]; then
+                echo "Failed to get auth token"
+                exit 1
+              fi
+              
+              TOKEN=$(echo $LOGIN_RESPONSE | grep -o '"token":"[^"]*' | cut -d'"' -f4)
+              echo "Token: $TOKEN"
+
+              # Extract admin UUID from login response
+              ADMIN_UUID=$(echo $LOGIN_RESPONSE | grep -o '"scope":"[^"]*' | cut -d'"' -f4)              
+              echo "Admin UUID: $ADMIN_UUID"
+              
+              # Update admin password
+              RESPONSE=$(curl -s -X PUT ${HOMER_SERVICE_URL}/api/v3/users/$ADMIN_UUID \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer $TOKEN" \
+                -d "{\"password\": \"$HOMER_ADMIN_PASSWORD\", \"username\": \"admin\", \"usergroup\": \"admin\", \"email\": \"admin@cognigy.com\", \"firstname\": \"admin\", \"department\": \"Develop\"}")
+
+              if [ $? -ne 0 ]; then
+                echo "Failed to update password"
+                exit 1
+              fi
+              MESSAGE=$(echo $RESPONSE | grep -o '"message":"[^"]*' | cut -d'"' -f4)
+              echo "Message: $MESSAGE"
+              echo "Update status: $MESSAGE"
+          env:          
+            - name: HOMER_SERVICE_URL              
+              value: http://homer.{{ $.Release.Namespace }}.svc.cluster.local:{{ .Values.homer.port }}
+            - name: HOMER_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vg-homer-password
+                  key: homer-password
+            - name: HOMER_SERVICE_URL              
+              value: http://homer.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.homer.port }}
+    
+
+{{- end }}

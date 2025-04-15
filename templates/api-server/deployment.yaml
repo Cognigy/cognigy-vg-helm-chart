@@ -16,6 +16,7 @@ spec:
         app: api-server
       annotations:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/common-secrets/vg-homer-password.yaml") $ | sha256sum }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.api.affinity }}
@@ -108,7 +109,10 @@ spec:
             - name: HOMER_USERNAME
               value: {{ .Values.homer.auth.username | quote }}
             - name: HOMER_PASSWORD
-              value: {{ .Values.homer.auth.password | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: vg-homer-password
+                  key: homer-password
             - name: JAEGER_BASE_URL
               value: {{ .Values.jaeger.urlPrefixServiceConnection }}{{ .Values.jaeger.serviceName }}:{{ .Values.jaeger.ports.tcp }}
             - name: JAMBONES_AUTH_USE_JWT

@@ -1,8 +1,8 @@
-{{- if and (.Values.ingress.enabled) (.Values.ingress.homer.enabled) (.Values.homer.enabled) }}
+{{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: homer
+  name: vg-connector
   namespace: {{ $.Release.Namespace | quote }}
   annotations:
   {{- if eq .Values.ingress.ingressClassName "traefik" }}
@@ -11,22 +11,25 @@ metadata:
     {{- else }}
     traefik.ingress.kubernetes.io/router.entrypoints: web
     {{- end }}
+    {{- if .Values.ingress.vgConnector.ipWhiteListMiddleware.enabled }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-ipwhitelistvgconnector@kubernetescrd
+    {{- end }}
   {{- end }}
-  {{- if .Values.ingress.homer.extraAnnotations }}
-    {{- include "vg.common.tplvalues.render" (dict "value" .Values.ingress.homer.extraAnnotations "context" $) | nindent 4 }}
+  {{- if .Values.ingress.vgConnector.extraAnnotations }}
+    {{- include "vg.common.tplvalues.render" (dict "value" .Values.ingress.vgConnector.extraAnnotations "context" $) | nindent 4 }}
   {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.ingressClassName }}
   {{- include "vg.tlsCertificate.secretName.render" $ | nindent 2 }}
   rules:
-    - host: {{ .Values.ingress.homer.host }}
+    - host: {{ .Values.ingress.vgConnector.host }}
       http:
         paths:
           - backend:
               service:
-                name: homer
+                name: vg-connector
                 port:
-                  number: {{ .Values.homer.port }}
+                  number: {{ .Values.vgConnector.port }}
             path: /
             pathType: Prefix
 {{- end }}

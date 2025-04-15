@@ -14,3 +14,9 @@ ingress:
     host: ""
   webapp:
     host: ""
+
+vg-connector:
+  enabled: true
+
+webapp:
+  disableSipClient: false

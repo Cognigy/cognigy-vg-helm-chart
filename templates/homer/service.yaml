@@ -1,3 +1,4 @@
+{{- if .Values.homer.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -14,3 +15,4 @@ spec:
       port: {{ .Values.homer.port }}
       targetPort: {{ .Values.homer.port }}
       protocol: TCP
+{{- end }}
