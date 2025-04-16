@@ -11,6 +11,12 @@ metadata:
     {{- else }}
     traefik.ingress.kubernetes.io/router.entrypoints: web
     {{- end }}
+    {{- if .Values.ingress.homer.ipWhiteListMiddleware.enabled }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-ipwhitelisthomer@kubernetescrd
+    {{- end }}
+    {{- if .Values.ingress.homer.basicAuthMiddleware.enabled }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-homerauth@kubernetescrd
+    {{- end }}
   {{- end }}
   {{- if .Values.ingress.homer.extraAnnotations }}
     {{- include "vg.common.tplvalues.render" (dict "value" .Values.ingress.homer.extraAnnotations "context" $) | nindent 4 }}
