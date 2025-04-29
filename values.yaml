@@ -200,16 +200,6 @@ ingress:
           - 0.0.0.0/0
         ipStrategy:
           depth: 0
-  billingApp:
-    host: ""
-    extraAnnotations: {}
-    ipWhiteListMiddleware:
-      enabled: false
-      ipWhiteList:
-        sourceRange:
-          - 0.0.0.0/0
-        ipStrategy:
-          depth: 0
   homer:
     enabled: false
     host: ""
@@ -406,7 +396,7 @@ dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:4.99.0
+  image: cognigy.azurecr.io/db-create:4.100.0
   imagePullPolicy: Always
   logCollectorEnabled: false
 
@@ -783,7 +773,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:3.20
 
 api:
-  image: cognigy.azurecr.io/api-server:4.99.0
+  image: cognigy.azurecr.io/api-server:4.100.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -845,41 +835,6 @@ apiBan:
   cronjobSchedule: "0 * * * *"
   extraEnvVars: []
 
-billingApp:
-  enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:4.99.0
-  imagePullPolicy: IfNotPresent
-  replicasCount: 1
-  affinity: {}
-  nodeSelector: {}
-  priorityClassName: ""
-  podSecurityContext: {}
-  tolerations: []
-  port: 9000
-  endpoint: ""
-  endpointProtocol: "https"
-  updateCallHistoryEndpointPath: "/api/v1/call-history/update"
-  deactivateAccountEndpointPath: "/api/v1/account/deactivate"
-  callHistoryTtlSecondsAfterFinished: 180
-  deactivateTtlSecondsAfterFinished: 180
-  billingAppUserCreds:
-    user: ""
-    password: ""
-    ## For existing user info, the secret must have the following two keys:
-    ## "user": Containing the username to log into api-server
-    ## "password": Containing password of the above username
-    ## NOTE: When billingApp.existingCredentials is set, the values in the previous parameters
-    ## "billingApp.user" and "billingApp.password" are ignored.
-    existingCredentials: ""
-  extraEnvVars: []
-  resources:
-    requests:
-      cpu: "0.100"
-      memory: 150Mi
-    limits:
-      cpu: "0.200"
-      memory: 300Mi
-
 drachtio:
   image: cognigy.azurecr.io/vg-drachtio-server:0.8.27-rc17
   imagePullPolicy: IfNotPresent
@@ -904,7 +859,7 @@ drachtio:
       memory: 500Mi
 
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:4.99.0
+  image: cognigy.azurecr.io/vg-feature-server:4.100.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1018,7 +973,7 @@ rtpEngine:
       memory: 1Gi
 
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.99.0
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.100.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1034,7 +989,7 @@ rtpEngineSidecar:
       memory: 200Mi
 
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:4.99.0
+  image: cognigy.azurecr.io/sbc-call-router:4.100.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1066,7 +1021,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:4.99.0
+  image: cognigy.azurecr.io/sbc-inbound:4.100.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1107,7 +1062,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:4.99.0
+  image: cognigy.azurecr.io/sbc-outbound:4.100.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1146,7 +1101,7 @@ sbcOutbound:
   registerRfc3261: false
 
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:4.99.0
+  image: cognigy.azurecr.io/sbc-sip-sidecar:4.100.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1162,7 +1117,7 @@ sbcSipSidecar:
 
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-test-call-manager:4.99.0
+  image: cognigy.azurecr.io/vg-test-call-manager:4.100.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1200,7 +1155,8 @@ testCallManager:
       memory: 400Mi
 
 vgConnector:
-  image: cognigy.azurecr.io/vg-connector:1.0.0-rc1
+  enabled: false
+  image: cognigy.azurecr.io/vg-connector:0.0.6
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1220,7 +1176,7 @@ vgConnector:
       memory: 150Mi
 
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:4.99.0
+  image: cognigy.azurecr.io/vg-webapp:4.100.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:

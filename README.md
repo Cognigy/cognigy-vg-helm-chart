@@ -35,14 +35,12 @@ You need to set at least following parameters in `YOUR_VALUES_FILE.yaml`:
 
 ### Cognigy.VG DNS and TLS Settings
 
-Cognigy VoiceGateway exposes four web services for which you will need to assign DNS records in a public domain operated by your organization. These DNS records must be added into your DNS system during the installation process. Replace `yourdomain.<tld>` according to the domain (subdomain) of your organization under `ingress` section as below:
+Cognigy VoiceGateway exposes three web services for which you will need to assign DNS records in a public domain operated by your organization. These DNS records must be added into your DNS system during the installation process. Replace `yourdomain.<tld>` according to the domain (subdomain) of your organization under `ingress` section as below:
 
   ```yaml
   ingress:
     api:
       host: "api-vg.yourdomain.<tld>"
-    billingApp:
-      host: "billing-vg.yourdomain.<tld>"
     testCallManager:
       host: "tcm-vg.yourdomain.<tld>"
     webapp:
@@ -123,12 +121,6 @@ After the first deployment, change the `dbCreate` job be a Helm Hook for the nex
 
 To log in for the first time, use the following credentials: username: `admin`, password: `admin`.
 After the first login, you will be forced to change the password, choose a safe one and store it in a secure place.
-
-### Enable Billing App
-
-1. Create, in the Cognigy VoiceGateway WebApp, a new User with "Admin Role" (e.g.: `billing-app` or `billing-app-user`)
-2. In `YOUR_VALUES_FILE.yaml` set `billingApp.enabled` to `true` and add the information into `billingApp.billingAppUserCreds`
-3. Execute Helm Upgrade
 
 ### Enable Interaction Panel Calls
 1. Create, in the Cognigy VoiceGateway WebApp, a new Service Provider (e.g.: `Interaction Panel Call Manager`)

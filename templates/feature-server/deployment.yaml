@@ -345,7 +345,7 @@ spec:
             - name: ENVIRONMENT
               value: {{ .Values.tracing.environment | quote }}            
             - name: COGNIGY_AI_VERSION
-              value: {{ .Chart.Version | trunc 6 | quote }}
+              value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
             - name: SIGTERM_FORCE_CLOSE_TIMEOUT
               value: {{ .Values.featureServer.sigtermForceCloseTimeoutMs | quote }}
             - name: VG_SENTRY_TRACING_ENABLED

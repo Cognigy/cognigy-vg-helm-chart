@@ -156,7 +156,7 @@ spec:
             - name: ENVIRONMENT
               value: {{ .Values.tracing.environment | quote }}
             - name: COGNIGY_AI_VERSION
-              value: {{ .Chart.Version | trunc 6 | quote }}
+              value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
             - name: ENABLE_DEBOUNCE_MIDDLEWARE
               value: {{ .Values.api.enableDebounceMiddleware | quote }}
             - name: DEBOUNCE_TIME_IN_SECONDS

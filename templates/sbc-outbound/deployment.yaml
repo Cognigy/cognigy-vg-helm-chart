@@ -162,7 +162,7 @@ spec:
             - name: ENVIRONMENT
               value: {{ .Values.tracing.environment | quote }}
             - name: COGNIGY_AI_VERSION
-              value: {{ .Chart.Version | trunc 6 | quote }}
+              value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
             - name: PAD_CRYPTO
               value: {{ .Values.sbcOutbound.padCrypto | quote }}
             - name: JAMBONES_USE_BEST_EFFORT_TLS

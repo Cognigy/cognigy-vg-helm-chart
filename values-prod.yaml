@@ -23,8 +23,6 @@ imageCredentials:
 ingress:
   api:
     host: ""
-  billingApp:
-    host: ""
   testCallManager:
     host: ""
   webapp:
@@ -55,11 +53,8 @@ apiBan:
     key: ""
   ## Add a list of known CIDRs to be banned, e.g.: "192.255.255.0/12, 168.27.1.0/24, 127.0.0.0/32"
   bannedIpsList: ""
-  ## Set the schedule for the cronjob to run as you wish 
+  ## Set the schedule for the cronjob to run as you wish
   cronjobSchedule: "0 * * * *"
-
-billingApp:
-  updateCallHistoryEndpoint: "https://<billing-vg.yourdomain.<tld>>/api/v1/call-history/update"
 
 ## This feature can only be enabled after the first installation is done
 ## A new ServiceProvider entity needs to be created to be used by the Interaction Panel Calls
@@ -73,7 +68,7 @@ testCallManager:
 
 ## Disable vg-connector by default
 vgConnector:
-  enabled: false 
+  enabled: false
 
 webapp:
   disableSipClient: true
