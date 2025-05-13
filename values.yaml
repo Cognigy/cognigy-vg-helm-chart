@@ -9,7 +9,6 @@ global:
   nodeEnv: ""
   ## Default local host IP
   localhost: 127.0.0.1
-
   ## Tracking active sessions based on application
   callCounter:
     enabled: true
@@ -19,7 +18,6 @@ global:
     reconcileIntervalSeconds: 60
     # Interval of the leader election in seconds
     leaderElectionIntervalSeconds: 60
-
   ## private network - IPs of the SBC (e.g. '172.31.0.0/16')
   privateVoipNetworkCidr: ""
   ## Global Docker image registry for Cognigy images
@@ -28,11 +26,9 @@ global:
   ## Global Log Level valid choices are debug, error, info, warn (sbc.sip: warning)
   logLevel: info
   enableTtsStreaming: true
-
 ###############
 # Cognigy ENV #
 ###############
-
 cognigyEnv:
   ## Enable Redis Sentinel Mode
   ## Note: Redis HA needs to be enabled to use Redis Sentinel Mode
@@ -43,12 +39,10 @@ cognigyEnv:
   REDIS_SENTINEL_HOST: "redis-ha-headless"
   ## Redis Sentinel Port
   REDIS_SENTINEL_PORT: "26379"
-
   ## Transition to upstream package - this is required with v4.89
   JAMBONES_REDIS_SENTINEL_MASTER_NAME: "mymaster"
   ## Comma-seperated list of Redis Sentinels
   JAMBONES_REDIS_SENTINELS: "redis-ha-headless:26379"
-
 ## Credentials for pulling image from private image registry.
 ## Ref.: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 imageCredentials:
@@ -63,10 +57,8 @@ imageCredentials:
   ##
   ## Note: When registry, username and password are set, the pullSecrets are ignored.
   pullSecrets: []
-
 ## We support the 3 major cloud providers: aws, azure, gcp
 cloud: ""
-
 aws:
   ## Set to true, if using IMDSv2 - Instance Metadata Service Version 2
   useIMDSv2: true
@@ -82,7 +74,6 @@ aws:
     storageClassName: "postgres"
     provisionerName: "ebs.csi.aws.com"
     awsEBSVolumeType: "gp3"
-
 azure:
   useLoadBalancerIMDS: true
   influxdb:
@@ -97,7 +88,6 @@ azure:
     storageClassName: "postgres"
     provisionerName: "disk.csi.azure.com"
     azureStorageAccountType: "StandardSSD_LRS"
-
 gcp:
   influxdb:
     storageClassName: "influxdb"
@@ -111,7 +101,6 @@ gcp:
     storageClassName: "postgres"
     provisionerName: "pd.csi.storage.gke.io"
     pdType: "pd-balanced"
-
 stats:
   ## Metrics will be generate
   enabled: true
@@ -121,7 +110,6 @@ stats:
   telegraf: true
   ## A value from 0 to 1; 1 = send all samples, 0.5 = send every 2nd sample, and so on.
   sampleRate: 1
-
 #######
 # TLS #
 #######
@@ -154,17 +142,14 @@ tls:
   ## "tls.key": Containing the certificate key
   ## NOTE: When tls.existingSecret is set, clear text certificate passed in the previous parameters "tls.crt" and "tls.key" are ignored.
   existingSecret: ""
-
 # Decoding of JWT Interaction Panels calls require the same secret as used in service-api for encoding
 # Supports multiple tokens, seperated by ';' secret1;secret2;
 cognigyJwtSecrets:
   secret: ""
   secretKey: ""
-
 ###########
 # Tracing #
 ###########
-
 tracing:
   enabled: false
   errorsEnabled: false
@@ -179,7 +164,6 @@ tracing:
   apiProject: ""
   secret: "vg-sentry-api-token"
   secretKey: token
-
 ###########
 # Ingress #
 ###########
@@ -189,7 +173,6 @@ tracing:
 ingress:
   enabled: true
   ingressClassName: traefik
-
   api:
     host: ""
     extraAnnotations: {}
@@ -254,7 +237,6 @@ ingress:
           - 0.0.0.0/0
         ipStrategy:
           depth: 0
-
 #############
 # SIP & RTP #
 #############
@@ -387,19 +369,16 @@ sbc:
     dnsRecordTtl: "60"
     ## Base name for SIP DNS records
     dnsBaseName: "sbc-sip"
-
 #############
 # Databases #
 #############
-
 dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:4.100.0
+  image: cognigy.azurecr.io/db-create:2025.10.0
   imagePullPolicy: Always
   logCollectorEnabled: false
-
 influxdb:
   image: cognigy.azurecr.io/vg-influx:1.8.10-alpine
   imagePullPolicy: IfNotPresent
@@ -423,7 +402,6 @@ influxdb:
     limits:
       cpu: "1"
       memory: 1.5Gi
-
 ## Bitnami Chart, image info: bitnami/mysql:8.0.39-debian-12-r5
 mysql:
   enabled: true
@@ -483,7 +461,6 @@ mysql:
     name: jambones
   host: mysql
   port: 3306
-
 ## Bitnami Chart, image info: bitnami/postgresql:14.12.0-debian-12-r15
 ## Used only internally by heplify-server and homer to store sip captures
 postgresql:
@@ -530,7 +507,6 @@ postgresql:
       enabled: false
   host: postgres
   port: 5432
-
 redis:
   image: cognigy.azurecr.io/redis:7.4.0-debian-12-r4
   imagePullPolicy: IfNotPresent
@@ -542,11 +518,9 @@ redis:
   priorityClassName: ""
   podSecurityContext: {}
   tolerations: []
-
 ###########################
 # Redis High Availability #
 ###########################
-
 redisHa:
   ## Enable Redis HA Deployment
   ## Note: This is only to enable Redis HA deployment, to enable Redis Sentinel usage,
@@ -629,11 +603,9 @@ redisHa:
         memory: 200Mi
     serviceMonitor:
       enabled: false
-
 ##############
 # Monitoring #
 ##############
-
 heplifyServer:
   ## We build and tag this image by ourselves
   image: cognigy.azurecr.io/vg-heplify-server:1.59.7-1
@@ -665,7 +637,6 @@ heplifyServer:
     limits:
       cpu: "0.100"
       memory: 800Mi
-
 homer:
   enabled: true
   ## We build and tag this image by ourselves
@@ -695,7 +666,6 @@ homer:
     limits:
       cpu: "0.100"
       memory: 150Mi
-
 jaeger:
   image: cognigy.azurecr.io/vg-jaeger:1.61.0
   imagePullPolicy: IfNotPresent
@@ -722,13 +692,10 @@ jaeger:
     limits:
       cpu: "0.150"
       memory: 450Mi
-
 metrics:
   port: 8002
-
 health:
   port: 8001
-
 telegraf:
   image: cognigy.azurecr.io/vg-telegraf:1.31-alpine
   imagePullPolicy: IfNotPresent
@@ -747,33 +714,27 @@ telegraf:
     limits:
       cpu: "0.100"
       memory: 250Mi
-
 ## You can enable the pod monitor if any prometheus instance is running on your cluster.
 podMonitors:
   enabled: false
   ## The namespace for the pod-monitor should be the same namespace where your prometheus instance is running
   namespace: "monitoring"
-
 #################
 # Cognigy Login #
 #################
-
 cognigyLogin:
   enabled: false
   baseUrl: ""
   clientId: "voicegateway"
   secret: "vg-cognigy-login"
   secretKey: "clientSecret"
-
 ###########################
 # VoiceGateway Components #
 ###########################
-
 jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:3.20
-
 api:
-  image: cognigy.azurecr.io/api-server:4.100.0
+  image: cognigy.azurecr.io/api-server:2025.10.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -815,7 +776,6 @@ api:
     limits:
       cpu: "0.500"
       memory: 500Mi
-
 apiBan:
   enabled: true
   image: cognigy.azurecr.io/api-ban:1.1.0
@@ -834,7 +794,6 @@ apiBan:
   bannedIpsList: ""
   cronjobSchedule: "0 * * * *"
   extraEnvVars: []
-
 drachtio:
   image: cognigy.azurecr.io/vg-drachtio-server:0.8.27-rc17
   imagePullPolicy: IfNotPresent
@@ -857,9 +816,8 @@ drachtio:
     limits:
       cpu: "0.5"
       memory: 500Mi
-
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:4.100.0
+  image: cognigy.azurecr.io/vg-feature-server:2025.10.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -918,7 +876,6 @@ featureServer:
     limits:
       cpu: "1"
       memory: 500Mi
-
 freeswitch:
   image: cognigy.azurecr.io/vg-freeswitch-mrf:0.9.3
   imagePullPolicy: IfNotPresent
@@ -953,7 +910,6 @@ freeswitch:
     limits:
       cpu: "2.5"
       memory: 3Gi
-
 rtpEngine:
   image: cognigy.azurecr.io/vg-rtpengine:13.1.1.5
   imagePullPolicy: IfNotPresent
@@ -971,9 +927,8 @@ rtpEngine:
     limits:
       cpu: "3"
       memory: 1Gi
-
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.100.0
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:2025.10.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -987,9 +942,8 @@ rtpEngineSidecar:
     limits:
       cpu: "0.100"
       memory: 200Mi
-
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:4.100.0
+  image: cognigy.azurecr.io/sbc-call-router:2025.10.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1019,9 +973,8 @@ sbcCallRouter:
     limits:
       cpu: "0.100"
       memory: 150Mi
-
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:4.100.0
+  image: cognigy.azurecr.io/sbc-inbound:2025.10.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1060,9 +1013,8 @@ sbcInbound:
     limits:
       cpu: "0.200"
       memory: 250Mi
-
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:4.100.0
+  image: cognigy.azurecr.io/sbc-outbound:2025.10.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1099,9 +1051,8 @@ sbcOutbound:
   padCrypto: false
   supportBestEffortTls: false
   registerRfc3261: false
-
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:4.100.0
+  image: cognigy.azurecr.io/sbc-sip-sidecar:2025.10.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1114,10 +1065,9 @@ sbcSipSidecar:
     limits:
       cpu: "0.100"
       memory: 150Mi
-
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-test-call-manager:4.100.0
+  image: cognigy.azurecr.io/vg-test-call-manager:2025.10.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1153,10 +1103,9 @@ testCallManager:
     limits:
       cpu: "0.200"
       memory: 400Mi
-
 vgConnector:
   enabled: false
-  image: cognigy.azurecr.io/vg-connector:0.0.6
+  image: cognigy.azurecr.io/vg-connector:2025.10.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1165,7 +1114,6 @@ vgConnector:
   podSecurityContext: {}
   tolerations: []
   port: 8000
-  acsCallbackUri: ""
   extraEnvVars: []
   resources:
     requests:
@@ -1174,9 +1122,8 @@ vgConnector:
     limits:
       cpu: "0.100"
       memory: 150Mi
-
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:4.100.0
+  image: cognigy.azurecr.io/vg-webapp:2025.10.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1225,7 +1172,6 @@ webapp:
     limits:
       cpu: "0.2"
       memory: 400Mi
-
 ###########
 # Traefik #
 ###########
@@ -1358,13 +1304,11 @@ traefik:
                 values:
                   - "set"
           topologyKey: "topology.kubernetes.io/zone"
-
   updateStrategy:
     type: RollingUpdate
     rollingUpdate:
       maxUnavailable: 1
       maxSurge: 0
-
 ## Optionally create priorityClass
 ## ref: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#priorityclass
 ##
@@ -1398,7 +1342,6 @@ priorityClass:
     preemptionPolicy: Never
     globalDefault: false
     description: "PriorityClass for low priority services"
-
 ## Optionally enable HorizontalPodAutoscaler for pods
 ## ref: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
 ##
@@ -1558,11 +1501,9 @@ hpa:
               type: Utilization
               averageUtilization: 70
       behavior: {}
-
 ###########
 # VMD #
 ###########
-
 phraseList: |
   {
     "en-US": [

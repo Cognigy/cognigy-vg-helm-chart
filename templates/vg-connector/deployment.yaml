@@ -67,13 +67,6 @@ spec:
               value: {{ .Values.vgConnector.port | quote }}
             - name: NODE_ENV
               value: {{ .Values.global.nodeEnv | quote }}
-            - name: ACS_CALLBACK_URI
-              value: {{ .Values.vgConnector.acsCallbackUri | quote }}
-            - name: ACS_CONNECTION_STRING
-              valueFrom:
-                secretKeyRef:
-                  name: acs-connection-string
-                  key: connection-string
             - name: K8S_SBC_SIP_SERVICE_NAME
               value: {{ .Values.sbc.sip.headlessServiceName | quote }}
             - name: K8S_RTPENGINE_SERVICE_NAME
