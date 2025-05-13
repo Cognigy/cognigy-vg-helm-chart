@@ -27,5 +27,4 @@ data:
             <sofia-loglevel>3</sofia-loglevel>
             <loglevel>info</loglevel>
         </logging>
-
     </drachtio>
