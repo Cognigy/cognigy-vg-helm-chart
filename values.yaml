@@ -9,12 +9,17 @@ global:
   nodeEnv: ""
   ## Default local host IP
   localhost: 127.0.0.1
-  ## Collect stats variables
-  ## Tracking call counts by entity level configuration
-  track:
-    accountCalls: true
-    applicationCalls: true
-    serviceProviderCalls: true
+
+  ## Tracking active sessions based on application
+  callCounter:
+    enabled: true
+    # TTL of a call counter session in minutes
+    ttlInMinutes: 5
+    # Update active sessions of an account every minute, in case calls sessions were expired
+    reconcileIntervalSeconds: 60
+    # Interval of the leader election in seconds
+    leaderElectionIntervalSeconds: 60
+
   ## private network - IPs of the SBC (e.g. '172.31.0.0/16')
   privateVoipNetworkCidr: ""
   ## Global Docker image registry for Cognigy images
@@ -195,22 +200,10 @@ ingress:
           - 0.0.0.0/0
         ipStrategy:
           depth: 0
-  billingApp:
-    host: ""
-    extraAnnotations: {}
-    ipWhiteListMiddleware:
-      enabled: false
-      ipWhiteList:
-        sourceRange:
-          - 0.0.0.0/0
-        ipStrategy:
-          depth: 0
   homer:
     enabled: false
     host: ""
     extraAnnotations: {}
-    basicAuthMiddleware:
-      enabled: true
     ipWhiteListMiddleware:
       enabled: false
       ipWhiteList:
@@ -242,6 +235,16 @@ ingress:
         ipStrategy:
           depth: 0
   webapp:
+    host: ""
+    extraAnnotations: {}
+    ipWhiteListMiddleware:
+      enabled: false
+      ipWhiteList:
+        sourceRange:
+          - 0.0.0.0/0
+        ipStrategy:
+          depth: 0
+  vgConnector:
     host: ""
     extraAnnotations: {}
     ipWhiteListMiddleware:
@@ -316,6 +319,8 @@ sbc:
       tls: 5061
       udp: 5060
       wss: 8443
+    ## sip-vg-dev.cognigy.ai
+    uri: ""
   rtp:
     ## The number of replicas for the RTP pods needs to be the same as the number of static IPs provisioned for the media traffic.
     replicaCount: 2
@@ -391,7 +396,7 @@ dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:4.96.0
+  image: cognigy.azurecr.io/db-create:4.100.0
   imagePullPolicy: Always
   logCollectorEnabled: false
 
@@ -662,6 +667,7 @@ heplifyServer:
       memory: 800Mi
 
 homer:
+  enabled: true
   ## We build and tag this image by ourselves
   image: cognigy.azurecr.io/vg-homer:1.5.3
   imagePullPolicy: IfNotPresent
@@ -676,10 +682,11 @@ homer:
   urlPrefixServiceConnection: http://
   existingSecret: ""
   extraEnvVars: []
-  ## Default credentials
   auth:
     username: admin
-    password: sipcapture
+  hookEnabled: true
+  hook: post-install,pre-upgrade
+  hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
   port: 80
   resources:
     requests:
@@ -766,7 +773,7 @@ jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:3.20
 
 api:
-  image: cognigy.azurecr.io/api-server:4.96.0
+  image: cognigy.azurecr.io/api-server:4.100.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -791,10 +798,11 @@ api:
   tolerations: []
   ## Prefix used to create some endpoint values [http | https]
   jwtAuth: true
+  ## rate limit
   enableDebounceMiddleware: true
   debounceTimeInSeconds: 5
   debounceQuantity: 50
-  disableRateLimit: true
+  disableRateLimit: true # enable only on shared environments
   rateLimitMinutes: 4
   rateLimit: 1000
   enablePrepareCognigyData: true
@@ -827,44 +835,10 @@ apiBan:
   cronjobSchedule: "0 * * * *"
   extraEnvVars: []
 
-billingApp:
-  enabled: false
-  image: cognigy.azurecr.io/voicegateway-billing-app:4.96.0
-  imagePullPolicy: IfNotPresent
-  replicasCount: 1
-  affinity: {}
-  nodeSelector: {}
-  priorityClassName: ""
-  podSecurityContext: {}
-  tolerations: []
-  port: 9000
-  endpoint: ""
-  endpointProtocol: "https"
-  updateCallHistoryEndpointPath: "/api/v1/call-history/update"
-  deactivateAccountEndpointPath: "/api/v1/account/deactivate"
-  callHistoryTtlSecondsAfterFinished: 180
-  deactivateTtlSecondsAfterFinished: 180
-  billingAppUserCreds:
-    user: ""
-    password: ""
-    ## For existing user info, the secret must have the following two keys:
-    ## "user": Containing the username to log into api-server
-    ## "password": Containing password of the above username
-    ## NOTE: When billingApp.existingCredentials is set, the values in the previous parameters
-    ## "billingApp.user" and "billingApp.password" are ignored.
-    existingCredentials: ""
-  extraEnvVars: []
-  resources:
-    requests:
-      cpu: "0.100"
-      memory: 150Mi
-    limits:
-      cpu: "0.200"
-      memory: 300Mi
-
 drachtio:
   image: cognigy.azurecr.io/vg-drachtio-server:0.8.27-rc17
   imagePullPolicy: IfNotPresent
+  host: 127.0.0.1
   port: 9022
   metricsPort: 8088
   homerId: 10
@@ -885,7 +859,7 @@ drachtio:
       memory: 500Mi
 
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:4.96.0
+  image: cognigy.azurecr.io/vg-feature-server:4.100.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -918,7 +892,7 @@ featureServer:
   podSecurityContext: {}
   tolerations: []
   sigtermForceCloseTimeoutMs: ""
-  terminationGracePeriodSeconds: 900
+  terminationGracePeriodSeconds: 300
   ## Please set featureServer.useStatefulSet to false if you don't want to use StatefulSet for Feature Server (headless service)
   ## Setting it to false is not recommended and does not work if Azure cloud.
   useStatefulSet: true
@@ -926,11 +900,13 @@ featureServer:
   freeswitchConnection: "127.0.0.1:8021:JambonzR0ck$"
   # Sets the max memory size of V8's old memory section - size in Megabytes
   nodeOptions: "--max-old-space-size=450"
-  # Pre cache audio
-  preCacheAudio: true
+  # Pre cache audio - disabled with 4.97.1 due to possbible audio static
+  preCacheAudio: false
   anchorMediaAlways: false
   ## Disable the 'P-Asserted-Identity' header
   disableDialPaiHeader: false
+  ## list of comma-separated vendors that should not be pre-cached. Valid values are aws, deepgram, elevenlabs, google, ibm, microsoft, nuance, wellsaid, whisper, playh
+  preCacheIgnoreList: "deepgram"
   extraEnvVars: []
   ports:
     tcp: 3000
@@ -979,7 +955,7 @@ freeswitch:
       memory: 3Gi
 
 rtpEngine:
-  image: cognigy.azurecr.io/vg-rtpengine:11.5.1.24
+  image: cognigy.azurecr.io/vg-rtpengine:13.1.1.5
   imagePullPolicy: IfNotPresent
   # During runtime, the log level can be decreased by sending the signal SIGURS1 to the daemon and can be increased with the signal SIGUSR2
   logLevel: 3
@@ -997,7 +973,7 @@ rtpEngine:
       memory: 1Gi
 
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.96.0
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:4.100.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1013,7 +989,7 @@ rtpEngineSidecar:
       memory: 200Mi
 
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:4.96.0
+  image: cognigy.azurecr.io/sbc-call-router:4.100.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1045,7 +1021,7 @@ sbcCallRouter:
       memory: 150Mi
 
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:4.96.0
+  image: cognigy.azurecr.io/sbc-inbound:4.100.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1066,7 +1042,7 @@ sbcInbound:
   tolerations: []
   ## valid choices are debug, info, error, warn
   logLevel:
-  terminationGracePeriodSeconds: 900
+  terminationGracePeriodSeconds: 300
   ## Enables Feature Server Signaling Transport as TCP, instead UDP (default)
   ##
   ## Note: This is an experimental feature. Please do not enable this in a production environment.
@@ -1086,7 +1062,7 @@ sbcInbound:
       memory: 250Mi
 
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:4.96.0
+  image: cognigy.azurecr.io/sbc-outbound:4.100.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1107,7 +1083,7 @@ sbcOutbound:
   tolerations: []
   ## valid choices are debug, info, error, warn
   logLevel:
-  terminationGracePeriodSeconds: 900
+  terminationGracePeriodSeconds: 300
   extraEnvVars: []
   ports:
     tcp: 4000
@@ -1125,7 +1101,7 @@ sbcOutbound:
   registerRfc3261: false
 
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:4.96.0
+  image: cognigy.azurecr.io/sbc-sip-sidecar:4.100.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1141,7 +1117,7 @@ sbcSipSidecar:
 
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-test-call-manager:4.89.0
+  image: cognigy.azurecr.io/vg-test-call-manager:4.100.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1178,8 +1154,29 @@ testCallManager:
       cpu: "0.200"
       memory: 400Mi
 
+vgConnector:
+  enabled: false
+  image: cognigy.azurecr.io/vg-connector:0.0.6
+  imagePullPolicy: IfNotPresent
+  replicaCount: 1
+  affinity: {}
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
+  port: 8000
+  acsCallbackUri: ""
+  extraEnvVars: []
+  resources:
+    requests:
+      cpu: "0.100"
+      memory: 150Mi
+    limits:
+      cpu: "0.100"
+      memory: 150Mi
+
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:4.96.0
+  image: cognigy.azurecr.io/vg-webapp:4.100.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1205,7 +1202,7 @@ webapp:
   disableDefaultTrunkRouting: false
   disableTracing: false
   disableLcr: false
-  disableSipClient: false
+  disableSipClient: true
   disableSpLimits: false
   enableAccountLimits: true
   enableAllSpeechProviders: false

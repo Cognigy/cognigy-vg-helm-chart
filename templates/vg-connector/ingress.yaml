@@ -1,8 +1,8 @@
-{{- if and (.Values.billingApp.enabled) (.Values.ingress.enabled) }}
+{{- if and .Values.vgConnector.enabled .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: billing-app
+  name: vg-connector
   namespace: {{ $.Release.Namespace | quote }}
   annotations:
   {{- if eq .Values.ingress.ingressClassName "traefik" }}
@@ -11,25 +11,25 @@ metadata:
     {{- else }}
     traefik.ingress.kubernetes.io/router.entrypoints: web
     {{- end }}
-    {{- if .Values.ingress.billingApp.ipWhiteListMiddleware.enabled }}
-    traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-ipwhitelistbillingapp@kubernetescrd
+    {{- if .Values.ingress.vgConnector.ipWhiteListMiddleware.enabled }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-ipwhitelistvgconnector@kubernetescrd
     {{- end }}
   {{- end }}
-  {{- if .Values.ingress.billingApp.extraAnnotations }}
-    {{- include "vg.common.tplvalues.render" (dict "value" .Values.ingress.billingApp.extraAnnotations "context" $) | nindent 4 }}
+  {{- if .Values.ingress.vgConnector.extraAnnotations }}
+    {{- include "vg.common.tplvalues.render" (dict "value" .Values.ingress.vgConnector.extraAnnotations "context" $) | nindent 4 }}
   {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.ingressClassName }}
   {{- include "vg.tlsCertificate.secretName.render" $ | nindent 2 }}
   rules:
-    - host: {{ .Values.ingress.billingApp.host }}
+    - host: {{ .Values.ingress.vgConnector.host }}
       http:
         paths:
           - backend:
               service:
-                name: billing-app
+                name: vg-connector
                 port:
-                  number: {{ .Values.billingApp.port }}
+                  number: {{ .Values.vgConnector.port }}
             path: /
             pathType: Prefix
 {{- end }}

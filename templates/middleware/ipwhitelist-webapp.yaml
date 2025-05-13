@@ -1,4 +1,4 @@
-{{- if and (.Values.ingress.enabled) (.Values.traefik.enabled) (.Values.ingress.webapp.ipWhiteListMiddleware.enabled) }}
+{{- if and (.Values.ingress.enabled) (.Values.ingress.webapp.ipWhiteListMiddleware.enabled) }}
 {{- with .Values.ingress.webapp.ipWhiteListMiddleware }}
 ---
 # Whitelisting Based on `X-Forwarded-For` with `depth=0`

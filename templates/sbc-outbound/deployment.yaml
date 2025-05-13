@@ -97,14 +97,20 @@ spec:
               value: {{ .Values.sbcOutbound.ports.dtmf | quote }}
             - name: JAMBONES_LOGLEVEL
               value: {{ if .Values.sbcOutbound.logLevel }}{{ .Values.sbcOutbound.logLevel }}{{ else }}{{ .Values.global.logLevel }}{{ end }}
-            - name: JAMBONES_TRACK_ACCOUNT_CALLS
-              value: {{ .Values.global.track.accountCalls | quote }}
-            - name: JAMBONES_TRACK_APP_CALLS
-              value: {{ .Values.global.track.applicationCalls | quote }}
-            - name: JAMBONES_TRACK_SP_CALLS
-              value: {{ .Values.global.track.serviceProviderCalls | quote }}
+            - name: CALL_COUNTER_TRACK_ACCOUNT_CALLS
+              value: {{ .Values.global.callCounter.enabled | quote }}
+            - name: CALL_COUNTER_TTL_IN_MINUTES
+              value: {{ .Values.global.callCounter.ttlInMinutes | quote }}
+            - name: CALL_COUNTER_RECONCILE_INTERVAL_SECONDS
+              value: {{ .Values.global.callCounter.reconcileIntervalSeconds | quote }}
+            - name: CALL_COUNTER_LEADER_ELECTION_SECONDS
+              value: {{ .Values.global.callCounter.leaderElectionIntervalSeconds | quote }}
             - name: ENABLE_METRICS
               value: {{ if .Values.stats.enabled }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            - name: K8S_APP_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['app']
             - name: K8S_POD_NAME
               valueFrom:
                 fieldRef:
@@ -156,7 +162,7 @@ spec:
             - name: ENVIRONMENT
               value: {{ .Values.tracing.environment | quote }}
             - name: COGNIGY_AI_VERSION
-              value: {{ .Chart.Version | trunc 6 | quote }}
+              value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
             - name: PAD_CRYPTO
               value: {{ .Values.sbcOutbound.padCrypto | quote }}
             - name: JAMBONES_USE_BEST_EFFORT_TLS

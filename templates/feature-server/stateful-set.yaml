@@ -348,7 +348,7 @@ spec:
             - name: ENVIRONMENT
               value: {{ .Values.tracing.environment | quote }}
             - name: COGNIGY_AI_VERSION
-              value: {{ .Chart.Version | trunc 6 | quote }}
+              value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
             - name: SIGTERM_FORCE_CLOSE_TIMEOUT
               value: {{ .Values.featureServer.sigtermForceCloseTimeoutMs | quote }}
             - name: VG_SENTRY_TRACING_ENABLED
@@ -363,6 +363,8 @@ spec:
               value: {{ .Values.featureServer.anchorMediaAlways | quote }}
             - name: VG_DISABLE_DIAL_PAI_HEADER
               value: {{ .Values.featureServer.disableDialPaiHeader | quote }}
+            - name: PRE_CACHE_IGNORE_LIST
+              value: {{ .Values.featureServer.preCacheIgnoreList | quote }}
             {{- if .Values.featureServer.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

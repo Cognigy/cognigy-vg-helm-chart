@@ -58,9 +58,9 @@ spec:
             - name: ENVIRONMENT
               value: {{ .Values.tracing.environment | quote }}
             - name: COGNIGY_AI_VERSION
-              value: {{ .Chart.Version | trunc 6 | quote }}
+              value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
             - name: COGNIGY_VG_VERSION
-              value: {{ .Chart.Version | trunc 6 | quote }}
+              value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
             - name: COGNIGY_URL
               value: {{ .Values.webapp.cognigyUrl | quote }}
             - name: ENABLE_COGNIGY_LOGIN

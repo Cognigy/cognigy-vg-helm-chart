@@ -1,3 +1,4 @@
+{{- if .Values.homer.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,6 +17,8 @@ spec:
         app: homer
       annotations:
         checksum/homer: {{ include (print $.Template.BasePath "/homer/config-map.yaml") $ | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/common-secrets/vg-homer-password.yaml") $ | sha256sum }}
+
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.homer.affinity }}
@@ -32,7 +35,7 @@ spec:
       {{- end }}
       {{- if .Values.homer.tolerations }}
       tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.homer.tolerations "context" $) | nindent 8 }}
-      {{- end }}
+      {{- end }}     
       containers:
         - name: homer
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.homer.image) }}
@@ -43,6 +46,11 @@ spec:
               containerPort: {{ .Values.homer.port }}
               protocol: TCP
           env:
+            - name: HOMER_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vg-homer-password
+                  key: homer-password
             - name: DB_HOST
               value: {{ .Values.postgresql.host }}
             - name: DB_USER
@@ -68,3 +76,4 @@ spec:
             path: webapp_config.json          
           - key: bootstrapped
             path: bootstrapped
+{{- end }}
