@@ -15,6 +15,10 @@ data:
         </request-handlers>
         <sip>
           <udp-mtu>4096</udp-mtu>
+          <contacts>
+            <contact>sip:*</contact>
+            <contact>sips:*</contact>
+          </contacts>
         </sip>
 
         <cdrs>false</cdrs>
