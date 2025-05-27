@@ -46,7 +46,7 @@ spec:
           ports:
             - name: health
               containerPort: {{ .Values.health.port }}
-              protocol: TCP            
+              protocol: TCP
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
               protocol: TCP
@@ -57,58 +57,59 @@ spec:
             failureThreshold: 3
             initialDelaySeconds: 90
             periodSeconds: 60
-            timeoutSeconds: 10 
+            timeoutSeconds: 10
           startupProbe:
             httpGet:
               path: /health/startup
               port: {{ .Values.health.port }}
           env:
-            - name: PORT
-              value: {{ .Values.vgConnector.port | quote }}
-            - name: NODE_ENV
-              value: {{ .Values.global.nodeEnv | quote }}
-            - name: K8S_SBC_SIP_SERVICE_NAME
-              value: {{ .Values.sbc.sip.headlessServiceName | quote }}
-            - name: K8S_RTPENGINE_SERVICE_NAME
-              value: {{ printf "%s:%.0f" .Values.sbc.rtp.headlessServiceName .Values.sbc.rtp.port }}            
-            - name: SBC_RTP_ENGINE_PORT_START
-              value: {{ .Values.rtpEngine.startPort | quote }}
-            - name: SBC_RTP_ENGINE_PORT_END
-              value: {{ .Values.rtpEngine.endPort | quote }}
-            - name: JAMBONES_MYSQL_HOST
-              value: {{ .Values.mysql.host }}
+            - name: COGNIGY_AI_VERSION
+              value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
+            - name: ENVIRONMENT
+              value: {{ .Values.tracing.environment | quote }}
             - name: JAMBONES_MYSQL_DATABASE
               value: {{ .Values.mysql.database.name | quote }}
-            - name: JAMBONES_MYSQL_USER
-              value: {{ .Values.mysql.auth.username | quote }}
+            - name: JAMBONES_MYSQL_HOST
+              value: {{ .Values.mysql.host }}
             - name: JAMBONES_MYSQL_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: voicegateway-mysql-password
                   key: mysql-password
-            - name: K8S_POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-            - name: K8S_POD_IP
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
-            {{- if .Values.sbc.sip.uri }}            
-            - name: K8S_SBC_SIP_WSS_URI_WITH_PORT
-              value: {{ printf "wss://%s:%.0f" .Values.sbc.sip.uri .Values.sbc.sip.ports.wss }}          
-            - name: SIP_BASE_URL
-              value: {{ .Values.sbc.sip.uri | quote }}
-            {{- end }}
+            - name: JAMBONES_MYSQL_USER
+              value: {{ .Values.mysql.auth.username | quote }}
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: voicegateway-jwt
                   key: jwt
-            - name: ENVIRONMENT
-              value: {{ .Values.tracing.environment | quote }}
-            - name: COGNIGY_AI_VERSION
-              value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
+            {{- if hasKey .Values.vgConnector "modules" }}
+            {{- if hasKey .Values.vgConnector.modules "webrtc" }}
+            - name: FEATURE_ENABLE_WEBRTC
+              value: {{ .Values.vgConnector.modules.webrtc.enabled | quote }}
+            {{- end }}
+            {{- if hasKey .Values.vgConnector.modules "msTeams" }}
+            - name: FEATURE_ENABLE_MSTEAMS
+              value: {{ .Values.vgConnector.modules.msTeams.enabled | quote }}
+            {{- if eq (.Values.vgConnector.modules.msTeams.enabled | toString) "true" }}
+            - name: ACS_CALLBACK_URI
+              value: {{ .Values.vgConnector.modules.msTeams.acsCallbackUri | quote }}
+            - name: ACS_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: vg-msteams-connection-string
+                  key: connection-string
+            - name: FEATURE_MSTEAMS_RECORD_AUDIO
+              value: {{ default "false" .Values.vgConnector.modules.msTeams.recordAudio | quote }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv | quote }}
+            - name: PORT
+              value: {{ .Values.vgConnector.port | quote }}
+            - name: SIP_BASE_URL
+              value: {{ .Values.sbc.sip.uri | quote }}
             {{- if .Values.vgConnector.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgConnector.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

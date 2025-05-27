@@ -69,6 +69,11 @@ testCallManager:
 ## Disable vg-connector by default
 vgConnector:
   enabled: false
+  modules:
+    webrtc:
+      enabled: true
+    msTeams:
+      enabled: false
 
 webapp:
   disableSipClient: true

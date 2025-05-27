@@ -17,6 +17,11 @@ ingress:
 
 vg-connector:
   enabled: true
+  modules:
+    webrtc:
+      enabled: true
+    msTeams:
+      enabled: false
 
 webapp:
   disableSipClient: false

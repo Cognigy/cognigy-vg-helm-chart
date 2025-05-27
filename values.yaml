@@ -734,7 +734,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:3.20
 api:
-  image: cognigy.azurecr.io/api-server:2025.10.0
+  image: cognigy.azurecr.io/api-server:2025.11.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -817,7 +817,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2025.10.0
+  image: cognigy.azurecr.io/vg-feature-server:2025.11.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -928,7 +928,7 @@ rtpEngine:
       cpu: "3"
       memory: 1Gi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:2025.10.0
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:2025.11.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -943,7 +943,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:2025.10.0
+  image: cognigy.azurecr.io/sbc-call-router:2025.11.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -974,7 +974,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:2025.10.0
+  image: cognigy.azurecr.io/sbc-inbound:2025.11.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1014,7 +1014,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:2025.10.0
+  image: cognigy.azurecr.io/sbc-outbound:2025.11.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1052,7 +1052,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:2025.10.0
+  image: cognigy.azurecr.io/sbc-sip-sidecar:2025.11.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1067,7 +1067,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-test-call-manager:2025.10.0
+  image: cognigy.azurecr.io/vg-test-call-manager:2025.11.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1105,7 +1105,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: false
-  image: cognigy.azurecr.io/vg-connector:2025.10.0
+  image: cognigy.azurecr.io/vg-connector:2025.11.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1113,6 +1113,11 @@ vgConnector:
   priorityClassName: ""
   podSecurityContext: {}
   tolerations: []
+  modules:
+    webrtc:
+      enabled: true
+    msTeams:
+      enabled: false
   port: 8000
   extraEnvVars: []
   resources:
@@ -1123,7 +1128,7 @@ vgConnector:
       cpu: "0.100"
       memory: 150Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2025.10.0
+  image: cognigy.azurecr.io/vg-webapp:2025.11.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
