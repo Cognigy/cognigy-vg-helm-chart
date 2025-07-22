@@ -817,7 +817,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2025.12.0
+  image: cognigy.azurecr.io/vg-feature-server:2025.12.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
