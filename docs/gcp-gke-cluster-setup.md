@@ -1,5 +1,4 @@
-# (DEPRECATED) GCP GKE Cluster Setup
-## WARNING: The installation guide below is deprecated and is not actively maintained!
+# GCP GKE Cluster Setup
 
 In order to install Cognigy VoiceGateway (VG) product, you need to provision a dedicated GCP GKE cluster. 
 Please, create a GKE Cluster in accordance with [Official GKE Documentation](https://cloud.google.com/kubernetes-engine/docs/concepts/types-of-clusters). 

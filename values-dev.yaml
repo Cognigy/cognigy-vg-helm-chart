@@ -15,7 +15,7 @@ ingress:
   webapp:
     host: ""
 
-vgConnector:
+vg-connector:
   enabled: true
   modules:
     webrtc:

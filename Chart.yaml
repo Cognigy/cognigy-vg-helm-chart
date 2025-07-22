@@ -1,9 +1,9 @@
 apiVersion: v2
 name: voicegateway
 description: A Helm Chart for Cognigy VoiceGateway
-version: "2025.14.0"
+version: "2025.11.2"
 appVersion: "0.9.2"
-kubeVersion: "<v1.34.0-0"
+kubeVersion: ">=v1.23.0-0,<v1.33.0-0"
 home: https://cognigy.com
 icon: https://www.cognigy.com/hubfs/Cognigy.svg
 maintainers:
@@ -14,7 +14,7 @@ sources:
   - https://github.com/Cognigy/cognigy-vg-helm-chart
 dependencies:
   - name: traefik
-    version: "35.4.0"
+    version: "32.1.1"
     repository: "https://helm.traefik.io/traefik"
     condition: traefik.enabled
   - name: postgresql
