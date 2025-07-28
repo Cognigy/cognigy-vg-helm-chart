@@ -38,6 +38,11 @@ spec:
                 secretKeyRef:
                   name: voicegateway-mysql-password
                   key: mysql-password
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-jwt
+                  key: jwt
             - name: JAMBONES_REDIS_HOST
               value: {{ .Values.redis.host }}
             - name: JAMBONES_REDIS_PORT

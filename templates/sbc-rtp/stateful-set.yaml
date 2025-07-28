@@ -30,11 +30,11 @@ spec:
       {{- if .Values.sbc.rtp.nodeSelector }}
       nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbc.rtp.nodeSelector "context" $) | nindent 8 }}
       {{- end }}
-      {{- if .Values.sbc.sip.priorityClassName }}
-      priorityClassName: {{ .Values.sbc.sip.priorityClassName }}
+      {{- if .Values.sbc.rtp.priorityClassName }}
+      priorityClassName: {{ .Values.sbc.rtp.priorityClassName }}
       {{- end }}
-      {{- if .Values.sbc.sip.podSecurityContext }}
-      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbc.sip.podSecurityContext "context" $) | nindent 8 }}
+      {{- if .Values.sbc.rtp.podSecurityContext }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbc.rtp.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.sbc.rtp.tolerations }}
       tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbc.rtp.tolerations "context" $) | nindent 8 }}
