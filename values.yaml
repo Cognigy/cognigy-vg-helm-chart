@@ -376,9 +376,11 @@ dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:2025.16.0
+  image: cognigy.azurecr.io/db-create:2025.16.0-1
   imagePullPolicy: Always
   logCollectorEnabled: false
+  ## Deploy to latest of a specific release '2025.15.0'
+  migrationTarget: 'latest'
 influxdb:
   image: cognigy.azurecr.io/vg-influx:1.8.10-alpine
   imagePullPolicy: IfNotPresent
@@ -734,7 +736,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-alpine-curl:3.20
 api:
-  image: cognigy.azurecr.io/vg-api-server:2025.16.0
+  image: cognigy.azurecr.io/vg-api-server:2025.16.0-1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -816,6 +818,7 @@ drachtio:
     limits:
       cpu: "0.5"
       memory: 500Mi
+
 featureServer:
   image: cognigy.azurecr.io/vg-feature-server:2025.16.0
   imagePullPolicy: Always
@@ -876,6 +879,69 @@ featureServer:
     limits:
       cpu: "1"
       memory: 500Mi
+
+featureServerNightly:
+  enabled: false
+  image: cognigy.azurecr.io/vg-feature-server:2025.16.0
+  imagePullPolicy: Always
+  replicaCount: 2
+  ## valid choices are debug, info, error, warn
+  logLevel:
+  ## 0 - fatal errors, panic
+  ## 1 - critical errors, minimal progress at subsystem level
+  ## 2 - non-critical errors
+  ## 3 - warnings, progress messages
+  ## 5 - signaling protocol actions (incoming packets, ...)
+  ## 7 - media protocol actions (incoming packets, ...)
+  ## 9 - entering/exiting functions, very verbatim progress
+  sofiaLoglevel: "3"
+  ## Microsoft only - Trims trailing silence (zero-amplitude samples) from the end of an audio file
+  trimTts: true
+  serviceName: feature-server-nightly
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                    - feature-server-nightly
+            topologyKey: kubernetes.io/hostname
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
+  sigtermForceCloseTimeoutMs: ""
+  terminationGracePeriodSeconds: 300
+  ## Please set featureServer.useStatefulSet to false if you don't want to use StatefulSet for Feature Server (headless service)
+  ## Setting it to false is not recommended and does not work if Azure cloud.
+  useStatefulSet: true
+  headlessServiceName: feature-server-headless-nightly
+  freeswitchConnection: "127.0.0.1:8021:JambonzR0ck$"
+  # Sets the max memory size of V8's old memory section - size in Megabytes
+  nodeOptions: "--max-old-space-size=450"
+  # Pre cache audio - disabled with 4.97.1 due to possbible audio static
+  preCacheAudio: false
+  anchorMediaAlways: false
+  ## Disable the 'P-Asserted-Identity' header
+  disableDialPaiHeader: false
+  ## list of comma-separated vendors that should not be pre-cached. Valid values are aws, deepgram, elevenlabs, google, ibm, microsoft, nuance, wellsaid, whisper, playh
+  preCacheIgnoreList: "deepgram"
+  extraEnvVars: []
+  ports:
+    tcp: 3000
+    udp: 5060
+  resources:
+    requests:
+      cpu: "1"
+      memory: 500Mi
+    limits:
+      cpu: "1"
+      memory: 500Mi
+
 freeswitch:
   image: cognigy.azurecr.io/vg-freeswitch-mrf:0.9.3
   imagePullPolicy: IfNotPresent
@@ -974,7 +1040,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:2025.16.0
+  image: cognigy.azurecr.io/sbc-inbound:2025.16.0-1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:

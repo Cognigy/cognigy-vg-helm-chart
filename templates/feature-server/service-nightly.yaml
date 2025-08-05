@@ -1,0 +1,33 @@
+{{- if .Values.featureServerNightly.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  {{- if .Values.featureServerNightly.useStatefulSet }}
+  name: {{ .Values.featureServerNightly.headlessServiceName | quote }}
+  {{- else}}
+  name: {{ .Values.featureServerNightly.serviceName | quote }}
+  {{- end }}
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: feature-server-nightly
+spec:
+  selector:
+    app: feature-server-nightly
+  {{- if .Values.featureServerNightly.useStatefulSet }}
+  type: ClusterIP
+  clusterIP: None
+  {{- end }}
+  ports:
+    - name: sip
+      port: {{ .Values.featureServerNightly.ports.udp }}
+      targetPort: {{ .Values.featureServerNightly.ports.udp }}
+      {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
+      protocol: TCP
+      {{- else }}
+      protocol: UDP
+      {{- end }}
+    - name: http
+      port: {{ .Values.featureServerNightly.ports.tcp }}
+      targetPort: {{ .Values.featureServerNightly.ports.tcp }}
+      protocol: TCP
+{{- end }}
