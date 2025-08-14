@@ -49,8 +49,6 @@ spec:
               value: {{ .Values.redis.port | quote }}
             - name: JAMBONES_TIME_SERIES_HOST
               value: {{ .Values.influxdb.host }}
-            - name: API_MIGRATION_TARGET
-              value: {{ .Values.dbCreate.migrationTarget }}
             {{- if .Values.dbCreate.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.dbCreate.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
