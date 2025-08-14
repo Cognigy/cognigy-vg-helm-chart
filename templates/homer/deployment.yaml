@@ -52,7 +52,7 @@ spec:
                   name: vg-homer-password
                   key: homer-password
             - name: DB_HOST
-              value: {{ .Values.postgresql.host }}
+              value: {{ .Values.additionalDbParameters.postgresql.host }}
             - name: DB_USER
               value: {{ .Values.postgresql.auth.postgresUsername | quote }}
             - name: DB_PASS

@@ -23,7 +23,7 @@ data:
     PromTargetName        = ""
     DBShema               = "homer7"
     DBDriver              = "postgres"
-    DBAddr                = "postgres:5432"
+    DBAddr                = {{ printf "%s:%d" .Values.additionalDbParameters.postgresql.host (.Values.additionalDbParameters.postgresql.port | int) | quote }}
     DBDataTable           = "homer_data"
     DBConfTable           = "homer_config"
     DBUser                = {{ .Values.postgresql.auth.postgresUsername | quote }}
