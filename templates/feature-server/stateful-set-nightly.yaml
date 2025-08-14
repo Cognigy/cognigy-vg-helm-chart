@@ -1,0 +1,382 @@
+{{- if .Values.featureServerNightly.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: feature-server-nightly
+  namespace: {{ $.Release.Namespace | quote }}
+spec:
+  selector:
+    matchLabels:
+      app: feature-server-nightly
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas)) }}
+  replicas: {{ .Values.featureServerNightly.replicaCount }}
+  {{- end }}
+  serviceName: feature-server-headless-nightly
+  template:
+    metadata:
+      labels:
+        app: feature-server-nightly
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- if .Values.featureServerNightly.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.featureServerNightly.terminationGracePeriodSeconds }}
+      {{- end }}
+      {{- if .Values.featureServerNightly.affinity }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if or (.Values.featureServerNightly.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector))}}
+      nodeSelector:
+        {{- if .Values.featureServerNightly.nodeSelector }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.nodeSelector "context" $) | nindent 8 }}
+        {{- end }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
+          {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.featureServerNightly.priorityClassName }}
+      priorityClassName: {{ .Values.featureServerNightly.priorityClassName }}
+      {{- end }}
+      {{- if .Values.featureServerNightly.podSecurityContext }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.podSecurityContext "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if or (.Values.featureServerNightly.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
+      tolerations: 
+        {{- if or (.Values.featureServerNightly.tolerations) }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.tolerations "context" $) | nindent 8 }}
+        {{- end }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
+          {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: feature-server-nightly
+      restartPolicy: Always
+      initContainers:
+        - image: kanisterio/mysql-sidecar:0.40.0
+          name: db-create-wait
+          env:
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-mysql-password
+                  key: mysql-password
+          command:
+            - sh 
+            - -c 
+            - |
+              until mysql -u {{ .Values.mysql.auth.username }} -D {{ .Values.mysql.database.name }} -h {{ .Values.mysql.host }} -p${PASSWORD} --protocol=tcp -e "select count(*) from accounts";
+              do 
+                sleep 5
+              done
+      containers:
+        - name: drachtio
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.drachtio.image) }}
+          imagePullPolicy: {{ .Values.drachtio.imagePullPolicy }}
+          resources: {{- toYaml .Values.drachtio.resources | nindent 12 }}
+          ports:
+            - name: drachtio
+              containerPort: {{ .Values.drachtio.port }}
+              protocol: TCP
+            - name: fs-drachtio
+              containerPort: {{ .Values.drachtio.metricsPort }}
+              protocol: TCP
+          env: 
+            - name: CLOUD 
+              value: {{ .Values.cloud | quote }}
+            {{- if eq .Values.cloud "aws" }}
+            - name: IMDSv2
+              value: {{ .Values.aws.useIMDSv2 | quote }}
+            {{- end }}
+            {{- if and (eq .Values.cloud "azure") (.Values.azure.useLoadBalancerIMDS) }}
+            - name: LB_IMDS
+              value: {{ .Values.azure.useLoadBalancerIMDS | quote }}
+            {{- end }}
+            - name: DRACHTIO_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-drachtio-secret
+                  key: secret
+            - name: SOFIA_SEARCH_DOMAINS
+              value: "1"
+            - name: SOFIA_SRES_NO_CACHE
+              value: "1"
+            - name: DRACHTIO_SUPPORT_BEST_EFFORT_TLS
+              value: {{ if .Values.drachtio.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            - name: PRIVATE_IP_ONLY
+              value: {{ .Values.drachtio.privateIpOnly | quote }}
+            {{- if .Values.drachtio.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.drachtio.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
+          lifecycle:
+            preStop:
+              exec:
+                command: [
+                  "/bin/sh",
+                  "-c",
+                  "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
+                ]
+          {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
+          args:
+            - drachtio
+            - --contact
+            - 'sip:*:5060;transport=udp,tcp'
+            - --loglevel
+            - {{ if .Values.drachtio.logLevel }}{{ .Values.drachtio.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+            - --sofia-loglevel
+            - {{ .Values.featureServerNightly.sofiaLoglevel | quote }}
+            - --prometheus-scrape-port
+            - {{ .Values.drachtio.metricsPort | quote }}
+          {{- else }}
+          args: 
+            - drachtio
+            - --contact
+            - 'sip:*:5060;transport=udp'
+            - --mtu ## max packet size for UDP
+            - '4096'
+            - --loglevel
+            - {{ if .Values.drachtio.logLevel }}{{ .Values.drachtio.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+            - --sofia-loglevel
+            - {{ .Values.featureServerNightly.sofiaLoglevel | quote }}
+            - --prometheus-scrape-port
+            - {{ .Values.drachtio.metricsPort | quote }}
+          {{- end }}
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
+        - name: freeswitch
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.freeswitch.image) }}
+          imagePullPolicy: {{ .Values.freeswitch.imagePullPolicy }}
+          resources: {{- toYaml .Values.freeswitch.resources | nindent 12 }}
+          ports:
+            - name: freeswitch
+              containerPort: {{ .Values.freeswitch.ports.eventSocket }}
+              protocol: TCP
+          args:
+            - freeswitch
+            - --username
+            - {{ .Values.freeswitch.username | quote }}            
+            - --sip-port
+            - {{ .Values.freeswitch.ports.sip | quote }}
+            - --tls-port
+            - {{ .Values.freeswitch.ports.tls | quote }}
+            - --event-socket-port
+            - {{ .Values.freeswitch.ports.eventSocket | quote }}
+            {{- range .Values.freeswitch.args }}
+            - {{ . }}
+            {{- end }}
+          env: 
+            - name: MOD_AUDIO_FORK_SUBPROTOCOL_NAME
+              value: audio.jambonz.org
+            - name: MOD_AUDIO_FORK_SERVICE_THREADS
+              value: {{ .Values.freeswitch.serviceThreads | quote }}
+            - name: MOD_AUDIO_FORK_BUFFER_SECS
+              value: {{ .Values.freeswitch.bufferSecs | quote }}
+            - name: JAMBONZ_TMP_CACHE_FOLDER
+              value: {{ .Values.freeswitch.tmpCacheAudioFolder | quote }}
+            - name: DEEPGRAM_SPEECH_USE_SINGLE_CONNECTION
+              value: {{ if .Values.freeswitch.deepgramSttUseSingleConnection }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            - name: AZURE_SPEECH_USE_SINGLE_CONNECTION
+              value: {{ if .Values.freeswitch.azureSttUseSingleConnection }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            - name: DISABLE_HTTP2_FOR_TTS_STREAMING
+              value: {{ if .Values.freeswitch.disableHttp2ForTtsStreaming }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            {{- if .Values.freeswitch.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.freeswitch.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
+          lifecycle:
+            preStop:
+              exec:
+                command: [
+                  "/bin/sh",
+                  "-c",
+                  "fs_cli -p JambonzR0ck$ -x 'fsctl shutdown elegant restart'"
+                ]
+          volumeMounts:
+            - mountPath: /tmp 
+              name: temp-audio-volume
+            - mountPath: /coredumps
+              name: fs-core-dumps
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
+        - name: feature-server
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.featureServerNightly.image) }}
+          imagePullPolicy: {{ .Values.featureServerNightly.imagePullPolicy }}
+          resources: {{- toYaml .Values.featureServerNightly.resources | nindent 12 }}
+          ports:
+            - name: feature-server
+              containerPort: {{ .Values.featureServerNightly.ports.tcp }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+            - name: health
+              containerPort: {{ .Values.health.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: {{ .Values.health.port }}
+            failureThreshold: 3
+            initialDelaySeconds: 90
+            periodSeconds: 60
+            timeoutSeconds: 10 
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: {{ .Values.health.port }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "/opt/app/bin/k8s-pre-stop-hook.js"]
+          volumeMounts:
+            - mountPath: /tmp 
+              name: temp-audio-volume
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv | quote }}
+            - name: HTTP_PORT
+              value: {{ .Values.featureServerNightly.ports.tcp | quote }}
+            - name: K8S 
+              value: {{ .Values.global.k8s | quote }}
+            - name: K8S_SBC_SIP_SERVICE_NAME 
+              value: {{ .Values.sbc.sip.headlessServiceName }}
+            - name: JAMBONES_OTEL_SERVICE_NAME
+              value: {{ .Values.featureServerNightly.serviceName | quote }}
+            - name: JAMBONZ_GATHER_EARLY_HINTS_MATCH
+              value: "true"
+            - name: JAMBONES_INJECT_CONTENT
+              value: "true"
+            - name: JAMBONZ_CLEANUP_INTERVAL_MINS
+              value: "60"
+            - name: JAMBONES_API_BASE_URL
+              value: {{ .Values.ingress.api.host }}/v1
+            - name: JAMBONZ_RECORD_WS_BASE_URL
+              value: {{ printf "\"ws://%s:%s/v1\"" .Values.api.serviceName (toString (int .Values.api.port)) }}
+            - name: JAMBONZ_RECORD_WS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-call-recording-credentials
+                  key: username
+            - name: JAMBONZ_RECORD_WS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-call-recording-credentials
+                  key: password
+            - name: JAMBONES_FREESWITCH
+              value: {{ .Values.featureServerNightly.freeswitchConnection | quote }}
+            - name: ENABLE_METRICS
+              value: {{ if .Values.stats.enabled }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: STATS_TAGS
+              value: "pod:$(K8S_POD_NAME)"
+            - name: STATS_PROTOCOL
+              value: {{ .Values.stats.protocol }}
+            - name: STATS_TELEGRAF
+              value: {{ if .Values.stats.telegraf }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            - name: STATS_HOST
+              value: {{ .Values.telegraf.serviceName }}
+            - name: STATS_PORT
+              value: {{ .Values.telegraf.port  | quote }}
+            - name: STATS_SAMPLE_RATE
+              value:  {{ .Values.stats.sampleRate | quote }}
+            - name: DRACHTIO_HOST
+              value: {{ .Values.global.localhost }}
+            - name: DRACHTIO_PORT 
+              value: {{ .Values.drachtio.port | quote }}
+            - name: DRACHTIO_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-drachtio-secret
+                  key: secret
+            - name: LOG_LEVEL
+              value: {{ if .Values.featureServerNightly.logLevel }}{{ .Values.featureServerNightly.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+            - name: JAMBONES_LOGLEVEL
+              value: {{ if .Values.featureServerNightly.logLevel }}{{ .Values.featureServerNightly.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+            - name: JAMBONES_MYSQL_HOST
+              value: {{ .Values.mysql.host }}
+            - name: JAMBONES_MYSQL_DATABASE
+              value: {{ .Values.mysql.database.name | quote }}
+            - name: JAMBONES_MYSQL_USER
+              value: {{ .Values.mysql.auth.username | quote }}
+            - name: JAMBONES_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-mysql-password
+                  key: mysql-password
+            - name: JAMBONES_REDIS_HOST
+              value: {{ .Values.redis.host }}
+            - name: JAMBONES_REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: JAMBONES_TIME_SERIES_HOST
+              value: {{ .Values.influxdb.host }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-jwt
+                  key: jwt
+            - name: VMD_HINTS_FILE
+              value: |
+                {{ .Values.phraseList | trim | nindent 16 }}
+            - name: JAMBONES_OTEL_ENABLED
+              value: "true"
+            - name: VG_TTS_TRIM_SILENCE
+              value: {{ .Values.featureServerNightly.trimTts | quote }}            
+            - name: OTEL_EXPORTER_JAEGER_AGENT_HOST
+              value: jaeger
+            - name: OTEL_TRACES_SAMPLER
+              value: parentbased_traceidratio
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: {{ default "1.0" .Values.featureServerNightly.otelSampleRate | quote }}
+            - name: TRACING_ENABLED
+              value: {{ .Values.tracing.enabled | quote }}
+            - name: TRACING_BASE_URL_WITH_PROTOCOL
+              value: {{ .Values.tracing.baseUrl | quote }}      
+            - name: TRACING_ERRORS_ENABLED
+              value: {{ .Values.tracing.errorsEnabled | quote }}
+            - name: TRACING_SAMPLE_RATE
+              value: {{ .Values.tracing.sampleRate | quote }}
+            - name: TRACING_EVENTS_SAMPLE_RATE
+              value: {{ .Values.tracing.eventsSampleRate | quote }}
+            - name: ENVIRONMENT
+              value: {{ .Values.tracing.environment | quote }}
+            - name: COGNIGY_AI_VERSION
+              value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
+            - name: SIGTERM_FORCE_CLOSE_TIMEOUT
+              value: {{ .Values.featureServerNightly.sigtermForceCloseTimeoutMs | quote }}
+            - name: VG_SENTRY_TRACING_ENABLED
+              value: {{ .Values.tracing.callTracingEnabled | quote }}
+            - name: NODE_OPTIONS
+              value: {{ .Values.featureServerNightly.nodeOptions | quote }}
+            - name: VG_EAGERLY_PRE_CACHE_AUDIO
+              value: {{ .Values.featureServerNightly.preCacheAudio | quote }}
+            - name: JAMBONES_DISABLE_TTS_STREAMING
+              value: {{ not .Values.global.enableTtsStreaming | quote }}
+            - name: ANCHOR_MEDIA_ALWAYS
+              value: {{ .Values.featureServerNightly.anchorMediaAlways | quote }}
+            - name: VG_DISABLE_DIAL_PAI_HEADER
+              value: {{ .Values.featureServerNightly.disableDialPaiHeader | quote }}
+            - name: PRE_CACHE_IGNORE_LIST
+              value: {{ .Values.featureServerNightly.preCacheIgnoreList | quote }}
+            {{- if .Values.featureServerNightly.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
+      volumes:
+        - name: temp-audio-volume
+          emptyDir: {}
+        - name: fs-core-dumps
+          emptyDir:
+            sizeLimit: "2Gi"
+{{- end }}
