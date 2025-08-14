@@ -1,21 +1,22 @@
 # Cognigy.VG Feature Release
 
-## 2025.10.0-1
+## 2024.18.0-1
 
 ### Feature Release Notes
 
-Feature release with selected services
+Test Feature Release - this is awesome!
 
 ### Released Services
 
 The following services were updated in this feature release:
 
-- sbc-inbound: 2025.10.0-1
-- sbc-outbound: 2025.10.0-1
+- sbc-call-router: 2024.18.0-1
+- sbc-inbound: 2024.18.0-1
+- vg-webapp: 2024.18.0-1
 
 ### Release Date
 
-2025-08-14 14:48:15 UTC
+2025-08-14 14:58:14 UTC
 
 ---
 

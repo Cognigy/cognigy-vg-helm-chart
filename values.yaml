@@ -1010,7 +1010,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:2025.16.0
+  image: cognigy.azurecr.io/sbc-call-router:2024.18.0-1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1041,7 +1041,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:2025.10.0-1
+  image: cognigy.azurecr.io/sbc-inbound:2024.18.0-1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1081,7 +1081,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:2025.10.0-1
+  image: cognigy.azurecr.io/sbc-outbound:2025.16.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1195,7 +1195,7 @@ vgConnector:
       cpu: "0.100"
       memory: 150Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2025.16.0
+  image: cognigy.azurecr.io/vg-webapp:2024.18.0-1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
