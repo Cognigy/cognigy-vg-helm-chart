@@ -1,22 +1,20 @@
 # Cognigy.VG Feature Release
 
-## 2024.18.0-1
+## 2024.18.0-2
 
 ### Feature Release Notes
 
-Test Feature Release - this is awesome!
+Let's test semver deployment staging
 
 ### Released Services
 
 The following services were updated in this feature release:
 
-- sbc-call-router: 2024.18.0-1
-- sbc-inbound: 2024.18.0-1
-- vg-webapp: 2024.18.0-1
+- sbc-inbound: 2024.18.0-2
 
 ### Release Date
 
-2025-08-14 14:58:14 UTC
+2025-08-14 15:11:08 UTC
 
 ---
 
