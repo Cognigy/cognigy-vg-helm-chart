@@ -100,6 +100,8 @@ stages:
 
               rm -fr .git
               rm -fr CHANGELOG
+              rm -fr CHANGELOG-PREVIEW
+              rm -fr CHANGELOG-FEATURE
               cp -r ./ ../cognigy-vg-helm-chart
 
               cd ../cognigy-vg-helm-chart
