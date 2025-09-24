@@ -1146,6 +1146,7 @@ testCallManager:
   authEndpointProtocol: "https"
   authEndpointPath: "/api/v1/call/auth"
   cronjobTtlSecondsAfterFinished: 180
+  cronjobSchedule: "*/15 * * * *"
   cleanUpEndpoint: ""
   cleanUpEndpointProtocol: "https"
   cleanUpEndpointPath: "/api/v1/call/clean-up"
