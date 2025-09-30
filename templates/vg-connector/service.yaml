@@ -6,6 +6,7 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: vg-connector
+    owner-team: echo
 spec:
   selector:
     app: vg-connector

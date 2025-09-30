@@ -3,6 +3,8 @@ kind: ConfigMap
 metadata:
   name: homer
   namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
 data:
   bootstrapped: |
     bootstrapping

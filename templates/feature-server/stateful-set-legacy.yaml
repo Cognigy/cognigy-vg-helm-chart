@@ -1,52 +1,52 @@
-{{- if .Values.featureServer.useStatefulSet }}
+{{- if .Values.featureServerLegacy.enabled }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: feature-server
+  name: feature-server-legacy
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     owner-team: echo
 spec:
   selector:
     matchLabels:
-      app: feature-server
+      app: feature-server-legacy
   {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas)) }}
-  replicas: {{ .Values.featureServer.replicaCount }}
+  replicas: {{ .Values.featureServerLegacy.replicaCount }}
   {{- end }}
-  serviceName: feature-server-headless
+  serviceName: feature-server-headless-legacy
   template:
     metadata:
       labels:
-        app: feature-server
+        app: feature-server-legacy
       annotations:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
-      {{- if .Values.featureServer.terminationGracePeriodSeconds }}
-      terminationGracePeriodSeconds: {{ .Values.featureServer.terminationGracePeriodSeconds }}
+      {{- if .Values.featureServerLegacy.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.featureServerLegacy.terminationGracePeriodSeconds }}
       {{- end }}
-      {{- if .Values.featureServer.affinity }}
-      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.affinity "context" $) | nindent 8 }}
+      {{- if .Values.featureServerLegacy.affinity }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerLegacy.affinity "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.featureServer.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector))}}
+      {{- if or (.Values.featureServerLegacy.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector))}}
       nodeSelector:
-        {{- if .Values.featureServer.nodeSelector }}
-          {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.nodeSelector "context" $) | nindent 8 }}
+        {{- if .Values.featureServerLegacy.nodeSelector }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerLegacy.nodeSelector "context" $) | nindent 8 }}
         {{- end }}
         {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
-      {{- if .Values.featureServer.priorityClassName }}
-      priorityClassName: {{ .Values.featureServer.priorityClassName }}
+      {{- if .Values.featureServerLegacy.priorityClassName }}
+      priorityClassName: {{ .Values.featureServerLegacy.priorityClassName }}
       {{- end }}
-      {{- if .Values.featureServer.podSecurityContext }}
-      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.podSecurityContext "context" $) | nindent 8 }}
+      {{- if .Values.featureServerLegacy.podSecurityContext }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerLegacy.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.featureServer.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
+      {{- if or (.Values.featureServerLegacy.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
       tolerations: 
-        {{- if or (.Values.featureServer.tolerations) }}
-          {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.tolerations "context" $) | nindent 8 }}
+        {{- if or (.Values.featureServerLegacy.tolerations) }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerLegacy.tolerations "context" $) | nindent 8 }}
         {{- end }}
         {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
@@ -58,7 +58,7 @@ spec:
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
-              app: feature-server
+              app: feature-server-legacy
       restartPolicy: Always
       initContainers:
         - image: kanisterio/mysql-sidecar:0.40.0
@@ -132,7 +132,7 @@ spec:
             - --loglevel
             - {{ if .Values.drachtio.logLevel }}{{ .Values.drachtio.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
             - --sofia-loglevel
-            - {{ .Values.featureServer.sofiaLoglevel | quote }}
+            - {{ .Values.featureServerLegacy.sofiaLoglevel | quote }}
             - --prometheus-scrape-port
             - {{ .Values.drachtio.metricsPort | quote }}
           {{- else }}
@@ -145,7 +145,7 @@ spec:
             - --loglevel
             - {{ if .Values.drachtio.logLevel }}{{ .Values.drachtio.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
             - --sofia-loglevel
-            - {{ .Values.featureServer.sofiaLoglevel | quote }}
+            - {{ .Values.featureServerLegacy.sofiaLoglevel | quote }}
             - --prometheus-scrape-port
             - {{ .Values.drachtio.metricsPort | quote }}
           {{- end }}
@@ -208,12 +208,12 @@ spec:
             - configMapRef:
                 name: cognigy-env
         - name: feature-server
-          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.featureServer.image) }}
-          imagePullPolicy: {{ .Values.featureServer.imagePullPolicy }}
-          resources: {{- toYaml .Values.featureServer.resources | nindent 12 }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.featureServerLegacy.image) }}
+          imagePullPolicy: {{ .Values.featureServerLegacy.imagePullPolicy }}
+          resources: {{- toYaml .Values.featureServerLegacy.resources | nindent 12 }}
           ports:
             - name: feature-server
-              containerPort: {{ .Values.featureServer.ports.tcp }}
+              containerPort: {{ .Values.featureServerLegacy.ports.tcp }}
               protocol: TCP
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
@@ -221,6 +221,7 @@ spec:
             - name: health
               containerPort: {{ .Values.health.port }}
               protocol: TCP
+          {{- if not .Values.featureServerLegacy.forDevelopment }}
           livenessProbe:
             httpGet:
               path: /health/liveness
@@ -233,22 +234,29 @@ spec:
             httpGet:
               path: /health/startup
               port: {{ .Values.health.port }}
-          # lifecycle:
-          #   preStop:
-          #     exec:
-          #       command: ["/bin/sh", "-c", "/opt/app/bin/k8s-pre-stop-hook.js"]
+          {{- end }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "/opt/app/bin/k8s-pre-stop-hook.js"]
           volumeMounts:
             - mountPath: /tmp 
               name: temp-audio-volume
           env:
             - name: NODE_ENV
+              {{- if .Values.featureServerLegacy.forDevelopment }}
+              value: "development"
+              {{- else }}
               value: {{ .Values.global.nodeEnv | quote }}
+              {{- end }}
             - name: HTTP_PORT
-              value: {{ .Values.featureServer.ports.tcp | quote }}
+              value: {{ .Values.featureServerLegacy.ports.tcp | quote }}
             - name: K8S 
               value: {{ .Values.global.k8s | quote }}
             - name: K8S_SBC_SIP_SERVICE_NAME 
               value: {{ .Values.sbc.sip.headlessServiceName }}
+            - name: JAMBONES_OTEL_SERVICE_NAME
+              value: {{ .Values.featureServerLegacy.serviceName | quote }}
             - name: JAMBONZ_GATHER_EARLY_HINTS_MATCH
               value: "true"
             - name: JAMBONES_INJECT_CONTENT
@@ -270,7 +278,7 @@ spec:
                   name: voicegateway-call-recording-credentials
                   key: password
             - name: JAMBONES_FREESWITCH
-              value: {{ .Values.featureServer.freeswitchConnection | quote }}
+              value: {{ .Values.featureServerLegacy.freeswitchConnection | quote }}
             - name: ENABLE_METRICS
               value: {{ if .Values.stats.enabled }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: K8S_POD_NAME
@@ -299,9 +307,9 @@ spec:
                   name: voicegateway-drachtio-secret
                   key: secret
             - name: LOG_LEVEL
-              value: {{ if .Values.featureServer.logLevel }}{{ .Values.featureServer.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+              value: {{ if .Values.featureServerLegacy.logLevel }}{{ .Values.featureServerLegacy.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
             - name: JAMBONES_LOGLEVEL
-              value: {{ if .Values.featureServer.logLevel }}{{ .Values.featureServer.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+              value: {{ if .Values.featureServerLegacy.logLevel }}{{ .Values.featureServerLegacy.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
             - name: JAMBONES_MYSQL_HOST
               value: {{ .Values.mysql.host }}
             - name: JAMBONES_MYSQL_DATABASE
@@ -330,13 +338,13 @@ spec:
             - name: JAMBONES_OTEL_ENABLED
               value: "true"
             - name: VG_TTS_TRIM_SILENCE
-              value: {{ .Values.featureServer.trimTts | quote }}            
+              value: {{ .Values.featureServerLegacy.trimTts | quote }}            
             - name: OTEL_EXPORTER_JAEGER_AGENT_HOST
               value: jaeger
             - name: OTEL_TRACES_SAMPLER
               value: parentbased_traceidratio
             - name: OTEL_TRACES_SAMPLER_ARG
-              value: {{ default "1.0" .Values.featureServer.otelSampleRate | quote }}
+              value: {{ default "1.0" .Values.featureServerLegacy.otelSampleRate | quote }}
             - name: TRACING_ENABLED
               value: {{ .Values.tracing.enabled | quote }}
             - name: TRACING_BASE_URL_WITH_PROTOCOL
@@ -352,23 +360,23 @@ spec:
             - name: COGNIGY_AI_VERSION
               value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
             - name: SIGTERM_FORCE_CLOSE_TIMEOUT
-              value: {{ .Values.featureServer.sigtermForceCloseTimeoutMs | quote }}
+              value: {{ .Values.featureServerLegacy.sigtermForceCloseTimeoutMs | quote }}
             - name: VG_SENTRY_TRACING_ENABLED
               value: {{ .Values.tracing.callTracingEnabled | quote }}
             - name: NODE_OPTIONS
-              value: {{ .Values.featureServer.nodeOptions | quote }}
+              value: {{ .Values.featureServerLegacy.nodeOptions | quote }}
             - name: VG_EAGERLY_PRE_CACHE_AUDIO
-              value: {{ .Values.featureServer.preCacheAudio | quote }}
+              value: {{ .Values.featureServerLegacy.preCacheAudio | quote }}
             - name: JAMBONES_DISABLE_TTS_STREAMING
               value: {{ not .Values.global.enableTtsStreaming | quote }}
             - name: ANCHOR_MEDIA_ALWAYS
-              value: {{ .Values.featureServer.anchorMediaAlways | quote }}
+              value: {{ .Values.featureServerLegacy.anchorMediaAlways | quote }}
             - name: VG_DISABLE_DIAL_PAI_HEADER
-              value: {{ .Values.featureServer.disableDialPaiHeader | quote }}
+              value: {{ .Values.featureServerLegacy.disableDialPaiHeader | quote }}
             - name: PRE_CACHE_IGNORE_LIST
-              value: {{ .Values.featureServer.preCacheIgnoreList | quote }}
-            {{- if .Values.featureServer.extraEnvVars }}
-            {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.extraEnvVars "context" $) | nindent 12 }}
+              value: {{ .Values.featureServerLegacy.preCacheIgnoreList | quote }}
+            {{- if .Values.featureServerLegacy.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerLegacy.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
           envFrom:
             - configMapRef:

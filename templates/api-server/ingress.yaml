@@ -4,6 +4,8 @@ kind: Ingress
 metadata:
   name: api-server
   namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
   annotations:
   {{- if eq .Values.ingress.ingressClassName "traefik" }}
     {{- if .Values.tls.enabled }}

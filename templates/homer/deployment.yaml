@@ -6,6 +6,7 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: homer
+    owner-team: echo
 spec:
   replicas: {{ .Values.homer.replicaCount }}
   selector:

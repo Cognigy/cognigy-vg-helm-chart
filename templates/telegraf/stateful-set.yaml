@@ -5,6 +5,7 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: telegraf
+    owner-team: echo
 spec:
   serviceName: telegraf
   replicas: {{ .Values.telegraf.replicaCount }}

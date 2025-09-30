@@ -9,6 +9,7 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: sbc-rtp
+    owner-team: echo
 spec:
   selector:
     app: sbc-rtp

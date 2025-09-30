@@ -6,6 +6,7 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: test-call-manager
+    owner-team: echo
 spec:
   selector:
     app: test-call-manager

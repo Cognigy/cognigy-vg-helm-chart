@@ -3,6 +3,8 @@ kind: ConfigMap
 metadata:
   namespace: {{ $.Release.Namespace | quote }}
   name: heplify-server
+  labels:
+    owner-team: echo
 data:
   ## https://github.com/sipcapture/homer/wiki/HEPLIFY-SERVER-Settings
   heplify-server.toml: |

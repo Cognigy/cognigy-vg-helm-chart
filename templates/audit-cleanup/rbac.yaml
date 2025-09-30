@@ -1,0 +1,53 @@
+{{- if .Values.auditLogging.enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: audit-cleanup-admin-extractor
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: audit-cleanup
+    component: extractor
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: audit-cleanup-admin-extractor
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: audit-cleanup
+    component: extractor
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "create", "update", "patch"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: audit-cleanup-admin-extractor
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: audit-cleanup
+    component: extractor
+subjects:
+- kind: ServiceAccount
+  name: audit-cleanup-admin-extractor
+  namespace: {{ $.Release.Namespace | quote }}
+roleRef:
+  kind: Role
+  name: audit-cleanup-admin-extractor
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

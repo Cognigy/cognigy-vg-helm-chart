@@ -4,8 +4,10 @@
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
-  name: prom-cognigy-monitor-cognigy-vg-feature-server
+  name: prom-cognigy-monitor-cognigy-vg-feature-server-all
   namespace: {{ .namespace }}
+  labels:
+    owner-team: echo
 spec:
   namespaceSelector:
     matchNames:
@@ -16,7 +18,12 @@ spec:
     - path: /metrics
       port: fs-drachtio
   selector:
-    matchLabels:
-      app: feature-server
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - feature-server
+          - feature-server-nightly
+          - feature-server-legacy
 {{- end }}
 {{- end }}

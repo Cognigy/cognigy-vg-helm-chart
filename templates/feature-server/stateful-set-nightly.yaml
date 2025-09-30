@@ -4,6 +4,8 @@ kind: StatefulSet
 metadata:
   name: feature-server-nightly
   namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
 spec:
   selector:
     matchLabels:
@@ -151,7 +153,11 @@ spec:
             - configMapRef:
                 name: cognigy-env
         - name: freeswitch
+          {{- if and (.Values.freeswitchNightly) (.Values.freeswitchNightly.image) }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.freeswitchNightly.image) }}
+          {{- else }}
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.freeswitch.image) }}
+          {{- end }}
           imagePullPolicy: {{ .Values.freeswitch.imagePullPolicy }}
           resources: {{- toYaml .Values.freeswitch.resources | nindent 12 }}
           ports:

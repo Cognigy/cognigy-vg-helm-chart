@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: webapp
   namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
 spec:
   selector:
     matchLabels:
@@ -57,10 +59,10 @@ spec:
               value: {{ .Values.tracing.eventsSampleRate | quote }}
             - name: ENVIRONMENT
               value: {{ .Values.tracing.environment | quote }}
-            - name: COGNIGY_AI_VERSION
-              value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
             - name: COGNIGY_VG_VERSION
-              value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
+              value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9]+)?" .Chart.Version | quote }}
+            - name: COGNIGY_DISPLAY_VERSION
+              value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.AppVersion | quote }}
             - name: COGNIGY_URL
               value: {{ .Values.webapp.cognigyUrl | quote }}
             - name: ENABLE_COGNIGY_LOGIN

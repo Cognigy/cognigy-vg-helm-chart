@@ -1,0 +1,109 @@
+{{- if .Values.auditLogging.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: audit-logs-cleanup
+  namespace: {{ $.Release.Namespace | quote }}
+spec:
+  schedule: {{ .Values.auditLogging.cleanup.schedule | quote }}
+  startingDeadlineSeconds: 300
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: {{ .Values.auditLogging.cleanup.ttlSecondsAfterFinished | default 180 }}
+      template:
+        metadata:
+          labels:
+            app: audit-logs-cleanup
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: audit-cleanup
+            image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.jobs.image) }}
+            imagePullPolicy: IfNotPresent
+            env:
+              - name: API_BASE_URL
+                value: {{ printf "%s://%s" .Values.api.protocol .Values.ingress.api.host | quote }}
+              - name: LOGIN_URL
+                value: {{ printf "%s://%s/v1/login" .Values.api.protocol .Values.ingress.api.host | quote }}
+              - name: CLEANUP_URL
+                value: {{ printf "%s://%s/v1/AuditLogs/cleanup" .Values.api.protocol .Values.ingress.api.host | quote }}
+              - name: ADMIN_USERNAME
+                valueFrom:
+                  secretKeyRef:
+                    name: vg-api-admin-creds
+                    key: username
+              - name: ADMIN_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: vg-api-admin-creds
+                    key: password
+            command:
+              - /bin/sh
+              - -c
+              - |
+                echo "🚀 Starting audit log cleanup..."
+                echo "🌐 Login URL: $LOGIN_URL"
+                echo "🧹 Cleanup URL: $CLEANUP_URL"
+                echo "👤 Username: $ADMIN_USERNAME"
+                echo "🕐 Timestamp: $(date)"
+                
+                # Step 1: Login to get JWT token
+                echo "🔑 Logging in to get JWT token..."
+                login_response=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "$LOGIN_URL" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"username\":\"$ADMIN_USERNAME\",\"password\":\"$ADMIN_PASSWORD\"}")
+                
+                login_http_code=$(echo "$login_response" | grep "HTTP_STATUS:" | cut -d: -f2)
+                login_body=$(echo "$login_response" | sed '/HTTP_STATUS:/d')
+                
+                echo "🔍 Login HTTP Status: $login_http_code"
+                
+                if [ "$login_http_code" != "200" ]; then
+                  echo "❌ Login failed with status: $login_http_code"
+                  echo "📋 Login response: $login_body"
+                  exit 1
+                fi
+                
+                # Extract JWT token from response
+                JWT_TOKEN=$(echo "$login_body" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+                
+                if [ -z "$JWT_TOKEN" ]; then
+                  echo "❌ Failed to extract JWT token from login response"
+                  echo "📋 Login response: $login_body"
+                  exit 1
+                fi
+                
+                echo "✅ Successfully obtained JWT token: ${JWT_TOKEN:0:20}..."
+                
+                # Step 2: Use JWT token for cleanup request
+                echo "🧹 Sending cleanup request with JWT token..."
+                cleanup_response=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X DELETE "$CLEANUP_URL" \
+                  -H "Authorization: Bearer $JWT_TOKEN" \
+                  -H "Content-Type: application/json")
+                
+                # Parse cleanup response
+                http_code=$(echo "$cleanup_response" | grep "HTTP_STATUS:" | cut -d: -f2)
+                body=$(echo "$cleanup_response" | sed '/HTTP_STATUS:/d')
+                
+                echo "🔍 Cleanup HTTP Status: $http_code"
+                echo "📋 Response Body: $body"
+                
+                if [ "$http_code" = "200" ]; then
+                  echo "✅ Audit log cleanup completed successfully"
+                  deleted_count=$(echo "$body" | grep -o '"deleted_count":[0-9]*' | cut -d: -f2 2>/dev/null || echo "unknown")
+                  echo "📊 Deleted records: $deleted_count"
+                  
+                  message=$(echo "$body" | grep -o '"message":"[^"]*"' | cut -d'"' -f4 2>/dev/null || echo "")
+                  [ -n "$message" ] && echo "💬 Message: $message"
+                  
+                  exit 0
+                else
+                  echo "❌ Audit log cleanup failed with status: $http_code"
+                  echo "📋 Error details: $body"
+                  exit 1
+                fi
+{{- end }}

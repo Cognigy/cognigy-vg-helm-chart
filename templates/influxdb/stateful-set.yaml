@@ -5,6 +5,7 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: influxdb
+    owner-team: echo
 spec:
   serviceName: influxdb
   replicas: {{ .Values.influxdb.replicaCount }}

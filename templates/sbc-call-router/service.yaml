@@ -5,6 +5,7 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: sbc-call-router
+    owner-team: echo
 spec:
   selector:
     app: sbc-call-router

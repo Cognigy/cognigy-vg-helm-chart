@@ -1,8 +1,10 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: db-create
+  name: db-create-{{ .Release.Revision }}
   namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
   annotations:
     {{- if .Values.dbCreate.hookEnabled }}
     # This is what defines this resource as a hook. Without these lines, the
