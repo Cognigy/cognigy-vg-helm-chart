@@ -19,6 +19,7 @@ spec:
           labels:
             app: audit-logs-cleanup
         spec:
+          {{- include "image.pullSecrets" $ | nindent 10 }}
           restartPolicy: Never
           containers:
           - name: audit-cleanup
@@ -106,4 +107,4 @@ spec:
                   echo "📋 Error details: $body"
                   exit 1
                 fi
-{{- end }}
+{{ end }}

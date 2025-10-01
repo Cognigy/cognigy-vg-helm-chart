@@ -376,7 +376,7 @@ dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:2025.20.0
+  image: cognigy.azurecr.io/db-create:2025.21.0-1
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -738,9 +738,9 @@ cognigyLogin:
 # VoiceGateway Components #
 ###########################
 jobs:
-  image: cognigy.azurecr.io/vg-alpine-curl:3.20
+  image: cognigy.azurecr.io/vg-alpine-k8s-tools:3.22
 api:
-  image: cognigy.azurecr.io/vg-api-server:2025.20.0
+  image: cognigy.azurecr.io/vg-api-server:2025.21.0-1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
