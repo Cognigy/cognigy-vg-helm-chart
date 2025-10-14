@@ -1,8 +1,8 @@
 apiVersion: v2
 name: voicegateway
 description: A Helm Chart for Cognigy VoiceGateway
-version: "2025.20.1"
-appVersion: "2025.20.1"
+version: "2025.21.0"
+appVersion: "2025.21.0"
 kubeVersion: "<v1.34.0-0"
 home: https://cognigy.com
 icon: https://www.cognigy.com/hubfs/Cognigy.svg
