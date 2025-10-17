@@ -6,7 +6,7 @@ metadata:
   labels:
     owner-team: echo
 spec:
-  schedule: "*/15 * * * *"
+  schedule: {{ quote .Values.testCallManager.cronjobSchedule }}
   jobTemplate:
     spec:
       backoffLimit: 0
