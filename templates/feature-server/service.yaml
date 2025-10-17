@@ -9,6 +9,7 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: feature-server
+    owner-team: echo
 spec:
   selector:
     app: feature-server

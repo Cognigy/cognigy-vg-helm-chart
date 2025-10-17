@@ -3,6 +3,8 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: update-api-ban-list
+  labels:
+    owner-team: echo
 spec:
   schedule: {{ .Values.apiBan.cronjobSchedule }}
   jobTemplate:

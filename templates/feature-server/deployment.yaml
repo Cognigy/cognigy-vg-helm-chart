@@ -4,6 +4,8 @@ kind: Deployment
 metadata:
   name: feature-server
   namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
 spec:
   selector:
     matchLabels:

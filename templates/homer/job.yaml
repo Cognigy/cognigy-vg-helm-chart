@@ -10,6 +10,8 @@ metadata:
     "helm.sh/hook-weight": "0"
     "helm.sh/hook-delete-policy": {{ .Values.homer.hookDeletePolicy | quote }}
     {{- end }}
+  labels:
+    owner-team: echo
 spec:
   backoffLimit: 5
   ttlSecondsAfterFinished: 86400 # 1 day

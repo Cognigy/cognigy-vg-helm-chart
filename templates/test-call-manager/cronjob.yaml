@@ -3,6 +3,8 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: clean-up-test-call-manager
+  labels:
+    owner-team: echo
 spec:
   schedule: {{ quote .Values.testCallManager.cronjobSchedule }}
   jobTemplate:

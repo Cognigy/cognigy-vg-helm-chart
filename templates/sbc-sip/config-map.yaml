@@ -3,6 +3,8 @@ kind: ConfigMap
 metadata:
   name: sbc-sip
   namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
 # check we can improve the content, secret and usage
 data:
   drachtio.conf.xml: |

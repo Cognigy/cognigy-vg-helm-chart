@@ -376,11 +376,15 @@ dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:2025.16.0-1
+  image: cognigy.azurecr.io/db-create:2025.21.0
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
-  migrationTarget: 'latest'
+  migrationTarget: "latest"
+additionalDbParameters:
+  postgresql:
+    host: postgres
+    port: 5432
 influxdb:
   image: cognigy.azurecr.io/vg-influx:1.8.10-alpine
   imagePullPolicy: IfNotPresent
@@ -463,9 +467,11 @@ mysql:
     name: jambones
   host: mysql
   port: 3306
-## Bitnami Chart, image info: bitnami/postgresql:14.12.0-debian-12-r15
+## Bitnami Chart, image info: bitnami/postgresql:14.18.0-debian-12-r0
 ## Used only internally by heplify-server and homer to store sip captures
 postgresql:
+  ## If enabled: false, helm chart will not deploy PostgreSQL.
+  ## Configuration values (such as auth.postgresUsername and auth.postgresPassword) will still be referenced by dependent services like heplify-server and homer.
   enabled: true
   replicaCount: 1
   global:
@@ -479,8 +485,8 @@ postgresql:
     database: homer_config
   image:
     registry: cognigy.azurecr.io
-    repository: postgres
-    tag: 14.12.0-debian-12-r15
+    repository: vg-postgres
+    tag: 14.18.0-debian-12-r0
   primary:
     priorityClassName: ""
     persistence:
@@ -496,8 +502,8 @@ postgresql:
     enabled: true
     image:
       registry: cognigy.azurecr.io
-      repository: postgres-exporter
-      tag: 0.15.0-debian-12-r43
+      repository: vg-postgres-exporter
+      tag: 0.17.1-debian-12-r16
     resources:
       requests:
         cpu: "0.200"
@@ -507,8 +513,6 @@ postgresql:
         memory: 200Mi
     serviceMonitor:
       enabled: false
-  host: postgres
-  port: 5432
 redis:
   image: cognigy.azurecr.io/redis:7.4.0-debian-12-r4
   imagePullPolicy: IfNotPresent
@@ -734,9 +738,9 @@ cognigyLogin:
 # VoiceGateway Components #
 ###########################
 jobs:
-  image: cognigy.azurecr.io/vg-alpine-curl:3.20
+  image: cognigy.azurecr.io/vg-alpine-k8s-tools:3.22
 api:
-  image: cognigy.azurecr.io/vg-api-server:2025.16.0-1
+  image: cognigy.azurecr.io/vg-api-server:2025.21.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -818,9 +822,8 @@ drachtio:
     limits:
       cpu: "0.5"
       memory: 500Mi
-
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2025.16.0
+  image: cognigy.azurecr.io/vg-feature-server:2025.21.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -868,6 +871,13 @@ featureServer:
   disableDialPaiHeader: false
   ## list of comma-separated vendors that should not be pre-cached. Valid values are aws, deepgram, elevenlabs, google, ibm, microsoft, nuance, wellsaid, whisper, playh
   preCacheIgnoreList: "deepgram"
+  # Canary deployment configuration for A/B testing between main and nightly feature servers
+  canary:
+    # Enable canary deployment with traffic splitting
+    enabled: false
+    # Percentage of traffic to route to nightly feature server (0-100)
+    # Example: 10 means 10% traffic to nightly, 90% traffic to main
+    trafficPercentageToNightly: 0
   extraEnvVars: []
   ports:
     tcp: 3000
@@ -879,10 +889,9 @@ featureServer:
     limits:
       cpu: "1"
       memory: 500Mi
-
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2025.16.0
+  image: cognigy.azurecr.io/vg-feature-server:2025.20.0-nightly-11
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -941,7 +950,53 @@ featureServerNightly:
     limits:
       cpu: "1"
       memory: 500Mi
-
+## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
+featureServerLegacy:
+  enabled: false
+  image: cognigy.azurecr.io/vg-feature-server:2025.20.0
+  imagePullPolicy: Always
+  replicaCount: 2
+  logLevel:
+  sofiaLoglevel: "3"
+  trimTts: true
+  serviceName: feature-server-legacy
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                    - feature-server-legacy
+            topologyKey: kubernetes.io/hostname
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
+  sigtermForceCloseTimeoutMs: ""
+  terminationGracePeriodSeconds: 300
+  useStatefulSet: true
+  headlessServiceName: feature-server-headless-legacy
+  freeswitchConnection: "127.0.0.1:8021:JambonzR0ck$"
+  nodeOptions: "--max-old-space-size=450"
+  preCacheAudio: false
+  anchorMediaAlways: false
+  disableDialPaiHeader: false
+  preCacheIgnoreList: "deepgram"
+  extraEnvVars: []
+  ports:
+    tcp: 3000
+    udp: 5060
+  resources:
+    requests:
+      cpu: "1"
+      memory: 500Mi
+    limits:
+      cpu: "1"
+      memory: 500Mi
 freeswitch:
   image: cognigy.azurecr.io/vg-freeswitch-mrf:0.9.3
   imagePullPolicy: IfNotPresent
@@ -976,6 +1031,11 @@ freeswitch:
     limits:
       cpu: "2.5"
       memory: 3Gi
+freeswitchNightly:
+## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
+## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
+## @see featureServerNightly
+#image: cognigy.azurecr.io/vg-freeswitch-mrf:0.9.3
 rtpEngine:
   image: cognigy.azurecr.io/vg-rtpengine:13.1.1.5
   imagePullPolicy: IfNotPresent
@@ -994,7 +1054,7 @@ rtpEngine:
       cpu: "3"
       memory: 1Gi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:2025.16.0
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:2025.21.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1009,7 +1069,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:2025.16.0
+  image: cognigy.azurecr.io/sbc-call-router:2025.21.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1040,7 +1100,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:2025.16.0-1
+  image: cognigy.azurecr.io/sbc-inbound:2025.21.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1080,7 +1140,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:2025.16.0
+  image: cognigy.azurecr.io/sbc-outbound:2025.21.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1118,7 +1178,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:2025.16.0
+  image: cognigy.azurecr.io/sbc-sip-sidecar:2025.21.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1133,7 +1193,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-test-call-manager:2025.16.0
+  image: cognigy.azurecr.io/vg-test-call-manager:2025.21.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1172,7 +1232,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: false
-  image: cognigy.azurecr.io/vg-connector:2025.16.0
+  image: cognigy.azurecr.io/vg-connector:2025.21.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1195,7 +1255,7 @@ vgConnector:
       cpu: "0.100"
       memory: 150Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2025.16.0
+  image: cognigy.azurecr.io/vg-webapp:2025.21.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1575,6 +1635,24 @@ hpa:
               type: Utilization
               averageUtilization: 70
       behavior: {}
+#######################
+# Audit Logging #
+#######################
+auditLogging:
+  enabled: true #default is true
+  #######################
+  # Audit Logs Cleanup #
+  #######################
+  cleanup:
+    ## Cron schedule for audit logs cleanup (daily at 2 AM)
+    schedule: "0 2 * * *"
+    ## Time in seconds after finished job to keep for debugging
+    ttlSecondsAfterFinished: 180
+    ## Credentials extractor configuration
+    extractorImage: "bitnami/kubectl:latest"
+    extractorMaxRetries: 2
+    extractorRetryInterval: 20
+    ttlDays: 30 #default is 30
 ###########
 # VMD #
 ###########

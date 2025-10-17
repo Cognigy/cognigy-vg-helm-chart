@@ -5,6 +5,7 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: sbc-outbound
+    owner-team: echo
 spec:
   selector:
     matchLabels:

@@ -6,6 +6,7 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: sbc-rtp
+    owner-team: echo
   annotations:
     "cluster-autoscaler.kubernetes.io/safe-to-evict": "true"
 spec:

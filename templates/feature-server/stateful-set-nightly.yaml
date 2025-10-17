@@ -4,6 +4,8 @@ kind: StatefulSet
 metadata:
   name: feature-server-nightly
   namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
 spec:
   selector:
     matchLabels:
@@ -151,7 +153,11 @@ spec:
             - configMapRef:
                 name: cognigy-env
         - name: freeswitch
+          {{- if and (.Values.freeswitchNightly) (.Values.freeswitchNightly.image) }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.freeswitchNightly.image) }}
+          {{- else }}
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.freeswitch.image) }}
+          {{- end }}
           imagePullPolicy: {{ .Values.freeswitch.imagePullPolicy }}
           resources: {{- toYaml .Values.freeswitch.resources | nindent 12 }}
           ports:
@@ -219,6 +225,7 @@ spec:
             - name: health
               containerPort: {{ .Values.health.port }}
               protocol: TCP
+          {{- if not .Values.featureServerNightly.forDevelopment }}
           livenessProbe:
             httpGet:
               path: /health/liveness
@@ -231,6 +238,7 @@ spec:
             httpGet:
               path: /health/startup
               port: {{ .Values.health.port }}
+          {{- end }}
           lifecycle:
             preStop:
               exec:
@@ -240,7 +248,11 @@ spec:
               name: temp-audio-volume
           env:
             - name: NODE_ENV
+              {{- if .Values.featureServerNightly.forDevelopment }}
+              value: "development"
+              {{- else }}
               value: {{ .Values.global.nodeEnv | quote }}
+              {{- end }}
             - name: HTTP_PORT
               value: {{ .Values.featureServerNightly.ports.tcp | quote }}
             - name: K8S 

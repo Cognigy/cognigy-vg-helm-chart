@@ -6,6 +6,7 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: redis
+    owner-team: echo
 spec:
   serviceName: redis
   replicas: {{ .Values.redis.replicaCount }}

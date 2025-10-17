@@ -3,6 +3,7 @@ kind: Service
 metadata:
   labels:
     app: telegraf
+    owner-team: echo
   name: telegraf
   namespace: {{ $.Release.Namespace | quote }}
 spec:

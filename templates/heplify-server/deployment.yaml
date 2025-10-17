@@ -5,6 +5,7 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: heplify-server
+    owner-team: echo
 spec:
   serviceName: heplify-server
   replicas: {{ .Values.heplifyServer.replicaCount }}

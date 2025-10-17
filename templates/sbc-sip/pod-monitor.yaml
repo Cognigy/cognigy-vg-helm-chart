@@ -6,6 +6,8 @@ kind: PodMonitor
 metadata:
   name: prom-cognigy-monitor-cognigy-vg-sbc-sip
   namespace: {{ .namespace }}
+  labels:
+    owner-team: echo
 spec:
   namespaceSelector:
     matchNames:

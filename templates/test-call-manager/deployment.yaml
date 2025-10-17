@@ -4,6 +4,8 @@ kind: Deployment
 metadata:
   name: test-call-manager
   namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
 spec:
   selector:
     matchLabels:

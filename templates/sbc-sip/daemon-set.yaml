@@ -6,6 +6,7 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: sbc-sip
+    owner-team: echo
 spec:
   selector:
     matchLabels:

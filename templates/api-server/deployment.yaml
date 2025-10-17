@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: api-server
   namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
 spec:
   selector:
     matchLabels:
@@ -98,12 +100,16 @@ spec:
               value: {{ .Values.api.port | quote }}
             - name: K8S
               value: {{ .Values.global.k8s | quote }}
-            - name: K8S_FEATURE_SERVER_SERVICE_NAME 
+            - name: K8S_FEATURE_SERVER_SERVICE_NAME
               {{- if .Values.featureServer.useStatefulSet }}
               value: {{ .Values.featureServer.headlessServiceName | quote }}
               {{- else }}
               value: {{ .Values.featureServer.serviceName | quote }}
               {{- end }}
+            - name: K8S_FEATURE_SERVER_CANARY_ENABLED
+              value: {{ .Values.featureServer.canary.enabled | quote }}
+            - name: K8S_FEATURE_SERVER_CANARY_PERCENTAGE
+              value: {{ .Values.featureServer.canary.trafficPercentageToNightly | quote }}
             - name: HOMER_BASE_URL
               value: {{ .Values.homer.urlPrefixServiceConnection }}{{ .Values.homer.serviceName }}
             - name: HOMER_USERNAME
@@ -214,6 +220,10 @@ spec:
             {{- if .Values.api.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.api.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
+            - name: ENABLE_AUDIT_LOGGING
+              value: {{ .Values.auditLogging.enabled | quote }}
+            - name: AUDIT_LOGGING_TTL_DAYS
+              value: {{ .Values.auditLogging.cleanup.ttlDays | quote }}
           envFrom:
             - configMapRef:
                 name: cognigy-env

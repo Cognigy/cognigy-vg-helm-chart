@@ -5,6 +5,7 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: webapp
+    owner-team: echo
 spec:
   selector:
     app: webapp

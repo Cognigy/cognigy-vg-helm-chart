@@ -11,7 +11,9 @@ trigger:
   # only run when we create new tags
   tags:
     include:
-      - "*"
+      - "v[0-9][0-9][0-9][0-9].*.*"  # Only final releases
+    exclude:
+      - "v[0-9][0-9][0-9][0-9].*.*-*"  # Exclude preview tags
 
 resources:
   repositories:
@@ -100,6 +102,8 @@ stages:
 
               rm -fr .git
               rm -fr CHANGELOG
+              rm -fr CHANGELOG-PREVIEW
+              rm -fr CHANGELOG-FEATURE
               cp -r ./ ../cognigy-vg-helm-chart
 
               cd ../cognigy-vg-helm-chart

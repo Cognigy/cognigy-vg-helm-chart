@@ -3,6 +3,8 @@ kind: ConfigMap
 metadata:
   name: homer
   namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
 data:
   bootstrapped: |
     bootstrapping
@@ -17,7 +19,7 @@ data:
       },
       "database_config": {
         "help": "Settings for PostgreSQL Database (settings)",
-        "host": "postgres",
+        "host": {{ .Values.additionalDbParameters.postgresql.host | quote }},
         "keepalive": true,
         "name": "homer_config",
         "node": "LocalConfig",
@@ -27,7 +29,7 @@ data:
       "database_data": {
         "localnode": {
           "help": "Settings for PostgreSQL Database (data)",
-          "host": "postgres",
+          "host": {{ .Values.additionalDbParameters.postgresql.host | quote }},
           "keepalive": true,
           "name": "homer_data",
           "node": "LocalNode",

@@ -10,6 +10,7 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: feature-server-nightly
+    owner-team: echo
 spec:
   selector:
     app: feature-server-nightly

@@ -1,0 +1,34 @@
+{{- if .Values.featureServerLegacy.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  {{- if .Values.featureServerLegacy.useStatefulSet }}
+  name: {{ .Values.featureServerLegacy.headlessServiceName | quote }}
+  {{- else}}
+  name: {{ .Values.featureServerLegacy.serviceName | quote }}
+  {{- end }}
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: feature-server-legacy
+    owner-team: echo
+spec:
+  selector:
+    app: feature-server-legacy
+  {{- if .Values.featureServerLegacy.useStatefulSet }}
+  type: ClusterIP
+  clusterIP: None
+  {{- end }}
+  ports:
+    - name: sip
+      port: {{ .Values.featureServerLegacy.ports.udp }}
+      targetPort: {{ .Values.featureServerLegacy.ports.udp }}
+      {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
+      protocol: TCP
+      {{- else }}
+      protocol: UDP
+      {{- end }}
+    - name: http
+      port: {{ .Values.featureServerLegacy.ports.tcp }}
+      targetPort: {{ .Values.featureServerLegacy.ports.tcp }}
+      protocol: TCP
+{{- end }}
