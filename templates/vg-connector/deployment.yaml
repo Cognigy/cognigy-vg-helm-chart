@@ -84,6 +84,12 @@ spec:
                 secretKeyRef:
                   name: voicegateway-jwt
                   key: jwt
+            - name: CONNECTOR_BASE_URL
+              value: {{ .Values.ingress.vgConnector.host | quote }}
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             {{- if hasKey .Values.vgConnector "modules" }}
             {{- if hasKey .Values.vgConnector.modules "webrtc" }}
             - name: FEATURE_ENABLE_WEBRTC
@@ -93,13 +99,6 @@ spec:
             - name: FEATURE_ENABLE_MSTEAMS
               value: {{ .Values.vgConnector.modules.msTeams.enabled | quote }}
             {{- if eq (.Values.vgConnector.modules.msTeams.enabled | toString) "true" }}
-            - name: ACS_CALLBACK_URI
-              value: {{ .Values.vgConnector.modules.msTeams.acsCallbackUri | quote }}
-            - name: ACS_CONNECTION_STRING
-              valueFrom:
-                secretKeyRef:
-                  name: vg-msteams-connection-string
-                  key: connection-string
             - name: FEATURE_MSTEAMS_RECORD_AUDIO
               value: {{ default "false" .Values.vgConnector.modules.msTeams.recordAudio | quote }}
             {{- end }}
