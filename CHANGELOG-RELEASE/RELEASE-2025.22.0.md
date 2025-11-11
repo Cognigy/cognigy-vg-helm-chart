@@ -74,3 +74,36 @@ Fix SRTP Base64 padding for Zoom compatibility
 
 ---
 
+
+### Preview Release 2025.22.0-5
+
+**Release Date**: 2025-10-20 14:14:33 UTC
+**Services Updated**: vg-api-server, vg-webapp
+**Changelog URL**: https://cognigy.atlassian.net/wiki/spaces/Engineering/pages/1720647717/2025.22.0-5?atlOrigin=eyJpIjoiNDY0NjQ4NjUzZTkxNDliMzlhMGMyNjkwOTM3MzQ0YTciLCJwIjoiYyJ9
+
+#### Changes
+Filter recent calls by application
+
+#### Released Services
+
+- vg-api-server: 2025.22.0-5
+- vg-webapp: 2025.22.0-5
+
+---
+
+
+### Preview Release 2025.22.0-6
+
+**Release Date**: 2025-10-20 14:48:29 UTC
+**Services Updated**: vg-feature-server
+**Changelog URL**: https://cognigy.atlassian.net/wiki/spaces/Engineering/pages/1720254491/2025.22.0-6
+
+#### Changes
+Set headers for failover transfers
+
+#### Released Services
+
+- vg-feature-server: 2025.22.0-6
+
+---
+
