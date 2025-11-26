@@ -26,3 +26,19 @@ Fix Memory Leaks
 
 ---
 
+
+### Preview Release 2025.23.0-2
+
+**Release Date**: 2025-11-04 13:58:33 UTC
+**Services Updated**: vg-feature-server
+**Changelog URL**: https://cognigy.atlassian.net/wiki/spaces/Engineering/pages/1763377154/FeatureServer+Restarts+for+Allianz
+
+#### Changes
+Improve Websocket implementation
+
+#### Released Services
+
+- vg-feature-server: 2025.23.0-2
+
+---
+
