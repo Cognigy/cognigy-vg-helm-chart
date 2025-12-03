@@ -1,44 +1,43 @@
-# Cognigy.VG Release 2025.23.0
+# Cognigy.VG Release 2025.23
+
+## Cognigy.VG Release 2025.23.1
 
 **Release Type**: Consolidated Release (includes all preview releases)
 **Sprint Version**: 2025.23.0
 **Status**: In Development (Preview releases available)
 
-## Overview
+### Overview
+
+This release introduces a patch to fix requent restarts when initial connection
+to Cognigy.AI took more attempts than expected.
+
+### Released Services
+
+- vg-feature-server: 2025.23.1
+
+##  Cognigy.VG Release 2025.23.0
+
+**Release Type**: Consolidated Release (includes all preview releases)
+**Sprint Version**: 2025.23.0
+**Status**: In Development (Preview releases available)
+
+### Overview
 
 This release consolidates all features and fixes from the following preview releases for sprint 2025.23.0.
 
-## Preview Releases
+### Preview Releases
 
-
-### Preview Release 2025.23.0-1
+#### Preview Release 2025.23.0-1
 
 **Release Date**: 2025-10-22 13:39:56 UTC
 **Services Updated**: sbc-inbound
 **Changelog URL**: https://cognigy.atlassian.net/wiki/spaces/Engineering/pages/1726840833/2025.23.0-1
 
-#### Changes
+##### Changes
 Fix Memory Leaks
 
-#### Released Services
+##### Released Services
 
 - sbc-inbound: 2025.23.0-1
 
 ---
-
-
-### Preview Release 2025.23.0-2
-
-**Release Date**: 2025-11-04 13:58:33 UTC
-**Services Updated**: vg-feature-server
-**Changelog URL**: https://cognigy.atlassian.net/wiki/spaces/Engineering/pages/1763377154/FeatureServer+Restarts+for+Allianz
-
-#### Changes
-Improve Websocket implementation
-
-#### Released Services
-
-- vg-feature-server: 2025.23.0-2
-
----
-
