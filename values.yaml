@@ -378,7 +378,7 @@ dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:2025.23.0
+  image: cognigy.azurecr.io/db-create:2025.24.0
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -742,7 +742,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-alpine-k8s-tools:3.22
 api:
-  image: cognigy.azurecr.io/vg-api-server:2025.23.0
+  image: cognigy.azurecr.io/vg-api-server:2025.24.2
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -776,6 +776,26 @@ api:
   rateLimit: 1000
   enablePrepareCognigyData: true
   protocol: https
+  ## VG Team configuration
+  ## This section configures team member emails and email notification settings
+  ## For Cognigy-managed environments, override existingSecret to "vg-team-credentials"
+  vgTeam:
+    enabled: false
+    existingSecret: "vg-team-credentials"
+    ## Team member configuration
+    teamMembers:
+      ## Secret key for team member emails (comma-separated list)
+      emailsKey: "VG_TEAM_MEMBER_EMAILS"
+      ## Secret key for Cognigy managed environment flag
+      managedEnvKey: "COGNIGY_MANAGED_ENV"
+    ## Email notification SMTP configuration
+    emailNotification:
+      smtpHost: "email-smtp.eu-central-1.amazonaws.com"
+      smtpPort: "587"
+      smtpFrom: "noreply@smtp.cognigy.ai"
+      ## Secret keys for SMTP credentials
+      smtpUsernameKey: "SMTP_USERNAME"
+      smtpPasswordKey: "SMTP_PASSWORD"
   extraEnvVars: []
   resources:
     requests:
@@ -825,7 +845,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2025.23.1
+  image: cognigy.azurecr.io/vg-feature-server:2025.24.2
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -893,7 +913,7 @@ featureServer:
       memory: 500Mi
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2025.22.0-nightly-10
+  image: cognigy.azurecr.io/vg-feature-server:2025.24.0-nightly-3
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -955,7 +975,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2025.22.0
+  image: cognigy.azurecr.io/vg-feature-server:2025.24.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
@@ -1037,9 +1057,9 @@ freeswitchNightly:
 ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
 ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
 ## @see featureServerNightly
-#image: cognigy.azurecr.io/vg-freeswitch-mrf:0.9.3
+#image: cognigy.azurecr.io/vg-freeswitch-mrf:2024.24.0
 rtpEngine:
-  image: cognigy.azurecr.io/vg-rtpengine:13.1.1.5
+  image: cognigy.azurecr.io/vg-rtpengine:0.2.0
   imagePullPolicy: IfNotPresent
   # During runtime, the log level can be decreased by sending the signal SIGURS1 to the daemon and can be increased with the signal SIGUSR2
   logLevel: 3
@@ -1056,7 +1076,7 @@ rtpEngine:
       cpu: "3"
       memory: 1Gi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:2025.23.0
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:2025.24.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1071,7 +1091,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:2025.23.0
+  image: cognigy.azurecr.io/sbc-call-router:2025.24.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1102,7 +1122,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:2025.23.0
+  image: cognigy.azurecr.io/sbc-inbound:2025.24.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1142,7 +1162,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:2025.23.0
+  image: cognigy.azurecr.io/sbc-outbound:2025.24.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1180,7 +1200,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:2025.23.0
+  image: cognigy.azurecr.io/sbc-sip-sidecar:2025.24.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1195,7 +1215,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-test-call-manager:2025.23.0
+  image: cognigy.azurecr.io/vg-test-call-manager:2025.24.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1234,7 +1254,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: false
-  image: cognigy.azurecr.io/vg-connector:2025.23.0
+  image: cognigy.azurecr.io/vg-connector:2025.24.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1257,7 +1277,7 @@ vgConnector:
       cpu: "0.100"
       memory: 150Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2025.23.0
+  image: cognigy.azurecr.io/vg-webapp:2025.24.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:

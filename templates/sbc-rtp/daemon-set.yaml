@@ -87,7 +87,9 @@ spec:
           args: 
             - rtpengine
             - --listen-udp=22222
-            - --listen-http=22222
+            - --listen-http=0.0.0.0:22222
+            - --port-min={{ .Values.rtpEngine.startPort }}
+            - --port-max={{ .Values.rtpEngine.endPort }}
             - --homer
             - {{ .Values.heplifyServer.serviceName }}:{{ .Values.heplifyServer.ports.udp }}
             - --homer-protocol

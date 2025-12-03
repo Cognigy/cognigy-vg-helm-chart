@@ -165,3 +165,16 @@ imagePullSecrets:
 {{- printf "{\"auths\":{\"%s\":{\"username\":\"%s\",\"password\":\"%s\",\"auth\":\"%s\"}}}" .registry .username .password (printf "%s:%s" .username .password | b64enc) | b64enc }}
 {{- end }}
 {{- end }}
+
+{{/*
+Return the proper Secret Name
+Usage:
+{{ include "common.secretName.render" ( dict "existingSecret" .Values.path.to.existingSecret "defaultSecret" "default-secret-name") }}
+*/}}
+{{- define "common.secretName.render" -}}
+  {{- if .existingSecret -}}
+    {{- printf "%s" .existingSecret -}}
+  {{- else -}}
+    {{- printf "%s" .defaultSecret -}}
+  {{- end -}}
+{{- end -}}

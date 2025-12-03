@@ -1,3 +1,5 @@
+{{- $vgTeamSecret := include "common.secretName.render" ( dict "existingSecret" $.Values.api.vgTeam.existingSecret "defaultSecret" "vg-team-credentials") }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -19,6 +21,9 @@ spec:
       annotations:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
         checksum/secret: {{ include (print $.Template.BasePath "/common-secrets/vg-homer-password.yaml") $ | sha256sum }}
+        {{- if .Values.api.vgTeam.enabled }}
+        checksum/vg-team-credentials: {{ if not (lookup "v1" "Secret" $.Release.Namespace $vgTeamSecret) }}{{ $vgTeamSecret | sha256sum }}{{ else }}{{ toYaml (lookup "v1" "Secret" $.Release.Namespace $vgTeamSecret).data | sha256sum }}{{ end }}
+        {{- end }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.api.affinity }}
@@ -185,11 +190,11 @@ spec:
                 secretKeyRef:
                   name: voicegateway-call-recording-credentials
                   key: password
+            - name: VG_WEBAPP_BASE_URL
+              value: {{ printf "%s://%s" .Values.api.protocol .Values.ingress.webapp.host | quote }}
             {{- if .Values.cognigyLogin.enabled }}
             - name: VG_API_BASE_URL
               value: {{ printf "%s://%s" .Values.api.protocol .Values.ingress.api.host | quote }}
-            - name: VG_WEBAPP_BASE_URL
-              value: {{ printf "%s://%s" .Values.api.protocol .Values.ingress.webapp.host | quote }}
             - name: COGNIGY_API_BASE_URL
               value: {{ .Values.cognigyLogin.baseUrl | quote }}
             - name: COGNIGY_OAUTH_CLIENT_ID
@@ -215,6 +220,45 @@ spec:
             {{- end }}
             - name: ENABLE_PREPARE_COGNIGY_DATA
               value: {{ .Values.api.enablePrepareCognigyData | quote }}
+            {{- if .Values.api.vgTeam.enabled }}
+            - name: EMAIL_NOTIFICATION_SMTP_HOST
+              value: {{ .Values.api.vgTeam.emailNotification.smtpHost | quote }}
+            - name: EMAIL_NOTIFICATION_SMTP_PORT
+              value: {{ .Values.api.vgTeam.emailNotification.smtpPort | quote }}
+            {{- if (lookup "v1" "Secret" $.Release.Namespace $vgTeamSecret) }}
+            - name: EMAIL_NOTIFICATION_SMTP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $vgTeamSecret }}
+                  key: {{ .Values.api.vgTeam.emailNotification.smtpUsernameKey | quote }}
+            - name: EMAIL_NOTIFICATION_SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $vgTeamSecret }}
+                  key: {{ .Values.api.vgTeam.emailNotification.smtpPasswordKey | quote }}
+            {{- end }}
+            - name: EMAIL_NOTIFICATION_SMTP_TLS_REQUIRED
+              value: "starttls"
+            - name: EMAIL_NOTIFICATION_SMTP_FROM
+              value: {{ .Values.api.vgTeam.emailNotification.smtpFrom | quote }}
+            - name: VG_TEAM_MEMBER_DEFAULT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vg-team-default-password
+                  key: defaultUserPassword
+            - name: VG_TEAM_MEMBER_EMAILS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $vgTeamSecret }}
+                  key: {{ .Values.api.vgTeam.teamMembers.emailsKey | quote }}
+                  optional: true
+            - name: COGNIGY_MANAGED_ENV
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $vgTeamSecret }}
+                  key: {{ .Values.api.vgTeam.teamMembers.managedEnvKey | quote }}
+                  optional: true
+            {{- end }}
             - name: JAMBONES_DISABLE_TTS_STREAMING
               value: {{ not .Values.global.enableTtsStreaming | quote }}
             {{- if .Values.api.extraEnvVars }}

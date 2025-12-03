@@ -89,7 +89,7 @@ spec:
           args: 
             - rtpengine
             - --listen-udp=22222
-            - --listen-http=22222
+            - --listen-http=0.0.0.0:22222
             - --port-min={{ .Values.rtpEngine.startPort }}
             - --port-max={{ .Values.rtpEngine.endPort }}
             - --homer
@@ -160,6 +160,8 @@ spec:
               value: {{ .Values.redis.port | quote }}
             - name: RTPENGINE_DTMF_LOG_PORT
               value: {{ .Values.rtpEngineSidecar.ports.dtmf | quote }}
+            - name: RTPENGINE_URL
+              value: {{ printf "ws://127.0.0.1:%d" (.Values.rtpEngine.port | int) | quote }}
             - name: ENABLE_METRICS
               value: {{ if .Values.stats.enabled }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: K8S_POD_NAME
