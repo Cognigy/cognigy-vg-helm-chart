@@ -1020,7 +1020,7 @@ featureServerLegacy:
       cpu: "1"
       memory: 500Mi
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2025.25.0
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:0.9.3
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
