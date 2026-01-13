@@ -378,7 +378,7 @@ dbCreate:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:2025.25.0
+  image: cognigy.azurecr.io/db-create:2026.1.0
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -705,7 +705,7 @@ metrics:
 health:
   port: 8001
 telegraf:
-  image: cognigy.azurecr.io/vg-telegraf:1.31-alpine
+  image: cognigy.azurecr.io/vg-telegraf:1.37.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -740,9 +740,9 @@ cognigyLogin:
 # VoiceGateway Components #
 ###########################
 jobs:
-  image: cognigy.azurecr.io/vg-alpine-k8s-tools:3.22
+  image: cognigy.azurecr.io/vg-k8s-tools:3.23.0
 api:
-  image: cognigy.azurecr.io/vg-api-server:2025.25.0
+  image: cognigy.azurecr.io/vg-api-server:2026.1.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -796,6 +796,17 @@ api:
       ## Secret keys for SMTP credentials
       smtpUsernameKey: "SMTP_USERNAME"
       smtpPasswordKey: "SMTP_PASSWORD"
+  ## Shared credentials for speech providers (Deepgram, Microsoft, etc.)
+  ## This secret contains a JSON string with shared credentials structure
+  sharedSpeechCredentials:
+    ## Enable mounting the shared credentials secret into the API deployment
+    enabled: false
+    ## Secret name containing shared credentials JSON
+    ## Default: "vg-shared-speech-credentials"
+    existingSecret: "vg-shared-speech-credentials"
+    ## Secret key containing the JSON string
+    ## The JSON should match the structure expected by the API server shared credentials schema
+    secretKey: "sharedSpeechCredentials"
   extraEnvVars: []
   resources:
     requests:
@@ -823,7 +834,7 @@ apiBan:
   cronjobSchedule: "0 * * * *"
   extraEnvVars: []
 drachtio:
-  image: cognigy.azurecr.io/vg-drachtio-server:0.8.27-rc17
+  image: cognigy.azurecr.io/vg-drachtio:1.1.0
   imagePullPolicy: IfNotPresent
   host: 127.0.0.1
   port: 9022
@@ -845,7 +856,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2025.25.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.1.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -913,7 +924,7 @@ featureServer:
       memory: 500Mi
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2025.25.0
+  image: cognigy.azurecr.io/vg-feature-server:2025.26.0-nightly-12
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -975,7 +986,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2025.24.2
+  image: cognigy.azurecr.io/vg-feature-server:2026.1.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
@@ -1076,7 +1087,7 @@ rtpEngine:
       cpu: "3"
       memory: 1Gi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:2025.25.0
+  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:2026.1.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1091,7 +1102,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:2025.25.0
+  image: cognigy.azurecr.io/sbc-call-router:2026.1.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1122,7 +1133,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:2025.25.0
+  image: cognigy.azurecr.io/sbc-inbound:2026.1.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1162,7 +1173,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:2025.25.0
+  image: cognigy.azurecr.io/sbc-outbound:2026.1.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1200,7 +1211,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:2025.25.0
+  image: cognigy.azurecr.io/sbc-sip-sidecar:2026.1.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1215,7 +1226,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-test-call-manager:2025.25.0
+  image: cognigy.azurecr.io/vg-test-call-manager:2026.1.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1254,7 +1265,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: false
-  image: cognigy.azurecr.io/vg-connector:2025.25.0
+  image: cognigy.azurecr.io/vg-connector:2026.1.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1277,7 +1288,7 @@ vgConnector:
       cpu: "0.100"
       memory: 150Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2025.25.0
+  image: cognigy.azurecr.io/vg-webapp:2026.1.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
