@@ -834,7 +834,7 @@ apiBan:
   cronjobSchedule: "0 * * * *"
   extraEnvVars: []
 drachtio:
-  image: cognigy.azurecr.io/vg-drachtio-server:0.8.27-rc17
+  image: cognigy.azurecr.io/vg-drachtio:1.1.0
   imagePullPolicy: IfNotPresent
   host: 127.0.0.1
   port: 9022
@@ -856,7 +856,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.1.0
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.1.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -924,7 +924,7 @@ featureServer:
       memory: 500Mi
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2025.26.0-nightly-12
+  image: cognigy.azurecr.io/vg-feature-server:2026.1.0-nightly-3
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -986,7 +986,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.1.0
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.1.1
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
@@ -1133,7 +1133,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:2026.1.0
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.1.1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1173,7 +1173,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:2026.1.0
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.1.1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
