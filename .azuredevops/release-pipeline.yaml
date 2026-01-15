@@ -102,7 +102,6 @@ stages:
 
               rm -fr .git
               rm -fr CHANGELOG*
-              rm -fr docs*
               cp -r ./ ../cognigy-vg-helm-chart
 
               cd ../cognigy-vg-helm-chart
