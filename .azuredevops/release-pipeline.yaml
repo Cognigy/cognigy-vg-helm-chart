@@ -101,9 +101,8 @@ stages:
               echo "Helm Chart version is $helmChartVersion"
 
               rm -fr .git
-              rm -fr CHANGELOG
-              rm -fr CHANGELOG-PREVIEW
-              rm -fr CHANGELOG-FEATURE
+              rm -fr CHANGELOG*
+              rm -fr docs*
               cp -r ./ ../cognigy-vg-helm-chart
 
               cd ../cognigy-vg-helm-chart

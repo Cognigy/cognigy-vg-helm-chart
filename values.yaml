@@ -834,7 +834,7 @@ apiBan:
   cronjobSchedule: "0 * * * *"
   extraEnvVars: []
 drachtio:
-  image: cognigy.azurecr.io/vg-drachtio:1.1.0
+  image: cognigy.azurecr.io/vg-drachtio-server:0.8.27-rc17
   imagePullPolicy: IfNotPresent
   host: 127.0.0.1
   port: 9022
