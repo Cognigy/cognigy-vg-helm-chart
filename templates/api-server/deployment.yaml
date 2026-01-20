@@ -1,5 +1,5 @@
 {{- $vgTeamSecret := include "common.secretName.render" ( dict "existingSecret" $.Values.api.vgTeam.existingSecret "defaultSecret" "vg-team-credentials") }}
-{{- $sharedSpeechCredentialsSecret := include "common.secretName.render" ( dict "existingSecret" (index $.Values.api "sharedSpeechCredentials" "existingSecret" | default "") "defaultSecret" "vg-shared-speech-credentials") }}
+{{- $sharedSpeechCredentialsSecret := include "common.secretName.render" ( dict "existingSecret" $.Values.sharedSpeechCredentials.existingSecret "defaultSecret" "vg-shared-speech-credentials") }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -24,6 +24,9 @@ spec:
         checksum/secret: {{ include (print $.Template.BasePath "/common-secrets/vg-homer-password.yaml") $ | sha256sum }}
         {{- if .Values.api.vgTeam.enabled }}
         checksum/vg-team-credentials: {{ if not (lookup "v1" "Secret" $.Release.Namespace $vgTeamSecret) }}{{ $vgTeamSecret | sha256sum }}{{ else }}{{ toYaml (lookup "v1" "Secret" $.Release.Namespace $vgTeamSecret).data | sha256sum }}{{ end }}
+        {{- end }}
+        {{- if .Values.sharedSpeechCredentials.enabled }}
+        checksum/sharedSpeechCredentials: {{ if not (lookup "v1" "Secret" $.Release.Namespace $sharedSpeechCredentialsSecret) }}{{ $sharedSpeechCredentialsSecret | sha256sum }}{{ else }}{{ toYaml (lookup "v1" "Secret" $.Release.Namespace $sharedSpeechCredentialsSecret).data | sha256sum }}{{ end }}
         {{- end }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
@@ -269,12 +272,16 @@ spec:
               value: {{ .Values.auditLogging.enabled | quote }}
             - name: AUDIT_LOGGING_TTL_DAYS
               value: {{ .Values.auditLogging.cleanup.ttlDays | quote }}
-            {{- if .Values.api.sharedSpeechCredentials.enabled }}
+            - name: VG_CLUSTER_ID
+              value: {{ .Values.ingress.webapp.host | quote }}
+            - name: VG_SPEECH_BILLING_ENABLED
+              value: {{ .Values.vgBilling.enabled | quote }}
+            {{- if .Values.sharedSpeechCredentials.enabled }}
             - name: VG_SHARED_SPEECH_CREDENTIALS
               valueFrom:
                 secretKeyRef:
                   name: {{ $sharedSpeechCredentialsSecret }}
-                  key: {{ .Values.api.sharedSpeechCredentials.secretKey | quote }}
+                  key: {{ $.Values.sharedSpeechCredentials.secretKey | quote }}
             {{- end }}
           envFrom:
             - configMapRef:
