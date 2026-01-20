@@ -239,22 +239,6 @@ ingress:
           - 0.0.0.0/0
         ipStrategy:
           depth: 0
-
-#############################
-# Shared Speech Credentials #
-#############################
-
-sharedSpeechCredentials:
-  enabled: false
-  existingSecret: "vg-shared-speech-credentials"
-  secretKey: "sharedSpeechCredentials"
-
-#############################
-# Billing App #
-#############################
-vgBilling:
-  enabled: false
-
 #############
 # SIP & RTP #
 #############
@@ -812,6 +796,17 @@ api:
       ## Secret keys for SMTP credentials
       smtpUsernameKey: "SMTP_USERNAME"
       smtpPasswordKey: "SMTP_PASSWORD"
+  ## Shared credentials for speech providers (Deepgram, Microsoft, etc.)
+  ## This secret contains a JSON string with shared credentials structure
+  sharedSpeechCredentials:
+    ## Enable mounting the shared credentials secret into the API deployment
+    enabled: false
+    ## Secret name containing shared credentials JSON
+    ## Default: "vg-shared-speech-credentials"
+    existingSecret: "vg-shared-speech-credentials"
+    ## Secret key containing the JSON string
+    ## The JSON should match the structure expected by the API server shared credentials schema
+    secretKey: "sharedSpeechCredentials"
   extraEnvVars: []
   resources:
     requests:
