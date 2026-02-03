@@ -1,33 +1,33 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: db-create-{{ .Release.Revision }}
+  name: api-migrator-{{ .Release.Revision }}
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     owner-team: echo
   annotations:
-    {{- if .Values.dbCreate.hookEnabled }}
+    {{- if .Values.apiMigrator.hookEnabled }}
     # This is what defines this resource as a hook. Without these lines, the
     # resource is considered part of the release.
-    "helm.sh/hook": {{ .Values.dbCreate.hook | quote }}
+    "helm.sh/hook": {{ .Values.apiMigrator.hook | quote }}
     "helm.sh/hook-weight": "-1"
-    "helm.sh/hook-delete-policy": {{ .Values.dbCreate.hookDeletePolicy | quote }}
+    "helm.sh/hook-delete-policy": {{ .Values.apiMigrator.hookDeletePolicy | quote }}
     {{- end }}
 spec:
   backoffLimit: 10
   ttlSecondsAfterFinished: 86400 # 1 day
   template:
     metadata:
-      name: db-create
+      name: api-migrator
       annotations:
         sidecar.istio.io/inject: "false"
     spec:
     {{- include "image.pullSecrets" $ | nindent 6 }}
       restartPolicy: OnFailure
       containers:
-        - name: db-init
-          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.dbCreate.image) }}
-          imagePullPolicy: {{ .Values.dbCreate.imagePullPolicy }}
+        - name: api-migrator-init
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.apiMigrator.image) }}
+          imagePullPolicy: {{ .Values.apiMigrator.imagePullPolicy }}
           env:
             - name: JAMBONES_MYSQL_HOST
               value: {{ .Values.mysql.host }}
@@ -45,19 +45,15 @@ spec:
                 secretKeyRef:
                   name: voicegateway-jwt
                   key: jwt
-            - name: JAMBONES_REDIS_HOST
-              value: {{ .Values.redis.host }}
-            - name: JAMBONES_REDIS_PORT
-              value: {{ .Values.redis.port | quote }}
             - name: JAMBONES_TIME_SERIES_HOST
               value: {{ .Values.influxdb.host }}
             - name: API_MIGRATION_TARGET
-              value: {{ .Values.dbCreate.migrationTarget }}
-            {{- if .Values.dbCreate.extraEnvVars }}
-            {{- include "vg.common.tplvalues.render" (dict "value" .Values.dbCreate.extraEnvVars "context" $) | nindent 12 }}
+              value: {{ .Values.apiMigrator.migrationTarget }}
+            {{- if .Values.apiMigrator.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.apiMigrator.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
-        {{- if .Values.dbCreate.logCollectorEnabled }}
+        {{- if .Values.apiMigrator.logCollectorEnabled }}
         - name: log-collector
           image: fluentd
-          imagePullPolicy: {{ .Values.dbCreate.imagePullPolicy }}
+          imagePullPolicy: {{ .Values.apiMigrator.imagePullPolicy }}
         {{- end }}

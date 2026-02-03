@@ -1,0 +1,20 @@
+{{- if .Values.vgConsole.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vg-console
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-console
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.vgConsole.port }}
+      targetPort: {{ .Values.vgConsole.port }}
+      protocol: TCP
+      name: http
+  selector:
+    app: vg-console
+{{- end }}
+

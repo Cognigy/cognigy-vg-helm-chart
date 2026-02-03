@@ -1,0 +1,160 @@
+{{- if .Values.vgConsole.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vg-console
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-console
+    owner-team: echo
+spec:
+  selector:
+    matchLabels:
+      app: vg-console
+  replicas: {{ .Values.vgConsole.replicaCount | default 1 }}
+  template:
+    metadata:
+      labels:
+        app: vg-console
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- if .Values.vgConsole.affinity }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgConsole.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.vgConsole.nodeSelector }}
+      nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgConsole.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.vgConsole.priorityClassName }}
+      priorityClassName: {{ .Values.vgConsole.priorityClassName }}
+      {{- end }}
+      {{- if .Values.vgConsole.podSecurityContext }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgConsole.podSecurityContext "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.vgConsole.tolerations }}
+      tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgConsole.tolerations "context" $) | nindent 8 }}
+      {{- end }}
+      restartPolicy: Always
+      initContainers:
+        - image: kanisterio/mysql-sidecar:0.40.0
+          name: db-user-create
+          env:
+            - name: ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vgConsole.database.adminSecretName | default "voicegateway-mysql-password" }}
+                  key: mysql-root-password
+            - name: USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vgConsole.database.secretName | default "voicegateway-mysql-password" }}
+                  key: {{ .Values.vgConsole.database.secretKey | default "mysql-password" }}
+          command:
+            - sh
+            - -c
+            - |
+              echo "Creating database '{{ .Values.vgConsole.database.name }}' and user '{{ .Values.vgConsole.database.username }}'..."
+              
+              # Wait for MySQL to be available
+              until mysql -u root -h {{ .Values.mysql.host }} -p${ROOT_PASSWORD} --protocol=tcp -e "SELECT 1" > /dev/null 2>&1;
+              do
+                echo "Waiting for MySQL to be available..."
+                sleep 2
+              done
+              
+              # Create database and user using root
+              mysql -u root -h {{ .Values.mysql.host }} -p${ROOT_PASSWORD} --protocol=tcp <<EOF
+              CREATE DATABASE IF NOT EXISTS \`{{ .Values.vgConsole.database.name }}\` 
+                CHARACTER SET utf8mb4 
+                COLLATE utf8mb4_unicode_ci;
+              
+              CREATE USER IF NOT EXISTS '{{ .Values.vgConsole.database.username }}'@'%' IDENTIFIED BY '${USER_PASSWORD}';
+              
+              GRANT ALL PRIVILEGES ON \`{{ .Values.vgConsole.database.name }}\`.* TO '{{ .Values.vgConsole.database.username }}'@'%';
+              
+              FLUSH PRIVILEGES;
+              EOF
+              
+              if [ $? -eq 0 ]; then
+                echo "Database '{{ .Values.vgConsole.database.name }}' and user '{{ .Values.vgConsole.database.username }}' created successfully!"
+              else
+                echo "ERROR: Failed to create database/user."
+                exit 1
+              fi
+        - image: kanisterio/mysql-sidecar:0.40.0
+          name: db-create-wait
+          env:
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vgConsole.database.secretName | default "voicegateway-mysql-password" }}
+                  key: {{ .Values.vgConsole.database.secretKey | default "mysql-password" }}
+          command:
+            - sh 
+            - -c 
+            - |
+              echo "Verifying database connectivity..."
+              until mysql -u {{ .Values.vgConsole.database.username }} -D {{ .Values.vgConsole.database.name }} -h {{ .Values.mysql.host }} -p${PASSWORD} --protocol=tcp -e "SELECT 1" > /dev/null 2>&1;
+              do 
+                echo "Database not ready, retrying in 2 seconds..."
+                sleep 2
+              done
+              echo "Database '{{ .Values.vgConsole.database.name }}' is accessible!"
+      containers:
+        - name: vg-console
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.vgConsole.image) }}
+          imagePullPolicy: {{ .Values.vgConsole.imagePullPolicy | default "IfNotPresent" }}
+          resources: {{- toYaml .Values.vgConsole.resources | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.vgConsole.port | default 4000 }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.vgConsole.port | default 4000 }}
+            failureThreshold: 3
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.vgConsole.port | default 4000 }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.vgConsole.port | default 4000 }}
+            failureThreshold: 30
+            periodSeconds: 10
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv | quote }}
+            - name: PORT
+              value: {{ .Values.vgConsole.port | default 4000 | quote }}
+            # MySQL Configuration (same as api-server)
+            - name: USE_MYSQL
+              value: "true"
+            - name: VG_MYSQL_HOST
+              value: {{ .Values.mysql.host }}
+            - name: VG_MYSQL_DATABASE
+              value: {{ .Values.vgConsole.database.name | quote }}
+            - name: VG_MYSQL_USER
+              value: {{ .Values.vgConsole.database.username | quote }}
+            - name: VG_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vgConsole.database.secretName | default "voicegateway-mysql-password" }}
+                  key: {{ .Values.vgConsole.database.secretKey | default "mysql-password" }}
+            # Logging
+            - name: LOG_LEVEL
+              value: {{ if .Values.vgConsole.logLevel }}{{ .Values.vgConsole.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+            {{- if .Values.vgConsole.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgConsole.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
+{{- end }}
+

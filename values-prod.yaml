@@ -41,7 +41,7 @@ tls:
 
 ## When doing the deployment for the first time, keep the value as false
 ## After that, set the value to true. Needs to be true for upgrade deployments
-dbCreate:
+apiMigrator:
   hookEnabled: false
 
 ## Retrieves a list with known malicious IPs from APIBAN (https://www.apiban.org/),

@@ -1,0 +1,37 @@
+{{- if and .Values.vgConsole.enabled .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vg-console
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+  annotations:
+  {{- if eq .Values.ingress.ingressClassName "traefik" }}
+    {{- if .Values.tls.enabled }}
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    {{- else }}
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    {{- end }}
+    {{- if .Values.ingress.vgConsole.ipWhiteListMiddleware.enabled }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-ipwhitelistvgconsole@kubernetescrd
+    {{- end }}
+  {{- end }}
+  {{- if .Values.ingress.vgConsole.extraAnnotations }}
+    {{- include "vg.common.tplvalues.render" (dict "value" .Values.ingress.vgConsole.extraAnnotations "context" $) | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.ingressClassName }}
+  {{- include "vg.tlsCertificate.secretName.render" $ | nindent 2 }}
+  rules:
+    - host: {{ .Values.ingress.vgConsole.host }}
+      http:
+        paths:
+          - backend:
+              service:
+                name: vg-console
+                port:
+                  number: {{ .Values.vgConsole.port }}
+            path: /
+            pathType: Prefix
+{{- end }}

@@ -185,6 +185,18 @@ spec:
               value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
             - name: PRIVATE_VOIP_NETWORK_CIDR
               value: {{ .Values.global.privateVoipNetworkCidr | quote }}
+            - name: VG_API_BASE_URL
+              value: {{ .Values.api.protocol }}://{{ .Values.ingress.api.host }}/v1
+            - name: VG_API_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: vg-api-admin-creds
+                  key: username
+            - name: VG_API_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vg-api-admin-creds
+                  key: password
             {{- if .Values.sbcInbound.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcInbound.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

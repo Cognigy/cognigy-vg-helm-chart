@@ -202,11 +202,11 @@ _sips._tcp.sip-vg.yourdomain.<tld>   IN    SRV    1 1 5061 sip-vg-2.yourdomain.<
 
 ### Execute the Database Creation Job as a Helm Hook
 
-After the initial deployment, enable the Helm hook for the `dbCreate` job.
+After the initial deployment, enable the Helm hook for the `apiMigrator` job.
 Add the following line in your `YOUR_VALUES_FILE.yaml` file:
 
 ```yaml
-dbCreate:
+apiMigrator:
 hookEnabled: true
 ```
 

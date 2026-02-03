@@ -98,6 +98,10 @@ spec:
             {{- if hasKey .Values.vgConnector.modules "msTeams" }}
             - name: FEATURE_ENABLE_MSTEAMS
               value: {{ .Values.vgConnector.modules.msTeams.enabled | quote }}
+            - name: SYSTEM_SPEECH_CREDENTIAL_LABEL
+              value: {{ $.Values.sharedSpeechCredentials.label | quote }}
+            - name: FEATURE_ENABLE_SHARED_SPEECH_CREDENTIALS
+              value: {{ $.Values.sharedSpeechCredentials.enabled | quote }}
             {{- if eq (.Values.vgConnector.modules.msTeams.enabled | toString) "true" }}
             - name: FEATURE_MSTEAMS_RECORD_AUDIO
               value: {{ default "false" .Values.vgConnector.modules.msTeams.recordAudio | quote }}

@@ -153,7 +153,11 @@ spec:
             - configMapRef:
                 name: cognigy-env
         - name: freeswitch
+          {{- if .Values.freeswitchLegacy.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.freeswitchLegacy.image) }}
+          {{- else }}
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.freeswitch.image) }}
+          {{- end }}
           imagePullPolicy: {{ .Values.freeswitch.imagePullPolicy }}
           resources: {{- toYaml .Values.freeswitch.resources | nindent 12 }}
           ports:
@@ -255,6 +259,10 @@ spec:
               value: {{ .Values.global.k8s | quote }}
             - name: K8S_SBC_SIP_SERVICE_NAME 
               value: {{ .Values.sbc.sip.headlessServiceName }}
+            - name: SYSTEM_SPEECH_CREDENTIAL_LABEL
+              value: {{ $.Values.sharedSpeechCredentials.label | quote }}
+            - name: FEATURE_ENABLE_SHARED_SPEECH_CREDENTIALS
+              value: {{ $.Values.sharedSpeechCredentials.enabled | quote }}
             - name: JAMBONES_OTEL_SERVICE_NAME
               value: {{ .Values.featureServerLegacy.serviceName | quote }}
             - name: JAMBONZ_GATHER_EARLY_HINTS_MATCH

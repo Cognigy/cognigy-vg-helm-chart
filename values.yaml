@@ -239,6 +239,33 @@ ingress:
           - 0.0.0.0/0
         ipStrategy:
           depth: 0
+  vgConsole:
+    host: ""
+    extraAnnotations: {}
+    ipWhiteListMiddleware:
+      enabled: false
+      ipWhiteList:
+        sourceRange:
+          - 0.0.0.0/0
+        ipStrategy:
+          depth: 0
+#############################
+# Shared Speech Credentials #
+#############################
+sharedSpeechCredentials:
+  enabled: false
+  ## Enable shared credentials cluster wide for all customers in the cluster
+  ## If true, all customers in the cluaster have access to the shared credentials
+  ## If false, access to shared credentials should be granted to each customer separately
+  clusterWide: false
+  existingSecret: "vg-shared-speech-credentials"
+  secretKey: "sharedSpeechCredentials"
+  label: "SYSTEM_PROVIDED"
+#############################
+# Billing App #
+#############################
+vgBilling:
+  enabled: false
 #############
 # SIP & RTP #
 #############
@@ -374,14 +401,14 @@ sbc:
 #############
 # Databases #
 #############
-dbCreate:
+apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/db-create:2026.1.0
+  image: cognigy.azurecr.io/vg-api-migrator:2026.3.0
   imagePullPolicy: Always
   logCollectorEnabled: false
-  ## Deploy to latest of a specific release '2025.15.0'
+  ## Deploy to latest of a specific release '2025.15.0' 
   migrationTarget: "latest"
 additionalDbParameters:
   postgresql:
@@ -742,7 +769,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.0
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.1.0
+  image: cognigy.azurecr.io/vg-api-server:2026.3.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -796,17 +823,6 @@ api:
       ## Secret keys for SMTP credentials
       smtpUsernameKey: "SMTP_USERNAME"
       smtpPasswordKey: "SMTP_PASSWORD"
-  ## Shared credentials for speech providers (Deepgram, Microsoft, etc.)
-  ## This secret contains a JSON string with shared credentials structure
-  sharedSpeechCredentials:
-    ## Enable mounting the shared credentials secret into the API deployment
-    enabled: false
-    ## Secret name containing shared credentials JSON
-    ## Default: "vg-shared-speech-credentials"
-    existingSecret: "vg-shared-speech-credentials"
-    ## Secret key containing the JSON string
-    ## The JSON should match the structure expected by the API server shared credentials schema
-    secretKey: "sharedSpeechCredentials"
   extraEnvVars: []
   resources:
     requests:
@@ -856,7 +872,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.1.0
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.3.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -924,7 +940,7 @@ featureServer:
       memory: 500Mi
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.3.0-nightly-4
+  image: cognigy.azurecr.io/vg-feature-server:2026.3.0-nightly-12
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -986,7 +1002,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.1.0
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.3.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
@@ -1031,7 +1047,7 @@ featureServerLegacy:
       cpu: "1"
       memory: 500Mi
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:0.9.3
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.3.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1065,10 +1081,15 @@ freeswitch:
       cpu: "2.5"
       memory: 3Gi
 freeswitchNightly:
-## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
-## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
-## @see featureServerNightly
-#image: cognigy.azurecr.io/vg-freeswitch-mrf:2024.24.0
+  ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
+  ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
+  ## @see featureServerNightly
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.3.0
+freeswitchLegacy:
+  ## You can specify a custom image for the FreeSWITCH in the legacy FeatureServer here
+  ## To enable a "legacy FreeSWITCH", you have to enable a legacy FeatureServer.
+  ## @see featureServerLegacy
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.3.0
 rtpEngine:
   image: cognigy.azurecr.io/vg-rtpengine:0.2.0
   imagePullPolicy: IfNotPresent
@@ -1087,7 +1108,7 @@ rtpEngine:
       cpu: "3"
       memory: 1Gi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/sbc-rtpengine-sidecar:2026.1.0
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.3.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1102,7 +1123,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/sbc-call-router:2026.1.0
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.3.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1133,7 +1154,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/sbc-inbound:2026.1.0
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.3.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1173,7 +1194,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/sbc-outbound:2026.1.0
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.3.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1211,7 +1232,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/sbc-sip-sidecar:2026.1.0
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.3.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1226,7 +1247,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-test-call-manager:2026.1.0
+  image: cognigy.azurecr.io/vg-tcm:2026.3.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1265,7 +1286,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: false
-  image: cognigy.azurecr.io/vg-connector:2026.1.0
+  image: cognigy.azurecr.io/vg-connector:2026.3.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1288,7 +1309,7 @@ vgConnector:
       cpu: "0.100"
       memory: 150Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.1.0
+  image: cognigy.azurecr.io/vg-webapp:2026.3.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1328,6 +1349,7 @@ webapp:
   enableOnPremisesAzureSpeech: true
   enableOnPremisesDeepgram: true
   enableOnPremisesNuance: true
+  enableSpeechmatics: true
   enablePingOptions: false
   extraEnvVars: []
   resources:
@@ -1668,6 +1690,53 @@ hpa:
               type: Utilization
               averageUtilization: 70
       behavior: {}
+#######################
+# VG Console #
+#######################
+## Internal console for Voice Gateway clusters
+## Provides cluster configuration, DevConfig management, and audit logging
+vgConsole:
+  ## Enable/disable the VG Console
+  enabled: false
+  ## Container image
+  image: cognigy.azurecr.io/vg-console:latest
+  imagePullPolicy: IfNotPresent
+  ## Number of replicas
+  replicaCount: 1
+  ## Container port
+  port: 4000
+  ## Log level (uses global.logLevel if not set)
+  logLevel:
+  database:
+    username: vg_console_user
+    name: vg_console
+    # Password secret configuration
+    # If secretName is not set, defaults to voicegateway-mysql-password
+    # If secretKey is not set, defaults to mysql-password
+    secretName: voicegateway-mysql-password
+    secretKey: mysql-password
+    # Admin secret for root password (used to create database and user)
+    # Root password is stored in mysql-root-password key
+    adminSecretName: voicegateway-mysql-password
+  resources:
+    requests:
+      cpu: "0.100"
+      memory: 128Mi
+    limits:
+      cpu: "0.500"
+      memory: 512Mi
+  ## Node selector
+  nodeSelector: {}
+  ## Tolerations
+  tolerations: []
+  ## Affinity
+  affinity: {}
+  ## Pod security context
+  podSecurityContext: {}
+  ## Priority class
+  priorityClassName: ""
+  ## Extra environment variables
+  extraEnvVars: []
 #######################
 # Audit Logging #
 #######################
