@@ -872,7 +872,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.3.0
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.3.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -940,7 +940,7 @@ featureServer:
       memory: 500Mi
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.3.0-nightly-12
+  image: cognigy.azurecr.io/vg-feature-server:2026.4.0-63
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1002,7 +1002,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.3.0
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.3.1
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
