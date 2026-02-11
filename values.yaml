@@ -405,7 +405,7 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/vg-api-migrator:2026.3.0
+  image: cognigy.azurecr.io/vg-api-migrator:2026.3.2
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0' 
@@ -769,7 +769,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.0
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.3.0
+  image: cognigy.azurecr.io/vg-api-server:2026.3.2
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -872,7 +872,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.3.1
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.3.2
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -940,7 +940,7 @@ featureServer:
       memory: 500Mi
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.4.0-63
+  image: cognigy.azurecr.io/vg-feature-server:2026.5.0-9
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1002,7 +1002,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.3.1
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.3.2
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
