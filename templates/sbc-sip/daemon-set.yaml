@@ -136,7 +136,9 @@ spec:
             {{- end }}
             - --loglevel
             - {{ .Values.sbc.sip.logLevel }}
+            {{- if ne .Values.cloud "stackit" }}
             - --cloud-deployment
+            {{- end }}
             - --sofia-loglevel
             - {{ .Values.sbc.sip.sofiaLoglevel | quote }}
             - --homer
@@ -182,30 +184,34 @@ spec:
                 secretKeyRef:
                   name: voicegateway-drachtio-secret
                   key: secret
+            {{- if .Values.drachtio.tls.enabled }}
             - name: DRACHTIO_TLS_CERT_FILE
-              value: /etc/letsencrypt/tls.crt
+              value: {{ .Values.drachtio.tls.certFile }}
             - name: DRACHTIO_TLS_KEY_FILE
-              value: /etc/letsencrypt/tls.key
+              value: {{ .Values.drachtio.tls.keyFile }}
             - name: DRACHTIO_TLS_CHAIN_FILE
-              value: /etc/letsencrypt/tls.crt
+              value: {{ .Values.drachtio.tls.chainFile }}
             - name: TLS_PORT
               value: {{ .Values.sbc.sip.ports.tls | quote }}
             - name: WSS_PORT
               value: {{ .Values.sbc.sip.ports.wss | quote }}
+            - name: DRACHTIO_SUPPORT_BEST_EFFORT_TLS
+              value: {{ if .Values.drachtio.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            {{- end }}
             - name: SOFIA_SEARCH_DOMAINS
               value: "1"
             - name: SOFIA_SRES_NO_CACHE
-              value: "1"
-            - name: DRACHTIO_SUPPORT_BEST_EFFORT_TLS
-              value: {{ if .Values.drachtio.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}            
+              value: "1"            
             - name: PRIVATE_IP_ONLY
               value: {{ .Values.drachtio.privateIpOnly | quote }}
             {{- if .Values.drachtio.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.drachtio.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
           volumeMounts:
+            {{- if .Values.drachtio.tls.enabled }}
             - mountPath: /etc/letsencrypt/
               name: drachtio-certs
+            {{- end }}
             - mountPath: /etc/drachtio.conf.xml
               name: sbc-sip-config
               subPath: drachtio.conf.xml
@@ -314,6 +320,7 @@ spec:
             - configMapRef:
                 name: cognigy-env
       volumes:
+      {{- if .Values.drachtio.tls.enabled }}
       - name: drachtio-certs
         secret:
           secretName: {{ .Values.sbc.sip.certSecretName | quote }}
@@ -323,6 +330,7 @@ spec:
             - key: tls.key
               path: tls.key
           defaultMode: 420
+      {{- end }}
       - name: sbc-sip-config
         configMap:
           name: sbc-sip

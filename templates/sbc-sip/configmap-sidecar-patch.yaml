@@ -1,0 +1,23 @@
+{{- if eq .Values.cloud "stackit" }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sbc-sip-sidecar-patch
+  namespace: {{ .Release.Namespace }}
+data:
+  entrypoint-wrapper.sh: |
+    #!/bin/sh
+    # STACKIT-specific entrypoint wrapper for sbc-sip-sidecar
+    # Sources the external IP from the InitContainer and passes it to the application
+    # The sbc-sip-sidecar natively supports CLOUD=stackit and SIP_EXTERNAL_IP env vars
+
+    # Source external IP if available (written by stackit-external-ip-detector InitContainer)
+    if [ -f /etc/nodeip/external_ip.sh ]; then
+      . /etc/nodeip/external_ip.sh
+      echo "STACKIT: Loaded SIP_EXTERNAL_IP=$SIP_EXTERNAL_IP"
+    fi
+
+    # Call original entrypoint - the app handles STACKIT logic natively
+    exec /docker-entrypoint.sh
+{{- end }}

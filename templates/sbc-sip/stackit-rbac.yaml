@@ -1,0 +1,32 @@
+{{- if eq .Values.cloud "stackit" }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sbc-sip-node-reader
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: sbc-sip
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Namespace }}-node-reader
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Namespace }}-sbc-sip-node-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Namespace }}-node-reader
+subjects:
+  - kind: ServiceAccount
+    name: sbc-sip-node-reader
+    namespace: {{ .Release.Namespace }}
+{{- end }}

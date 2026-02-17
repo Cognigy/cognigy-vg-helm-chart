@@ -1,0 +1,12 @@
+{{- if eq .Values.cloud "stackit" -}}
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: {{ .Values.stackit.postgresql.storageClassName | quote }}
+provisioner: {{ .Values.stackit.postgresql.provisionerName | quote }}
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: {{ .Values.stackit.postgresql.pdType | quote }}
+{{- end -}}

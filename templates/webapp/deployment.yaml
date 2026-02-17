@@ -105,6 +105,12 @@ spec:
               value: {{ .Values.webapp.enableOnPremisesAzureSpeech | quote }}
             - name: ENABLE_SPEECHMATICS
               value: {{ .Values.webapp.enableSpeechmatics | quote }}            
+            - name: ENABLE_OPENAI
+              value: {{ .Values.webapp.enableOpenai | quote }}
+            - name: ENABLE_NICE
+              value: {{ .Values.webapp.enableNice | quote }}
+            - name: ENABLE_DEEPGRAMFLUX
+              value: {{ .Values.webapp.enableDeepgramflux | quote }}
             - name: ENABLE_PING_OPTIONS
               value: {{ .Values.webapp.enablePingOptions | quote }}
             {{- if .Values.webapp.extraEnvVars }}

@@ -86,6 +86,40 @@ spec:
             - name: rtp-engine
               containerPort: {{ .Values.rtpEngine.port }}
               protocol: TCP            
+          {{- if eq .Values.cloud "stackit" }}
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              # STACKIT-specific: Get IPv4 address from eth0 (exclude IPv6)
+              LOCAL_IP=$(ip -4 addr show eth0 | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1)
+              
+              # Get public IP from environment
+              if [ -n "$RTP_EXTERNAL_IP" ]; then
+                PUBLIC_IP=$(echo "$RTP_EXTERNAL_IP" | cut -d',' -f1)
+              else
+                echo "ERROR: RTP_EXTERNAL_IP not set"
+                exit 1
+              fi
+              
+              # Export variables for /entrypoint.sh
+              export PUBLIC_IP
+              export LOCAL_IP
+              export PRIVATE_INTERFACE="private/${LOCAL_IP}"
+              export PUBLIC_INTERFACE="public/${LOCAL_IP}!${PUBLIC_IP}"
+              
+              # Call original entrypoint
+              exec /entrypoint.sh rtpengine \
+                --listen-udp=22222 \
+                --listen-http=0.0.0.0:22222 \
+                --port-min={{ .Values.rtpEngine.startPort }} \
+                --port-max={{ .Values.rtpEngine.endPort }} \
+                --homer {{ .Values.heplifyServer.serviceName }}:{{ .Values.heplifyServer.ports.udp }} \
+                --homer-protocol udp \
+                --homer-id {{ .Values.rtpEngine.homerId | quote }} \
+                --log-level {{ if .Values.rtpEngine.logLevel }}{{ .Values.rtpEngine.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+          {{- else }}
           args: 
             - rtpengine
             - --listen-udp=22222
@@ -100,6 +134,7 @@ spec:
             - {{ .Values.rtpEngine.homerId | quote }}
             - --log-level
             - {{ if .Values.rtpEngine.logLevel }}{{ .Values.rtpEngine.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+          {{- end }}
           env:
             - name: NODE_ENV
               value: {{ .Values.global.nodeEnv | quote }}
