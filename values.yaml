@@ -1334,7 +1334,7 @@ vgConnector:
       cpu: "0.100"
       memory: 150Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.4.0
+  image: cognigy.azurecr.io/vg-webapp:2026.4.1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
