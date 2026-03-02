@@ -254,6 +254,10 @@ spec:
               value: {{ $.Values.sharedSpeechCredentials.label | quote }}
             - name: FEATURE_ENABLE_SHARED_SPEECH_CREDENTIALS
               value: {{ $.Values.sharedSpeechCredentials.enabled | quote }}
+            - name: ENABLE_CLUSTER_WIDE_SHARED_CREDENTIALS
+              value: {{ $.Values.sharedSpeechCredentials.clusterWide | quote }}
+            - name: SHARED_SPEECH_CREDENTIALS_MICROSOFT_HD_VOICES_ENABLED
+              value: {{ $.Values.sharedSpeechCredentials.microsoftHdVoiceEnabled | quote }}
             - name: JAMBONZ_GATHER_EARLY_HINTS_MATCH
               value: "true"
             - name: JAMBONES_INJECT_CONTENT
@@ -333,15 +337,30 @@ spec:
               value: |
                 {{ .Values.phraseList | trim | nindent 16 }}
             - name: JAMBONES_OTEL_ENABLED
-              value: "true"
+              value: {{ default "true" .Values.featureServer.otelEnabled | quote }}
             - name: VG_TTS_TRIM_SILENCE
-              value: {{ .Values.featureServer.trimTts | quote }}            
+              value: {{ .Values.featureServer.trimTts | quote }}
+            {{- $tracing := .Values.otelCollector.tracing | default dict }}
+            {{- $jaegerHost := "" }}
+            {{- if $tracing.enabled }}
+            {{- $jaegerHost = $tracing.otelExporterJaegerAgentHost }}
+            {{- else }}
+            {{- $jaegerHost = "jaeger" }}
+            {{- end }}
             - name: OTEL_EXPORTER_JAEGER_AGENT_HOST
-              value: jaeger
+              value: {{ $jaegerHost | quote }}
+            {{- if $tracing.otelExporterJaegerEndpoint }}
+            - name: OTEL_EXPORTER_JAEGER_ENDPOINT
+              value: {{ $tracing.otelExporterJaegerEndpoint | quote }}
+            {{- end }}
+            {{- if $tracing.otelExporterCollectorUrl }}
+            - name: OTEL_EXPORTER_COLLECTOR_URL
+              value: {{ $tracing.otelExporterCollectorUrl | quote }}
+            {{- end }}
             - name: OTEL_TRACES_SAMPLER
-              value: parentbased_traceidratio
+              value: {{ default "parentbased_traceidratio" $tracing.otelTracesSampler | quote }}
             - name: OTEL_TRACES_SAMPLER_ARG
-              value: {{ default "1.0" .Values.featureServer.otelSampleRate | quote }}
+              value: {{ default "1.0" $tracing.otelSampleRate | quote }}
             - name: TRACING_ENABLED
               value: {{ .Values.tracing.enabled | quote }}
             - name: TRACING_BASE_URL_WITH_PROTOCOL

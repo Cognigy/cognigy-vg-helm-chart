@@ -1,0 +1,112 @@
+{{- if .Values.otelCollector.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: otel-collector
+    owner-team: echo
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          http:
+            endpoint: 0.0.0.0:4318
+          {{- if .Values.otelCollector.grpcEnabled }}
+          grpc:
+            endpoint: 0.0.0.0:4317
+          {{- end }}
+
+    processors:
+      {{- if .Values.otelCollector.vendortransformProcessor.enabled }}
+      # Vendor-specific transformations (delete_keys per vendor, e.g. vendor.evt.NBest)
+      vendortransform:
+        {{- if .Values.otelCollector.vendortransformProcessor.targets }}
+        {{- if .Values.otelCollector.vendortransformProcessor.log_level }}
+        log_level: {{ .Values.otelCollector.vendortransformProcessor.log_level | quote }}
+        {{- end }}
+        targets:
+          {{- range .Values.otelCollector.vendortransformProcessor.targets }}
+          - source_attribute: {{ .source_attribute | quote }}
+            vendor_key: {{ .vendor_key | quote }}
+            default_rule:
+              delete_keys: {{ .default_rule.delete_keys | default list | toJson }}
+            rules:
+              {{- range $vendor, $rule := .rules }}
+              {{ $vendor }}:
+                delete_keys: {{ $rule.delete_keys | default list | toJson }}
+              {{- end }}
+          {{- end }}
+        {{- else }}
+        {{- if .Values.otelCollector.vendortransformProcessor.log_level }}
+        log_level: {{ .Values.otelCollector.vendortransformProcessor.log_level | quote }}
+        {{- end }}
+        default_rule:
+          delete_keys: {{ .Values.otelCollector.vendortransformProcessor.default_rule.delete_keys | default list | toJson }}
+        rules:
+          {{- range $vendor, $rule := .Values.otelCollector.vendortransformProcessor.rules }}
+          {{ $vendor }}:
+            delete_keys: {{ $rule.delete_keys | default list | toJson }}
+          {{- end }}
+        {{- end }}
+      {{- end }}
+
+      {{- if .Values.otelCollector.spokennumProcessor.enabled }}
+      # Convert spoken number words to digits (e.g., "four one one one" -> "4111")
+      spokennum:
+        languages: {{ .Values.otelCollector.spokennumProcessor.languages | toJson }}
+        {{- if .Values.otelCollector.spokennumProcessor.attributeKeys }}
+        attribute_keys: {{ .Values.otelCollector.spokennumProcessor.attributeKeys | toJson }}
+        {{- end }}
+        min_digit_sequence: {{ .Values.otelCollector.spokennumProcessor.minDigitSequence | default 4 }}
+      {{- end }}
+
+      {{- if .Values.otelCollector.redactionProcessor.enabled }}
+      {{- $pci := .Values.otelCollector.redactionProcessor }}
+      # Redact PCI card numbers and PII patterns
+      redaction/pci_pii:
+        allow_all_keys: true
+        summary: silent
+        blocked_values:
+          {{- $baseVals := $pci.blockedValues | default list }}
+          {{- $extraVals := $pci.extraBlockedValues | default list }}
+          {{- concat $baseVals $extraVals | toYaml | nindent 10 }}
+      {{- end }}
+
+      {{- if .Values.otelCollector.batch.timeout }}
+      batch:
+        timeout: {{ .Values.otelCollector.batch.timeout | quote }}
+      {{- else }}
+      batch: {}
+      {{- end }}
+
+    exporters:
+      otlp/jaeger:
+        endpoint: {{ .Values.otelCollector.jaegerEndpoint | default "jaeger:4317" }}
+        tls:
+          insecure: true
+
+    service:
+      telemetry:
+        logs:
+          level: {{ .Values.otelCollector.logLevel | default "info" }}
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors:
+            {{- $processors := list }}
+            {{- if .Values.otelCollector.vendortransformProcessor.enabled }}
+            {{- $processors = append $processors "vendortransform" }}
+            {{- end }}
+            {{- if .Values.otelCollector.spokennumProcessor.enabled }}
+            {{- $processors = append $processors "spokennum" }}
+            {{- end }}
+            {{- if .Values.otelCollector.redactionProcessor.enabled }}
+            {{- $processors = append $processors "redaction/pci_pii" }}
+            {{- end }}
+            {{- $processors = append $processors "batch" }}
+            {{ $processors | toJson }}
+          exporters: [otlp/jaeger]
+{{- end }}

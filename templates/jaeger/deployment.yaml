@@ -49,4 +49,10 @@ spec:
             - name: ui
               containerPort: {{ .Values.jaeger.ports.tcp }}
               protocol: TCP
+            - name: otlp-grpc
+              containerPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              containerPort: 4318
+              protocol: TCP
 {{- end }}

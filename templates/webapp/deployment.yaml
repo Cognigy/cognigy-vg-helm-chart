@@ -103,8 +103,6 @@ spec:
               value: {{ .Values.webapp.enableOnPremisesNuance | quote }}
             - name: ENABLE_ON_PREM_AZURE_SPEECH
               value: {{ .Values.webapp.enableOnPremisesAzureSpeech | quote }}
-            - name: ENABLE_SPEECHMATICS
-              value: {{ .Values.webapp.enableSpeechmatics | quote }}            
             - name: ENABLE_OPENAI
               value: {{ .Values.webapp.enableOpenai | quote }}
             - name: ENABLE_NICE
@@ -113,6 +111,12 @@ spec:
               value: {{ .Values.webapp.enableDeepgramflux | quote }}
             - name: ENABLE_PING_OPTIONS
               value: {{ .Values.webapp.enablePingOptions | quote }}
+            - name: SYSTEM_SPEECH_CREDENTIAL_LABEL
+              value: {{ $.Values.sharedSpeechCredentials.label | quote }}
+            - name: FEATURE_ENABLE_SHARED_SPEECH_CREDENTIALS
+              value: {{ $.Values.sharedSpeechCredentials.enabled | quote }}
+            - name: SHARED_SPEECH_CREDENTIALS_MICROSOFT_HD_VOICES_ENABLED
+              value: {{ $.Values.sharedSpeechCredentials.microsoftHdVoiceEnabled | quote }}
             {{- if .Values.webapp.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.webapp.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

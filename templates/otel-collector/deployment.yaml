@@ -1,0 +1,70 @@
+{{- if .Values.otelCollector.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: otel-collector
+    owner-team: echo
+spec:
+  replicas: {{ .Values.otelCollector.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/otel-collector/configmap.yaml") $ | sha256sum }}
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- if .Values.otelCollector.affinity }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.otelCollector.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.otelCollector.nodeSelector }}
+      nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" .Values.otelCollector.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.otelCollector.priorityClassName }}
+      priorityClassName: {{ .Values.otelCollector.priorityClassName }}
+      {{- end }}
+      {{- if .Values.otelCollector.podSecurityContext }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.otelCollector.podSecurityContext "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.otelCollector.tolerations }}
+      tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.otelCollector.tolerations "context" $) | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: otel-collector
+          image: {{ .Values.otelCollector.image | default "otel/opentelemetry-collector-contrib:0.96.0" }}
+          imagePullPolicy: {{ .Values.otelCollector.imagePullPolicy | default "IfNotPresent" }}
+          args:
+            - --config=/etc/otelcol-contrib/config.yaml
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              containerPort: 4318
+              protocol: TCP
+          {{- if .Values.otelCollector.resources }}
+          resources: {{- toYaml .Values.otelCollector.resources | nindent 12 }}
+          {{- else }}
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otelcol-contrib/config.yaml
+              subPath: config.yaml
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+{{- end }}

@@ -37,7 +37,7 @@ That's it! The audit system will:
 - ✅ Enable audit logging in the API server
 - ✅ Automatically enable cleanup CronJob
 - ✅ Run daily at 2 AM UTC
-- ✅ Auto-generate admin credentials
+- ✅ Use admin credentials from `vg-api-admin-creds` (created by prepareCognigyData when enabled)
 - ✅ Clean up old audit logs automatically
 - ✅ Provide detailed logging
 
@@ -59,9 +59,6 @@ auditLogging:
 | `auditLogging.cleanup.schedule` | Cron schedule expression | `"0 2 * * *"` | ❌ |
 | `auditLogging.cleanup.ttlDays` | Days to keep audit logs | `30` | ❌ |
 | `auditLogging.cleanup.ttlSecondsAfterFinished` | Job cleanup time | `180` | ❌ |
-| `auditLogging.cleanup.extractorImage` | Credentials extractor image | `"bitnami/kubectl:latest"` | ❌ |
-| `auditLogging.cleanup.extractorMaxRetries` | Max password extraction retries | `15` | ❌ |
-| `auditLogging.cleanup.extractorRetryInterval` | Retry interval in seconds | `20` | ❌ |
 
 ### Complete Configuration Example
 
@@ -79,11 +76,6 @@ auditLogging:
     
     ## Time in seconds after finished job to keep for debugging
     ttlSecondsAfterFinished: 180
-    
-    ## Credentials extractor configuration
-    extractorImage: "bitnami/kubectl:latest"
-    extractorMaxRetries: 15
-    extractorRetryInterval: 20
 ```
 
 ## 🔧 How It Works
@@ -92,24 +84,18 @@ auditLogging:
 
 ```mermaid
 graph LR
-    A[Extractor Job] --> B[API Server Logs]
-    A --> C[Extract Credentials]
-    C --> D[vg-api-admin-creds Secret]
-    E[CronJob] --> D
-    E --> F[API Server Login]
-    F --> G[JWT Token]
-    E --> H[Cleanup Endpoint]
-    H --> I[MySQL Database]
+    A[API Server prepareCognigyData] --> B[vg-api-admin-creds Secret]
+    C[CronJob] --> B
+    C --> D[API Server Login]
+    D --> E[JWT Token]
+    C --> F[Cleanup Endpoint]
+    F --> G[MySQL Database]
 ```
 
 ### Execution Flow
 
-**Initial Setup (Post-Install/Upgrade):**
-1. **Extractor Job triggers** after Helm deployment
-2. **Cleans existing admin users** from MySQL database
-3. **Restarts API server** to force fresh credential creation
-4. **Monitors API server logs** for new admin passwords
-5. **Creates vg-api-admin-creds secret** with extracted credentials
+**Initial Setup:**
+1. **API server** runs `prepareCognigyData` and creates `vg-api-admin-creds` and `vg-api-cognigy-ai-creds` secrets via kubectl (when `enablePrepareCognigyData` is true)
 
 **Daily Cleanup:**
 1. **CronJob triggers** according to schedule
@@ -122,15 +108,15 @@ graph LR
 
 ### Authentication
 
-The system uses JWT-based authentication with auto-generated credentials:
+The system uses JWT-based authentication with credentials from the `vg-api-admin-creds` secret:
 ```yaml
 secret: vg-api-admin-creds
 keys: 
   - username  # cognigy-ai
-  - password  # auto-extracted from API server logs
+  - password  # created by prepareCognigyData at API server startup
 ```
 
-This secret is **automatically created** during deployment, ensuring zero-configuration setup.
+This secret is **automatically created** by the API server when `prepareCognigyData` runs (requires `enablePrepareCognigyData: true`, kubectl in container, and RBAC).
 
 ## 📋 Cron Schedule Examples
 
@@ -203,10 +189,7 @@ Response Body: {"error":"Unauthorized"}
    kubectl get secret vg-api-admin-creds -n voicegateway -o jsonpath='{.data.username}' | base64 -d
    kubectl get secret vg-api-admin-creds -n voicegateway -o jsonpath='{.data.password}' | base64 -d
    ```
-3. If the secret doesn't exist, check the extractor job logs:
-   ```bash
-   kubectl logs -l app=audit-cleanup,component=extractor -n voicegateway
-   ```
+3. If the secret doesn't exist, ensure `enablePrepareCognigyData` is true and the API server has kubectl + RBAC. See docs/cognigy-init/README.md.
 
 #### ❌ **Connection Failed**
 ```
