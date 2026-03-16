@@ -15,7 +15,7 @@ metadata:
     {{- end }}
 spec:
   backoffLimit: 10
-  ttlSecondsAfterFinished: 86400 # 1 day
+  ttlSecondsAfterFinished: 86400
   template:
     metadata:
       name: api-migrator
@@ -24,13 +24,77 @@ spec:
     spec:
     {{- include "image.pullSecrets" $ | nindent 6 }}
       restartPolicy: OnFailure
+      initContainers:
+        # Create billing database, dedicated billing user, and grant privileges using root credentials
+        # Tables are created by setup-billing-schema.js in the main container
+        - name: create-billing-db
+          image: "{{ include "vg.common.image.render" (dict "global" $.Values.global "image" (printf "%s/%s:%s" .Values.mysql.image.registry .Values.mysql.image.repository .Values.mysql.image.tag)) }}"
+          imagePullPolicy: {{ .Values.apiMigrator.imagePullPolicy | default "IfNotPresent" }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              
+              echo "Creating vg_speech_billing database..."
+              MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h "$MYSQL_HOST" -u root -e "
+                CREATE DATABASE IF NOT EXISTS vg_speech_billing
+                  CHARACTER SET utf8mb4
+                  COLLATE utf8mb4_unicode_ci;
+              "
+              
+              echo "Creating dedicated billing user..."
+              MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h "$MYSQL_HOST" -u root -e "
+                CREATE USER IF NOT EXISTS '$BILLING_USER'@'%' IDENTIFIED BY '$BILLING_PASSWORD';
+                GRANT ALL PRIVILEGES ON vg_speech_billing.* TO '$BILLING_USER'@'%';
+                FLUSH PRIVILEGES;
+              "
+              
+              echo "Verifying database exists..."
+              MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h "$MYSQL_HOST" -u root -e "USE vg_speech_billing" || {
+                echo "CRITICAL: Failed to verify vg_speech_billing database"
+                exit 1
+              }
+              
+              echo "Billing database and user ready."
+          env:
+            - name: MYSQL_HOST
+              value: {{ .Values.mysql.host | quote }}
+            - name: BILLING_USER
+              value: {{ .Values.billing.mysql.username | quote }}
+            - name: BILLING_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.billing.mysql.existingSecret | quote }}
+                  key: {{ .Values.billing.mysql.secretKey | quote }}
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-mysql-password
+                  key: mysql-root-password     
       containers:
         - name: api-migrator-init
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.apiMigrator.image) }}
           imagePullPolicy: {{ .Values.apiMigrator.imagePullPolicy }}
+          {{- if .Values.billing.enabled }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "=== Running vg migrations ==="
+              node /opt/app/migrator/migrate.js release
+              
+              echo ""
+              echo "=== Setting up billing schema ==="
+              node /opt/app/migrator/setup-billing-schema.js
+              
+              echo ""
+              echo "=== All migrations complete ==="
+          {{- end }}
           env:
             - name: JAMBONES_MYSQL_HOST
-              value: {{ .Values.mysql.host }}
+              value: {{ .Values.mysql.host | quote }}
             - name: JAMBONES_MYSQL_DATABASE
               value: {{ .Values.mysql.database.name | quote }}
             - name: JAMBONES_MYSQL_USER
@@ -49,6 +113,17 @@ spec:
               value: {{ .Values.influxdb.host }}
             - name: API_MIGRATION_TARGET
               value: {{ .Values.apiMigrator.migrationTarget }}
+            {{- if .Values.billing.enabled }}
+            - name: VG_SPEECH_BILLING_MYSQL_HOST
+              value: {{ .Values.mysql.host | quote }}
+            - name: VG_SPEECH_BILLING_MYSQL_USER
+              value: {{ .Values.billing.mysql.username | quote }}
+            - name: VG_SPEECH_BILLING_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.billing.mysql.existingSecret | quote }}
+                  key: {{ .Values.billing.mysql.secretKey | quote }}
+            {{- end }}
             {{- if .Values.apiMigrator.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.apiMigrator.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

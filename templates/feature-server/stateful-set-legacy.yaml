@@ -402,6 +402,19 @@ spec:
               value: {{ .Values.featureServerLegacy.disableDialPaiHeader | quote }}
             - name: PRE_CACHE_IGNORE_LIST
               value: {{ .Values.featureServerLegacy.preCacheIgnoreList | quote }}
+            - name: VG_SPEECH_BILLING_ENABLED
+              value: {{ .Values.billing.enabled | quote }}
+            - name: VG_CLUSTER_ID
+              value: {{ .Values.billing.clusterId | default .Values.ingress.webapp.host | quote }}
+            {{- if .Values.billing.enabled }}
+            - name: VG_SPEECH_BILLING_MYSQL_USER
+              value: {{ .Values.billing.mysql.username | quote }}
+            - name: VG_SPEECH_BILLING_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.billing.mysql.existingSecret | quote }}
+                  key: {{ .Values.billing.mysql.secretKey | quote }}
+            {{- end }}
             {{- if .Values.featureServerLegacy.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerLegacy.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

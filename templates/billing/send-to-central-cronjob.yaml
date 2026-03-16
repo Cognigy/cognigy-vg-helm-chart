@@ -1,0 +1,68 @@
+{{- /* if billing.enabled is true and billing.sendToCentral.serverUrl is not empty, then deploy the send-to-central-cronjob */ -}}
+{{ if and .Values.billing.enabled .Values.billing.sendToCentral.enabled .Values.billing.sendToCentral.serverUrl }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: vg-send-billing-to-central
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: vg-billing
+    component: send-to-central
+    owner-team: echo
+spec:
+  schedule: {{ .Values.billing.sendToCentral.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app: vg-billing
+            component: send-to-central
+          annotations:
+            sidecar.istio.io/inject: "false"
+        spec:
+          {{- include "image.pullSecrets" $ | nindent 10 }}
+          restartPolicy: Never
+          containers:
+            - name: send-to-central
+              image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.api.image) }}
+              imagePullPolicy: {{ .Values.api.imagePullPolicy | default "IfNotPresent" }}
+              command: ["node", "lib/billing/jobs/send-billing-to-central.js"]
+              env:
+                - name: JAMBONES_MYSQL_HOST
+                  value: {{ .Values.mysql.host | quote }}
+                - name: JAMBONES_MYSQL_PORT
+                  value: {{ .Values.mysql.port | default "3306" | quote }}
+                - name: JAMBONES_MYSQL_DATABASE
+                  value: {{ .Values.billing.mysql.database | quote }}
+                - name: JAMBONES_MYSQL_USER
+                  value: {{ .Values.billing.mysql.username | quote }}
+                - name: JAMBONES_MYSQL_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.billing.mysql.existingSecret | quote }}
+                      key: {{ .Values.billing.mysql.secretKey | quote }}
+                - name: VG_CLUSTER_ID
+                  value: {{ .Values.billing.clusterId | default .Values.ingress.webapp.host | quote }}
+                - name: VG_SPEECH_BILLING_SERVER_URL
+                  value: {{ .Values.billing.sendToCentral.serverUrl | quote }}
+                - name: VG_SPEECH_BILLING_SHARED_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.billing.sendToCentral.secretName | default "vg-billing-secret" | quote }}
+                      key: {{ .Values.billing.sendToCentral.secretKey | default "shared-secret" | quote }}
+                - name: JAMBONES_LOGLEVEL
+                  value: {{ if .Values.billing.logLevel }}{{ .Values.billing.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: "256Mi"
+                limits:
+                  cpu: "500m"
+                  memory: "512Mi"
+{{- end }}

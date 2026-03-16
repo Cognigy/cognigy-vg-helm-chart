@@ -279,9 +279,9 @@ spec:
             - name: AUDIT_LOGGING_TTL_DAYS
               value: {{ .Values.auditLogging.cleanup.ttlDays | quote }}
             - name: VG_CLUSTER_ID
-              value: {{ .Values.ingress.webapp.host | quote }}
+              value: {{ .Values.billing.clusterId | default .Values.ingress.webapp.host | quote }}
             - name: VG_SPEECH_BILLING_ENABLED
-              value: {{ .Values.vgBilling.enabled | quote }}
+              value: {{ .Values.billing.enabled | quote }}
             - name: SYSTEM_SPEECH_CREDENTIAL_LABEL
               value: {{ $.Values.sharedSpeechCredentials.label | quote }}
             - name: FEATURE_ENABLE_SHARED_SPEECH_CREDENTIALS

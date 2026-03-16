@@ -153,6 +153,17 @@ spec:
             # Logging
             - name: LOG_LEVEL
               value: {{ if .Values.vgConsole.logLevel }}{{ .Values.vgConsole.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+            # Flux Fleet Access
+            - name: ADO_FLUX_FLEET_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: flux-system
+                  key: username
+            - name: ADO_FLUX_FLEET_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: flux-system
+                  key: password
             {{- if .Values.vgConsole.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgConsole.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

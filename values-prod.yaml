@@ -27,6 +27,8 @@ ingress:
     host: ""
   webapp:
     host: ""
+  vgConnector:
+    host: ""
 
 # TLS certificate set crt, key values or alternatively point to an existing secret, see values.yaml for details
 tls:
@@ -66,9 +68,8 @@ testCallManager:
     id: ""
     apiKey: ""
 
-## Disable vg-connector by default
 vgConnector:
-  enabled: false
+  enabled: true
   modules:
     webrtc:
       enabled: true

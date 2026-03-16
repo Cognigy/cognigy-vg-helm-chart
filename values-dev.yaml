@@ -14,6 +14,8 @@ ingress:
     host: ""
   webapp:
     host: ""
+  vgConnector:
+    host: ""
 
 vgConnector:
   enabled: true

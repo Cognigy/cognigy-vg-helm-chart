@@ -6,7 +6,11 @@ metadata:
   labels:
     owner-team: echo
 spec:
-  schedule: {{ .Values.apiBan.cronjobSchedule }}
+  schedule: {{ .Values.apiBan.cronjobSchedule | quote }}
+  startingDeadlineSeconds: 300
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 3
   jobTemplate:
     spec:
       backoffLimit: 0

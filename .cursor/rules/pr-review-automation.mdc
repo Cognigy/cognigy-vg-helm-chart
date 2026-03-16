@@ -1,0 +1,254 @@
+---
+description: Automate PR review comment evaluation, implementation, and resolution
+globs: ["**/*"]
+alwaysApply: false
+---
+
+# PR Review Comment Automation
+
+When asked to review PR comments (e.g., "review PR #X comments", "evaluate PR feedback", "process Copilot reviews"), follow this structured workflow.
+
+## Phase 1: Discovery
+
+Fetch all PR data using GitHub CLI:
+
+```bash
+# Get PR metadata
+gh pr view <PR_NUMBER> --json title,body,state,author,reviews,comments
+
+# Get all review comments (inline code comments)
+gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments
+
+# Get review thread IDs for resolution
+gh api graphql -f query='{
+  repository(owner: "<OWNER>", name: "<REPO>") {
+    pullRequest(number: <PR_NUMBER>) {
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          isResolved
+          comments(first: 1) {
+            nodes {
+              body
+              path
+              line
+            }
+          }
+        }
+      }
+    }
+  }
+}'
+```
+
+## Phase 2: Evaluation Matrix
+
+Categorize each comment into one of these categories:
+
+| Category             | Description                                                                 | Action                     |
+| -------------------- | --------------------------------------------------------------------------- | -------------------------- |
+| **🔴 Critical**       | Security vulnerabilities, data loss risks, breaking changes, invalid syntax | Must implement immediately |
+| **🟠 Should Fix**     | Best practices, consistency, maintainability, quoting/escaping              | Implement before merge     |
+| **🟡 Nice to Have**   | Style preferences, optional configurability, minor optimizations            | Consider for future        |
+| **⚪ False Positive** | Incorrect analysis, doesn't apply to this codebase, misunderstood context   | Resolve without changes    |
+| **🔵 Won't Fix**      | Intentional design choice, out of scope, acceptable trade-off               | Resolve with rationale     |
+
+### Evaluation Criteria
+
+For each comment, assess:
+
+1. **Validity** (0-10): Is the concern technically accurate?
+2. **Applicability** (0-10): Does it apply to this specific codebase/context?
+3. **Risk if Ignored** (Low/Medium/High/Critical): What could go wrong?
+4. **Effort to Fix** (Trivial/Small/Medium/Large): How much work?
+
+Priority order: Security > Correctness > Best Practice > Consistency > Style
+
+## Phase 3: Present Matrix
+
+Display findings in a structured table format:
+
+```markdown
+## PR Review Evaluation Matrix
+
+| #   | File           | Comment Summary             | Category     | Risk   | Effort  | Thread ID |
+| --- | -------------- | --------------------------- | ------------ | ------ | ------- | --------- |
+| 1   | path/file.yaml | Missing quote on env value  | 🔴 Critical   | High   | Trivial | PRRT_xxx  |
+| 2   | path/file.yaml | Use /bin/sh for portability | 🟠 Should Fix | Medium | Trivial | PRRT_yyy  |
+| 3   | path/file.yaml | Hardcoded resource name     | 🔵 Won't Fix  | Low    | Medium  | PRRT_zzz  |
+
+### Summary
+- 🔴 Critical: X items
+- 🟠 Should Fix: X items  
+- 🟡 Nice to Have: X items
+- ⚪ False Positive: X items
+- 🔵 Won't Fix: X items
+```
+
+**IMPORTANT**: Wait for user approval before proceeding to implementation.
+
+## Phase 4: Implementation
+
+After user approval:
+
+1. Create a todo list for approved items
+2. Implement fixes in priority order (Critical → Should Fix → Nice to Have)
+3. Verify changes with appropriate validation:
+   - Helm charts: `helm lint .` and `helm template test .`
+   - YAML: Basic syntax validation
+   - Code: Run linters if available
+
+## Phase 5: Resolution
+
+Resolve all evaluated threads via GraphQL:
+
+```bash
+gh api graphql -f query='
+mutation {
+  resolveReviewThread(input: {threadId: "<THREAD_ID>"}) {
+    thread { isResolved }
+  }
+}'
+```
+
+Resolve threads in batches:
+- First: All implemented fixes (Critical + Should Fix)
+- Then: False positives and Won't Fix items
+- Last: Nice to Have items (if not implemented)
+
+## Phase 6: Risk Assessment Comment (REQUIRED - ALWAYS LAST)
+
+**After all threads are resolved**, analyze the ENTIRE PR diff against main and post a comprehensive risk assessment.
+
+### Step 1: Gather Full PR Context
+
+```bash
+# Get PR metadata and diff statistics
+gh pr view <PR_NUMBER> --json title,body,baseRefName,headRefName,additions,deletions,changedFiles
+
+# Get list of all changed files with status
+gh pr view <PR_NUMBER> --json files --jq '.files[] | "\(.status)\t\(.additions)+\t\(.deletions)-\t\(.path)"'
+
+# Get the full diff for analysis
+gh pr diff <PR_NUMBER>
+
+# Get diff stats summary
+gh pr diff <PR_NUMBER> --stat
+```
+
+### Step 2: Analyze the Entire PR Diff
+
+Evaluate ALL changes in the PR (not just review comments):
+
+1. **Categorize changed files** by component/risk area
+2. **Identify security-sensitive changes** (secrets, auth, permissions, SQL, credentials)
+3. **Check for breaking changes** (API changes, config schema changes, removed features)
+4. **Assess deployment impact** (migrations, new dependencies, infrastructure changes)
+5. **Review test coverage** implications
+
+### Step 3: Post the Risk Assessment Comment
+
+```bash
+gh pr comment <PR_NUMBER> --body "$(cat <<'EOF'
+## 🔍 PR Risk Assessment
+
+### PR Overview
+| Metric            | Value |
+| ----------------- | ----- |
+| **Target Branch** | main  |
+| **Files Changed** | X     |
+| **Lines Added**   | +Y    |
+| **Lines Deleted** | -Z    |
+
+### Changed Components
+| Component           | Files Changed | Risk Level | Notes        |
+| ------------------- | ------------- | ---------- | ------------ |
+| [e.g., Helm Values] | X             | 🟢/🟡/🟠/🔴    | [Brief note] |
+| [e.g., CronJobs]    | X             | 🟢/🟡/🟠/🔴    | [Brief note] |
+| [e.g., Deployments] | X             | 🟢/🟡/🟠/🔴    | [Brief note] |
+| [e.g., Migrations]  | X             | 🟢/🟡/🟠/🔴    | [Brief note] |
+
+### Review Comments Summary
+| Category         | Count | Status     |
+| ---------------- | ----- | ---------- |
+| 🔴 Critical       | X     | ✅ Fixed    |
+| 🟠 Should Fix     | X     | ✅ Fixed    |
+| 🟡 Nice to Have   | X     | ⏭️ Deferred |
+| ⚪ False Positive | X     | ✅ Resolved |
+| 🔵 Won't Fix      | X     | ✅ Resolved |
+
+---
+
+### Risk Assessment
+
+**Overall Risk Level**: 🟢 Low / 🟡 Medium / 🟠 High / 🔴 Critical
+
+#### 🔒 Security
+- [ ] No secrets or credentials exposed in code
+- [ ] No hardcoded sensitive values
+- [ ] Authentication/authorization unchanged or properly reviewed
+- [ ] Input validation adequate (no injection risks)
+- [ ] Secure credential handling (env vars, secrets)
+
+#### 💥 Breaking Changes
+- [ ] No breaking changes to existing deployments
+- [ ] Configuration schema backward compatible
+- [ ] API contracts preserved
+- [ ] Migration path documented (if applicable)
+
+#### 🚀 Deployment Impact
+- [ ] Safe to deploy without downtime
+- [ ] Rollback is straightforward
+- [ ] No manual intervention required
+- [ ] Feature flags available (if needed)
+
+#### 🧪 Testing & Validation
+- [ ] Changes have been validated (lint, template render, etc.)
+- [ ] Edge cases considered
+- [ ] Error handling adequate
+
+#### 📚 Maintainability
+- [ ] Follows existing codebase patterns
+- [ ] Code is readable and documented
+- [ ] No significant technical debt introduced
+
+---
+
+### Key Changes Summary
+[Bulleted list of the main changes introduced by this PR - derived from the diff, not just review comments]
+
+### Potential Concerns
+[Any items that reviewers should pay special attention to]
+
+### Recommendations
+[Suggestions for deployment, monitoring, or follow-up work]
+
+---
+*This risk assessment covers the entire PR diff against `main`, not just review comment resolutions.*
+*Generated during automated PR review processing.*
+EOF
+)"
+```
+
+## Important Rules
+
+1. **Always present the evaluation matrix BEFORE implementing** - Never auto-implement without user approval
+2. **Track thread IDs from discovery phase** - Required for resolution
+3. **Verify all changes work** - Run validation before resolving threads
+4. **Risk assessment covers ENTIRE PR diff** - Not just review comment fixes, but all changes vs main
+5. **Risk assessment comment is MANDATORY** - Must be the last action on every PR review
+6. **Be conservative with "Won't Fix"** - Document clear rationale
+7. **Batch similar fixes** - Group related changes for efficiency
+
+## Example Usage
+
+User: "Review PR #5 comments and resolve them"
+
+Agent workflow:
+1. Fetch PR #5 data, comments, and full diff against main
+2. Present evaluation matrix for review comments
+3. Wait for approval: "Proceed with implementing X critical and Y should-fix items?"
+4. Implement approved fixes
+5. Resolve all threads
+6. Analyze ENTIRE PR diff (all files changed vs main)
+7. Post comprehensive risk assessment comment (LAST STEP - covers full PR scope)

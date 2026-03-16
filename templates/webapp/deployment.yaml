@@ -115,6 +115,8 @@ spec:
               value: {{ $.Values.sharedSpeechCredentials.label | quote }}
             - name: FEATURE_ENABLE_SHARED_SPEECH_CREDENTIALS
               value: {{ $.Values.sharedSpeechCredentials.enabled | quote }}
+            - name: SHARED_SPEECH_CREDENTIALS_DISPLAY_NAME_SUFFIX
+              value: {{ $.Values.sharedSpeechCredentials.displayNameSuffix | quote }}
             - name: SHARED_SPEECH_CREDENTIALS_MICROSOFT_HD_VOICES_ENABLED
               value: {{ $.Values.sharedSpeechCredentials.microsoftHdVoiceEnabled | quote }}
             {{- if .Values.webapp.extraEnvVars }}

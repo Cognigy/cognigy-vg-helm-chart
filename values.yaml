@@ -278,12 +278,40 @@ sharedSpeechCredentials:
   existingSecret: "vg-shared-speech-credentials"
   secretKey: "sharedSpeechCredentials"
   label: "NICE_PROVIDED"
+  displayNameSuffix: "provided by NiCE"
   microsoftHdVoiceEnabled: false
-#############################
-# Billing App #
-#############################
-vgBilling:
+##################
+# Speech Billing #
+##################
+billing:
   enabled: false
+  ## Cluster identifier for billing data (defaults to webapp ingress host if not set)
+  # clusterId: ""
+
+  ## Log level for billing jobs
+  ## Valid values: debug, info, warn, error
+  logLevel:
+  mysql:
+    database: vg_speech_billing
+    ## Dedicated billing user (created by init container)
+    username: billing
+    existingSecret: vg-billing-mysql-password
+    secretKey: billing-password
+  ## Pre-aggregation job - runs daily to calculate 10-minute billing packages
+  preAggregation:
+    enabled: false
+    ## Schedule: Daily at 02:00 UTC
+    schedule: "0 2 * * *"
+  ## Send-to-central job - sends aggregated data to Central Billing Server
+  sendToCentral:
+    enabled: false
+    ## Schedule: Daily at 03:00 UTC (after pre-aggregation)
+    schedule: "0 3 * * *"
+    ## Central Billing Server URL (required if enabled)
+    serverUrl: ""
+    ## Secret containing shared secret for HMAC signing between the API Server and the Central Billing Server
+    secretName: "vg-billing-secret"
+    secretKey: "shared-secret"
 #############
 # SIP & RTP #
 #############
@@ -422,8 +450,8 @@ sbc:
 apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
-  hookDeletePolicy: before-hook-creation,hook-succeeded,hook-failed
-  image: cognigy.azurecr.io/vg-api-migrator:2026.5.0
+  hookDeletePolicy: before-hook-creation,hook-succeeded
+  image: cognigy.azurecr.io/vg-api-migrator:2026.6.0
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -845,7 +873,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.3
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.5.0
+  image: cognigy.azurecr.io/vg-api-server:2026.6.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -956,7 +984,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.5.3
+  image: cognigy.azurecr.io/vg-feature-server:2026.6.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1024,7 +1052,7 @@ featureServer:
       memory: 500Mi
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.5.3
+  image: cognigy.azurecr.io/vg-feature-server:2026.6.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1086,7 +1114,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.5.0
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.6.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
@@ -1131,7 +1159,7 @@ featureServerLegacy:
       cpu: "1"
       memory: 500Mi
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.5.0
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.6.1
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1168,12 +1196,12 @@ freeswitchNightly:
   ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
   ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
   ## @see featureServerNightly
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.5.0
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.6.1
 freeswitchLegacy:
   ## You can specify a custom image for the FreeSWITCH in the legacy FeatureServer here
   ## To enable a "legacy FreeSWITCH", you have to enable a legacy FeatureServer.
   ## @see featureServerLegacy
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.5.0
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.6.1
 rtpEngine:
   image: cognigy.azurecr.io/vg-rtpengine:0.2.0
   imagePullPolicy: IfNotPresent
@@ -1192,7 +1220,7 @@ rtpEngine:
       cpu: "3"
       memory: 1Gi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.5.0
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.6.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1207,7 +1235,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/vg-sbc-call-router:2026.5.0
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.6.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1238,7 +1266,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/vg-sbc-inbound:2026.5.0
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.6.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1278,7 +1306,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/vg-sbc-outbound:2026.5.0
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.6.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1316,7 +1344,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.5.0
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.6.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1331,7 +1359,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.5.0
+  image: cognigy.azurecr.io/vg-tcm:2026.6.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1370,7 +1398,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: false
-  image: cognigy.azurecr.io/vg-connector:2026.5.0
+  image: cognigy.azurecr.io/vg-connector:2026.6.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1393,7 +1421,7 @@ vgConnector:
       cpu: "0.100"
       memory: 150Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.5.0
+  image: cognigy.azurecr.io/vg-webapp:2026.6.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:

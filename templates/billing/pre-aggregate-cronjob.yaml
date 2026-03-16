@@ -1,0 +1,59 @@
+{{- /* if billing.enabled is true and billing.preAggregation.enabled is true, then deploy the pre-aggregate-cronjob */ -}}
+{{ if and .Values.billing.enabled .Values.billing.preAggregation.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: vg-pre-aggregate-speech
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: vg-billing
+    component: pre-aggregate
+    owner-team: echo
+spec:
+  schedule: {{ .Values.billing.preAggregation.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app: vg-billing
+            component: pre-aggregate
+          annotations:
+            sidecar.istio.io/inject: "false"
+        spec:
+          {{- include "image.pullSecrets" $ | nindent 10 }}
+          restartPolicy: Never
+          containers:
+            - name: pre-aggregate
+              image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.api.image) }}
+              imagePullPolicy: {{ .Values.api.imagePullPolicy | default "IfNotPresent" }}
+              command: ["node", "lib/billing/jobs/pre-aggregate-speech.js"]
+              env:
+                - name: JAMBONES_MYSQL_HOST
+                  value: {{ .Values.mysql.host | quote }}
+                - name: JAMBONES_MYSQL_PORT
+                  value: {{ .Values.mysql.port | default "3306" | quote }}
+                - name: JAMBONES_MYSQL_DATABASE
+                  value: {{ .Values.billing.mysql.database | quote }}
+                - name: JAMBONES_MYSQL_USER
+                  value: {{ .Values.billing.mysql.username | quote }}
+                - name: JAMBONES_MYSQL_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.billing.mysql.existingSecret | quote }}
+                      key: {{ .Values.billing.mysql.secretKey | quote }}
+                - name: JAMBONES_LOGLEVEL
+                  value: {{ if .Values.billing.logLevel }}{{ .Values.billing.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: "256Mi"
+                limits:
+                  cpu: "500m"
+                  memory: "512Mi"
+{{- end }}
