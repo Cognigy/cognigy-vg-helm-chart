@@ -1032,6 +1032,9 @@ featureServer:
   disableDialPaiHeader: false
   ## list of comma-separated vendors that should not be pre-cached. Valid values are aws, deepgram, elevenlabs, google, ibm, microsoft, nuance, wellsaid, whisper, playh
   preCacheIgnoreList: "deepgram"
+  ## Override global.enableTtsStreaming for this feature-server. When set (true/false), takes precedence
+  ## over the global switch. Leave as null to inherit from global.enableTtsStreaming.
+  enableTtsStreaming: null
   # Canary deployment configuration for A/B testing between main and nightly feature servers
   canary:
     # Enable canary deployment with traffic splitting
@@ -1100,6 +1103,9 @@ featureServerNightly:
   disableDialPaiHeader: false
   ## list of comma-separated vendors that should not be pre-cached. Valid values are aws, deepgram, elevenlabs, google, ibm, microsoft, nuance, wellsaid, whisper, playh
   preCacheIgnoreList: "deepgram"
+  ## Override global.enableTtsStreaming for this feature-server. When set (true/false), takes precedence
+  ## over the global switch. Leave as null to inherit from global.enableTtsStreaming.
+  enableTtsStreaming: null
   extraEnvVars: []
   ports:
     tcp: 3000
@@ -1147,6 +1153,9 @@ featureServerLegacy:
   anchorMediaAlways: false
   disableDialPaiHeader: false
   preCacheIgnoreList: "deepgram"
+  ## Override global.enableTtsStreaming for this feature-server. When set (true/false), takes precedence
+  ## over the global switch. Leave as null to inherit from global.enableTtsStreaming.
+  enableTtsStreaming: null
   extraEnvVars: []
   ports:
     tcp: 3000
@@ -1400,8 +1409,19 @@ vgConnector:
   enabled: true
   image: cognigy.azurecr.io/vg-connector:2026.6.0
   imagePullPolicy: IfNotPresent
-  replicaCount: 1
-  affinity: {}
+  replicaCount: 2
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                    - vg-connector
+            topologyKey: kubernetes.io/hostname
   nodeSelector: {}
   priorityClassName: ""
   podSecurityContext: {}

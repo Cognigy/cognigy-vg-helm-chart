@@ -199,7 +199,7 @@ spec:
                   "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
                 ]
           volumeMounts:
-            - mountPath: /tmp 
+            - mountPath: /tmp
               name: temp-audio-volume
           envFrom:
             - configMapRef:
@@ -372,7 +372,11 @@ spec:
             - name: VG_EAGERLY_PRE_CACHE_AUDIO
               value: {{ .Values.featureServer.preCacheAudio | quote }}
             - name: JAMBONES_DISABLE_TTS_STREAMING
+              {{- if kindIs "bool" .Values.featureServer.enableTtsStreaming }}
+              value: {{ not .Values.featureServer.enableTtsStreaming | quote }}
+              {{- else }}
               value: {{ not .Values.global.enableTtsStreaming | quote }}
+              {{- end }}
             - name: ANCHOR_MEDIA_ALWAYS
               value: {{ .Values.featureServer.anchorMediaAlways | quote }}
             - name: VG_DISABLE_DIAL_PAI_HEADER
