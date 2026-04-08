@@ -811,10 +811,10 @@ otelCollector:
     targets:
       - source_attribute: "stt.result"
         default_rule:
-          delete_keys: ["vendor.evt.NBest"]
+          delete_keys: ['vendor.evt.NBest']
       - source_attribute: "http.body"
         default_rule:
-          delete_keys: ["speech.vendor.evt.NBest"]
+          delete_keys: ['speech.vendor.evt.NBest']
   # Spoken number to digit conversion processor configuration
   spokennumProcessor:
     enabled: false
@@ -984,7 +984,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.6.2
+  image: cognigy.azurecr.io/vg-feature-server:2026.7.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1055,7 +1055,7 @@ featureServer:
       memory: 500Mi
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.6.2
+  image: cognigy.azurecr.io/vg-feature-server:2026.7.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1120,7 +1120,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.6.0
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.7.1
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:

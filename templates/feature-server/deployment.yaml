@@ -199,7 +199,7 @@ spec:
                   "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
                 ]
           volumeMounts:
-            - mountPath: /tmp 
+            - mountPath: /tmp
               name: temp-audio-volume
           envFrom:
             - configMapRef:
