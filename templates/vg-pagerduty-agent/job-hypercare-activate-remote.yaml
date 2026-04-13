@@ -1,0 +1,70 @@
+{{- if and .Values.vgPagerdutyAgent.hypercare.activateOnDeploy .Values.vgPagerdutyAgent.hypercare.centralAgentUrl .Values.vgPagerdutyAgent.hypercare.localEnvironment }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vg-pagerduty-agent-hypercare-activate-remote
+  namespace: {{ $.Release.Namespace | quote }}
+  annotations:
+    "helm.sh/hook": post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+  labels:
+    app: vg-pagerduty-agent-hypercare-activate-remote
+    owner-team: echo
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: vg-pagerduty-agent-hypercare-activate-remote
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- if .Values.vgPagerdutyAgent.nodeSelector }}
+      nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgPagerdutyAgent.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.vgPagerdutyAgent.tolerations }}
+      tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgPagerdutyAgent.tolerations "context" $) | nindent 8 }}
+      {{- end }}
+      restartPolicy: OnFailure
+      containers:
+        - name: vg-pagerduty-agent-hypercare-activate-remote
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.jobs.image) }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HYPERCARE_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vgPagerdutyAgent.secretName | default "vg-pagerduty-agent-secrets" }}
+                  key: HYPERCARE_API_TOKEN
+            - name: HYPERCARE_PAYLOAD
+              value: {{ dict "environment" .Values.vgPagerdutyAgent.hypercare.localEnvironment "window_hours" (.Values.vgPagerdutyAgent.hypercare.windowHours | default 2) "release_version" (regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version) | toJson | quote }}
+            - name: CENTRAL_AGENT_URL
+              value: {{ .Values.vgPagerdutyAgent.hypercare.centralAgentUrl | quote }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Activating hypercare on central agent for environment: {{ .Values.vgPagerdutyAgent.hypercare.localEnvironment }}"
+              echo "Payload: ${HYPERCARE_PAYLOAD}"
+              response=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer ${HYPERCARE_API_TOKEN}" \
+                -d "${HYPERCARE_PAYLOAD}" \
+                "${CENTRAL_AGENT_URL}/api/hypercare/activate")
+
+              http_code=$(echo "$response" | grep "HTTP_STATUS:" | cut -d: -f2)
+              body=$(echo "$response" | sed '/HTTP_STATUS:/d')
+
+              echo "HTTP Status: $http_code"
+              echo "Response: $body"
+
+              if [ "$http_code" = "200" ]; then
+                echo "Hypercare window activated successfully on central agent"
+                exit 0
+              else
+                echo "Failed to activate hypercare window on central agent"
+                exit 1
+              fi
+{{- end }}

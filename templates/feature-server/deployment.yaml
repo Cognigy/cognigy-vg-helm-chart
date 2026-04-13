@@ -158,6 +158,9 @@ spec:
           ports:
             - name: freeswitch
               containerPort: {{ .Values.freeswitch.ports.eventSocket }}
+              protocol: TCP
+            - name: fs-freeswitch
+              containerPort: {{ .Values.freeswitch.metricsPort }}
               protocol: TCP          
           args:
             - freeswitch
@@ -169,6 +172,9 @@ spec:
             - {{ .Values.freeswitch.ports.tls | quote }}
             - --event-socket-port
             - {{ .Values.freeswitch.ports.eventSocket | quote }}
+            {{- if .Values.freeswitch.createCoreFile }}
+            - --create-core-file
+            {{- end }}
             {{- range .Values.freeswitch.args }}
             - {{ . }}
             {{- end }}
@@ -199,8 +205,10 @@ spec:
                   "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
                 ]
           volumeMounts:
-            - mountPath: /tmp
+            - mountPath: /tmp 
               name: temp-audio-volume
+            - mountPath: /coredumps
+              name: fs-core-dumps
           envFrom:
             - configMapRef:
                 name: cognigy-env
@@ -381,6 +389,8 @@ spec:
               value: {{ .Values.featureServer.anchorMediaAlways | quote }}
             - name: VG_DISABLE_DIAL_PAI_HEADER
               value: {{ .Values.featureServer.disableDialPaiHeader | quote }}
+            - name: LOG_REDACTION_ENABLED
+              value: {{ $.Values.logRedaction.enabled | default "false" | quote }}
             {{- if .Values.featureServer.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
@@ -390,4 +400,7 @@ spec:
       volumes:
         - name: temp-audio-volume
           emptyDir: {}
+        - name: fs-core-dumps
+          emptyDir:
+            sizeLimit: "2Gi"
 {{- end }}

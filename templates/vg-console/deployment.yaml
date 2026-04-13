@@ -164,6 +164,17 @@ spec:
                 secretKeyRef:
                   name: flux-system
                   key: password
+            {{- if or .Values.vgConsole.pagerdutyAgentUrl .Values.vgPagerdutyAgent.enabled }}
+            - name: VG_PAGERDUTY_AGENT_URL
+              value: {{ .Values.vgConsole.pagerdutyAgentUrl | default (printf "http://vg-pagerduty-agent.%s:%v" $.Release.Namespace (.Values.vgPagerdutyAgent.port | default 3000)) | quote }}
+            {{- end }}
+            {{- if .Values.vgPagerdutyAgent.hypercare.enabled }}
+            - name: HYPERCARE_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vgPagerdutyAgent.secretName | default "vg-pagerduty-agent-secrets" }}
+                  key: HYPERCARE_API_TOKEN
+            {{- end }}
             {{- if .Values.vgConsole.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgConsole.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

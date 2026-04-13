@@ -1,0 +1,13 @@
+{{- if and (.Values.ingress.enabled) (.Values.ingress.vgPagerdutyAgent.ipWhiteListMiddleware.enabled) }}
+{{- with .Values.ingress.vgPagerdutyAgent.ipWhiteListMiddleware }}
+---
+# Whitelisting Based on `X-Forwarded-For` with `depth=0`
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: ipwhitelistvgpagerdutyagent
+  namespace: {{ $.Release.Namespace | quote }}
+spec:
+  ipAllowList: {{- toYaml .ipWhiteList | nindent 4 }}
+{{- end }}
+{{- end }}

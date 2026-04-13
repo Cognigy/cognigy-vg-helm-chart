@@ -66,6 +66,20 @@ Set `imageCredentials.username` and `imageCredentials.password` accordingly.
 2. Cloud Provider:
 Set `cloud` variable accordingly.
 
+### VG PagerDuty Agent Secret Requirements
+
+When `vgPagerdutyAgent.enabled: true`, the secret referenced by
+`vgPagerdutyAgent.secretName` must include all non-hypercare PagerDuty Agent
+keys (see the inline list in `values.yaml`).
+
+`HYPERCARE_API_TOKEN` is required only when hypercare is enabled:
+
+- `vgPagerdutyAgent.hypercare.enabled: true` (central polling mode), or
+- `vgPagerdutyAgent.hypercare.activateOnDeploy: true` (remote activation mode).
+
+If hypercare is disabled, `HYPERCARE_API_TOKEN` is not required by
+`vg-console` or `vg-pagerduty-agent`.
+
 ### Cognigy.VG DNS and TLS Settings
 
 Cognigy VoiceGateway exposes three web services for which you will need to

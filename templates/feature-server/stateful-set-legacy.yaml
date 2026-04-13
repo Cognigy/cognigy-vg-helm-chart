@@ -164,6 +164,9 @@ spec:
             - name: freeswitch
               containerPort: {{ .Values.freeswitch.ports.eventSocket }}
               protocol: TCP
+            - name: fs-freeswitch
+              containerPort: {{ .Values.freeswitch.metricsPort }}
+              protocol: TCP
           args:
             - freeswitch
             - --username
@@ -174,6 +177,9 @@ spec:
             - {{ .Values.freeswitch.ports.tls | quote }}
             - --event-socket-port
             - {{ .Values.freeswitch.ports.eventSocket | quote }}
+            {{- if .Values.freeswitch.createCoreFile }}
+            - --create-core-file
+            {{- end }}
             {{- range .Values.freeswitch.args }}
             - {{ . }}
             {{- end }}

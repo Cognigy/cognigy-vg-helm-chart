@@ -164,6 +164,9 @@ spec:
             - name: freeswitch
               containerPort: {{ .Values.freeswitch.ports.eventSocket }}
               protocol: TCP
+            - name: fs-freeswitch
+              containerPort: {{ .Values.freeswitch.metricsPort }}
+              protocol: TCP
           args:
             - freeswitch
             - --username
@@ -174,6 +177,9 @@ spec:
             - {{ .Values.freeswitch.ports.tls | quote }}
             - --event-socket-port
             - {{ .Values.freeswitch.ports.eventSocket | quote }}
+            {{- if .Values.freeswitch.createCoreFile }}
+            - --create-core-file
+            {{- end }}
             {{- range .Values.freeswitch.args }}
             - {{ . }}
             {{- end }}
@@ -419,6 +425,8 @@ spec:
                   name: {{ .Values.billing.mysql.existingSecret | quote }}
                   key: {{ .Values.billing.mysql.secretKey | quote }}
             {{- end }}
+            - name: LOG_REDACTION_ENABLED
+              value: {{ $.Values.logRedaction.enabled | default "false" | quote }}
             {{- if .Values.featureServerNightly.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

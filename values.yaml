@@ -266,6 +266,16 @@ ingress:
           - 0.0.0.0/0
         ipStrategy:
           depth: 0
+  vgPagerdutyAgent:
+    host: ""
+    extraAnnotations: {}
+    ipWhiteListMiddleware:
+      enabled: false
+      ipWhiteList:
+        sourceRange:
+          - 0.0.0.0/0
+        ipStrategy:
+          depth: 0
 #############################
 # Shared Speech Credentials #
 #############################
@@ -280,6 +290,14 @@ sharedSpeechCredentials:
   label: "NICE_PROVIDED"
   displayNameSuffix: "provided by NiCE"
   microsoftHdVoiceEnabled: false
+##################
+# Log Redaction  #
+##################
+# Log redaction for sensitive data (e.g. credit card numbers) in service logs.
+# The log-redactor binary is baked into Docker images; this flag activates it
+# at runtime via the LOG_REDACTION_ENABLED environment variable.
+logRedaction:
+  enabled: false
 ##################
 # Speech Billing #
 ##################
@@ -451,7 +469,7 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.6.0
+  image: cognigy.azurecr.io/vg-api-migrator:2026.8.0
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -776,7 +794,7 @@ jaeger:
       memory: 450Mi
 otelCollector:
   enabled: false
-  image: cognigydevelopment.azurecr.io/otel-collector-contrib:0.145.0
+  image: cognigydevelopment.azurecr.io/vg-otel-collector:main-9f18c8ad6750b0952189203da0d4ebe9230c9979-1774959200
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -811,10 +829,10 @@ otelCollector:
     targets:
       - source_attribute: "stt.result"
         default_rule:
-          delete_keys: ['vendor.evt.NBest']
+          delete_keys: ["vendor.evt.NBest"]
       - source_attribute: "http.body"
         default_rule:
-          delete_keys: ['speech.vendor.evt.NBest']
+          delete_keys: ["speech.vendor.evt.NBest"]
   # Spoken number to digit conversion processor configuration
   spokennumProcessor:
     enabled: false
@@ -873,7 +891,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.3
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.6.0
+  image: cognigy.azurecr.io/vg-api-server:2026.8.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -984,7 +1002,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.7.1
+  image: cognigy.azurecr.io/vg-feature-server:2026.8.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1055,7 +1073,7 @@ featureServer:
       memory: 500Mi
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.7.1
+  image: cognigy.azurecr.io/vg-feature-server:2026.8.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1120,7 +1138,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.7.1
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.8.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
@@ -1168,11 +1186,12 @@ featureServerLegacy:
       cpu: "1"
       memory: 500Mi
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.7.1
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.7.2
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
   username: Cognigy
+  metricsPort: 9090
   ports:
     sip: 5080
     tls: 5081
@@ -1186,6 +1205,9 @@ freeswitch:
     # - --rtp-range-start the starting UDP port for RTP traffic
     # - --rtp-range-end the ending UDP port for RTP traffic
     # - --log-level debug (available from R71 freeSWITCH-mrf image)
+  ## Enable core dump creation on crash. Requires the host/node kernel core_pattern
+  ## to be set to a path inside /coredumps (e.g., /coredumps/core.%e.%p.%t).
+  createCoreFile: true
   tmpCacheAudioFolder: "/tmp/"
   serviceThreads: 1
   bufferSecs: 5
@@ -1205,12 +1227,12 @@ freeswitchNightly:
   ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
   ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
   ## @see featureServerNightly
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.7.1
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.7.2
 freeswitchLegacy:
   ## You can specify a custom image for the FreeSWITCH in the legacy FeatureServer here
   ## To enable a "legacy FreeSWITCH", you have to enable a legacy FeatureServer.
   ## @see featureServerLegacy
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.7.1
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.7.2
 rtpEngine:
   image: cognigy.azurecr.io/vg-rtpengine:0.2.0
   imagePullPolicy: IfNotPresent
@@ -1229,7 +1251,7 @@ rtpEngine:
       cpu: "3"
       memory: 1Gi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.6.0
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.8.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1244,7 +1266,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/vg-sbc-call-router:2026.6.0
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.8.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1275,7 +1297,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/vg-sbc-inbound:2026.6.0
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.8.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1315,7 +1337,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/vg-sbc-outbound:2026.6.0
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.8.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1353,7 +1375,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.6.0
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.8.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1368,7 +1390,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.6.0
+  image: cognigy.azurecr.io/vg-tcm:2026.8.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1407,7 +1429,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: true
-  image: cognigy.azurecr.io/vg-connector:2026.6.0
+  image: cognigy.azurecr.io/vg-connector:2026.8.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1441,7 +1463,7 @@ vgConnector:
       cpu: "0.100"
       memory: 150Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.6.0
+  image: cognigy.azurecr.io/vg-webapp:2026.8.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1869,8 +1891,73 @@ vgConsole:
   podSecurityContext: {}
   ## Priority class
   priorityClassName: ""
+  ## Override URL for vg-pagerduty-agent (cross-namespace or external).
+  ## When empty and vgPagerdutyAgent.enabled=true, defaults to same-namespace service.
+  pagerdutyAgentUrl: ""
   ## Extra environment variables
   extraEnvVars: []
+
+####################################
+# VG PagerDuty Agent               #
+####################################
+## Automated PagerDuty investigation agent with ES, Grafana, and LLM orchestration
+vgPagerdutyAgent:
+  enabled: false
+  image: cognigy.azurecr.io/vg-pagerduty-agent:latest
+  imagePullPolicy: IfNotPresent
+  replicaCount: 1
+  port: 3000
+  ## Secret "vg-pagerduty-agent-secrets" must be provisioned externally (e.g. SealedSecret).
+  ## Required keys: ELASTICSEARCH_API_KEY_PROD, ELASTICSEARCH_API_KEY_DEV,
+  ##   PAGERDUTY_API_KEY, PAGERDUTY_WEBHOOK_SIGNING_SECRET, ANTHROPIC_API_KEY,
+  ##   PROM_GRAFANA_API_URL_<ENV>, PROM_GRAFANA_ADMIN_USERNAME_<ENV>, PROM_GRAFANA_ADMIN_PASSWORD_<ENV>
+  ##   HYPERCARE_API_TOKEN (required when vgPagerdutyAgent.hypercare.enabled=true)
+  ## Hypercare rollback PRs: Azure DevOps Git on flux-fleet-* — ADO_FLUX_FLEET_* from flux-system (default), or add AZURE_DEVOPS_PAT to this secret (vg-console style; see vg-console api/azure-devops-client.js).
+  secretName: vg-pagerduty-agent-secrets
+  ## Internal URL to vg-console API is derived from vgConsole.port
+  consoleServiceName: vg-console
+  resources:
+    requests:
+      cpu: "0.100"
+      memory: 128Mi
+    limits:
+      cpu: "0.500"
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podSecurityContext: {}
+  priorityClassName: ""
+  extraEnvVars: []
+  ## Hypercare monitoring after a release upgrade.
+  ##
+  ## Central cluster (hypercare.enabled: true):
+  ##   Deploys the CronJob that polls /api/hypercare/run every N minutes.
+  ##   No-op when no environment has an active window.
+  ##   Expose the agent via ingress (ingress.vgPagerdutyAgent.host)
+  ##   and share the HYPERCARE_API_TOKEN secret with calling clusters.
+  ##
+  ## Per-environment activation (hypercare.activateOnDeploy: true):
+  ##   On Helm upgrade, fires a post-upgrade Job that POSTs to the central
+  ##   vg-pagerduty-agent to activate hypercare for this environment only.
+  ##   Does NOT deploy local CronJob or hypercare infra.
+  hypercare:
+    enabled: false
+    ## Cron schedule for the polling CronJob (central cluster only)
+    schedule: "*/10 * * * *"
+    ## Duration of the hypercare window in hours
+    windowHours: 2
+    successfulJobsHistoryLimit: 6
+    failedJobsHistoryLimit: 3
+    ## --- Per-environment remote activation (deploying clusters) ---
+    ## When true, a post-upgrade Job calls the central agent to activate
+    ## hypercare for this environment. Requires centralAgentUrl and localEnvironment.
+    activateOnDeploy: false
+    ## External URL of the central vg-pagerduty-agent (e.g. https://hypercare.internal.example.com)
+    centralAgentUrl: ""
+    ## This cluster's environment name as known to the agent (e.g. "vg-eu")
+    localEnvironment: ""
+
 #######################
 # Audit Logging #
 #######################

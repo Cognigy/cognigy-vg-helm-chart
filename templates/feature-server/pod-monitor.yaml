@@ -17,6 +17,8 @@ spec:
       port: metrics
     - path: /metrics
       port: fs-drachtio
+    - path: /metrics
+      port: fs-freeswitch
   selector:
     matchExpressions:
       - key: app

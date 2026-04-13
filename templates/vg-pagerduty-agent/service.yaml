@@ -1,0 +1,19 @@
+{{- if .Values.vgPagerdutyAgent.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vg-pagerduty-agent
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-pagerduty-agent
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.vgPagerdutyAgent.port | default 3000 }}
+      targetPort: {{ .Values.vgPagerdutyAgent.port | default 3000 }}
+      protocol: TCP
+      name: http
+  selector:
+    app: vg-pagerduty-agent
+{{- end }}
