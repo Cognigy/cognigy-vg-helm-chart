@@ -794,7 +794,7 @@ jaeger:
       memory: 450Mi
 otelCollector:
   enabled: false
-  image: cognigydevelopment.azurecr.io/vg-otel-collector:main-9f18c8ad6750b0952189203da0d4ebe9230c9979-1774959200
+  image: cognigy.azurecr.io/vg-otel-collector:main-9f18c8ad6750b0952189203da0d4ebe9230c9979-1774959200  
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
