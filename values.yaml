@@ -469,7 +469,7 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.8.0
+  image: cognigy.azurecr.io/vg-api-migrator:2026.8.1
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -794,7 +794,7 @@ jaeger:
       memory: 450Mi
 otelCollector:
   enabled: false
-  image: cognigy.azurecr.io/vg-otel-collector:main-9f18c8ad6750b0952189203da0d4ebe9230c9979-1774959200  
+  image: cognigy.azurecr.io/vg-otel-collector:main-9f18c8ad6750b0952189203da0d4ebe9230c9979-1774959200
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -891,7 +891,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.3
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.8.0
+  image: cognigy.azurecr.io/vg-api-server:2026.8.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1002,7 +1002,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.8.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.8.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1073,7 +1073,7 @@ featureServer:
       memory: 500Mi
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.8.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.8.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1896,7 +1896,6 @@ vgConsole:
   pagerdutyAgentUrl: ""
   ## Extra environment variables
   extraEnvVars: []
-
 ####################################
 # VG PagerDuty Agent               #
 ####################################
@@ -1957,7 +1956,6 @@ vgPagerdutyAgent:
     centralAgentUrl: ""
     ## This cluster's environment name as known to the agent (e.g. "vg-eu")
     localEnvironment: ""
-
 #######################
 # Audit Logging #
 #######################
