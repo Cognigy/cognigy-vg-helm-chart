@@ -1,0 +1,22 @@
+{{- if .Values.mediaProcessor.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.mediaProcessor.serviceName | quote }}
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: media-processor
+    owner-team: echo
+spec:
+  selector:
+    app: media-processor
+  ports:
+    - name: grpc
+      port: {{ .Values.mediaProcessor.ports.grpc }}
+      targetPort: {{ .Values.mediaProcessor.ports.grpc }}
+      protocol: TCP
+    - name: metrics
+      port: {{ .Values.mediaProcessor.ports.metrics }}
+      targetPort: {{ .Values.mediaProcessor.ports.metrics }}
+      protocol: TCP
+{{- end }}

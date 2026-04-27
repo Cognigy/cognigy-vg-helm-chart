@@ -1,0 +1,128 @@
+{{- if .Values.mediaProcessor.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media-processor
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: media-processor
+    owner-team: echo
+spec:
+  selector:
+    matchLabels:
+      app: media-processor
+  replicas: {{ .Values.mediaProcessor.replicaCount }}
+  template:
+    metadata:
+      labels:
+        app: media-processor
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- if .Values.mediaProcessor.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.mediaProcessor.terminationGracePeriodSeconds }}
+      {{- end }}
+      {{- if .Values.mediaProcessor.affinity }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.mediaProcessor.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.mediaProcessor.nodeSelector }}
+      nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" .Values.mediaProcessor.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.mediaProcessor.priorityClassName }}
+      priorityClassName: {{ .Values.mediaProcessor.priorityClassName }}
+      {{- end }}
+      {{- if .Values.mediaProcessor.podSecurityContext }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.mediaProcessor.podSecurityContext "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.mediaProcessor.tolerations }}
+      tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.mediaProcessor.tolerations "context" $) | nindent 8 }}
+      {{- end }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: media-processor
+      restartPolicy: Always
+      containers:
+        - name: media-processor
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.mediaProcessor.image) }}
+          imagePullPolicy: {{ .Values.mediaProcessor.imagePullPolicy }}
+          resources: {{- toYaml .Values.mediaProcessor.resources | nindent 12 }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.mediaProcessor.ports.grpc }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.mediaProcessor.ports.metrics }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: metrics
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: metrics
+            failureThreshold: 3
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /health
+              port: metrics
+            failureThreshold: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          env:
+            - name: GRPC_PORT
+              value: {{ .Values.mediaProcessor.ports.grpc | quote }}
+            - name: METRICS_PORT
+              value: {{ .Values.mediaProcessor.ports.metrics | quote }}
+            - name: LOG_LEVEL
+              value: {{ if .Values.mediaProcessor.logLevel }}{{ .Values.mediaProcessor.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: K8S_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            # Cache configuration
+            - name: CACHE_TYPE
+              value: {{ .Values.mediaProcessor.cache.type | quote }}
+            - name: CACHE_TTL_SECONDS
+              value: {{ .Values.mediaProcessor.cache.ttlSeconds | quote }}
+            {{- if eq .Values.mediaProcessor.cache.type "redis" }}
+            # Redis configuration
+            {{- if eq $.Values.cognigyEnv.FEATURE_REDIS_SENTINEL_MODE_ENABLED "true" }}
+            # Redis Sentinel mode (HA)
+            - name: REDIS_SENTINEL_MODE_ENABLED
+              value: "true"
+            - name: REDIS_SENTINEL_MASTER_NAME
+              value: {{ $.Values.cognigyEnv.JAMBONES_REDIS_SENTINEL_MASTER_NAME | quote }}
+            - name: REDIS_SENTINEL_ADDRESSES
+              value: {{ $.Values.cognigyEnv.JAMBONES_REDIS_SENTINELS | quote }}
+            {{- else }}
+            # Redis standalone mode
+            - name: REDIS_HOST
+              value: {{ $.Values.redis.host | quote }}
+            - name: REDIS_PORT
+              value: {{ $.Values.redis.port | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.mediaProcessor.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.mediaProcessor.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
+{{- end }}

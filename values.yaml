@@ -428,7 +428,7 @@ sbc:
   ec2EipAllocator:
     ## Only for AWS
     enabled: false
-    image: cognigy.azurecr.io/vg-ec2-eip-allocator:2.7.7
+    image: cognigy.azurecr.io/ec2-eip-allocator:1.1.2
     ## Tag key for the SIP EIP Node Pool
     sipEipGroupRoleKey: "role"
     ## Tag value for the SIP EIP Node Pool
@@ -469,7 +469,7 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.8.1
+  image: cognigy.azurecr.io/vg-api-migrator:2026.9.0
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -794,7 +794,7 @@ jaeger:
       memory: 450Mi
 otelCollector:
   enabled: false
-  image: cognigy.azurecr.io/vg-otel-collector:main-9f18c8ad6750b0952189203da0d4ebe9230c9979-1774959200
+  image: cognigy.azurecr.io/vg-otel-collector:2026.8.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -891,7 +891,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.3
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.8.1
+  image: cognigy.azurecr.io/vg-api-server:2026.9.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1002,7 +1002,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.8.1
+  image: cognigy.azurecr.io/vg-feature-server:2026.9.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1053,6 +1053,10 @@ featureServer:
   ## Override global.enableTtsStreaming for this feature-server. When set (true/false), takes precedence
   ## over the global switch. Leave as null to inherit from global.enableTtsStreaming.
   enableTtsStreaming: null
+  ## List of vendors that use per-credential TTS streaming control.
+  ## Vendors not listed fall back to global enableTtsStreaming behavior.
+  ## Use ["*"] for all vendors.
+  streamingTtsVendors: []
   # Canary deployment configuration for A/B testing between main and nightly feature servers
   canary:
     # Enable canary deployment with traffic splitting
@@ -1060,6 +1064,11 @@ featureServer:
     # Percentage of traffic to route to nightly feature server (0-100)
     # Example: 10 means 10% traffic to nightly, 90% traffic to main
     trafficPercentageToNightly: 0
+  mediaProcessor:
+    enabled: false
+    sttVendors: []
+    ttsVendors: []
+    streamingTtsVendors: []
   extraEnvVars: []
   ports:
     tcp: 3000
@@ -1073,7 +1082,7 @@ featureServer:
       memory: 500Mi
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.8.1
+  image: cognigy.azurecr.io/vg-feature-server:2026.9.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1121,9 +1130,18 @@ featureServerNightly:
   disableDialPaiHeader: false
   ## list of comma-separated vendors that should not be pre-cached. Valid values are aws, deepgram, elevenlabs, google, ibm, microsoft, nuance, wellsaid, whisper, playh
   preCacheIgnoreList: "deepgram"
+  mediaProcessor:
+    enabled: false
+    sttVendors: []
+    ttsVendors: []
+    streamingTtsVendors: []
   ## Override global.enableTtsStreaming for this feature-server. When set (true/false), takes precedence
   ## over the global switch. Leave as null to inherit from global.enableTtsStreaming.
   enableTtsStreaming: null
+  ## List of vendors that use per-credential TTS streaming control.
+  ## Vendors not listed fall back to global enableTtsStreaming behavior.
+  ## Use ["*"] for all vendors.
+  streamingTtsVendors: []
   extraEnvVars: []
   ports:
     tcp: 3000
@@ -1138,7 +1156,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.8.0
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.9.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
@@ -1171,9 +1189,18 @@ featureServerLegacy:
   anchorMediaAlways: false
   disableDialPaiHeader: false
   preCacheIgnoreList: "deepgram"
+  mediaProcessor:
+    enabled: false
+    sttVendors: []
+    ttsVendors: []
+    streamingTtsVendors: []
   ## Override global.enableTtsStreaming for this feature-server. When set (true/false), takes precedence
   ## over the global switch. Leave as null to inherit from global.enableTtsStreaming.
   enableTtsStreaming: null
+  ## List of vendors that use per-credential TTS streaming control.
+  ## Vendors not listed fall back to global enableTtsStreaming behavior.
+  ## Use ["*"] for all vendors.
+  streamingTtsVendors: []
   extraEnvVars: []
   ports:
     tcp: 3000
@@ -1186,7 +1213,7 @@ featureServerLegacy:
       cpu: "1"
       memory: 500Mi
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.7.2
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.9.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1227,12 +1254,12 @@ freeswitchNightly:
   ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
   ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
   ## @see featureServerNightly
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.7.2
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.9.0
 freeswitchLegacy:
   ## You can specify a custom image for the FreeSWITCH in the legacy FeatureServer here
   ## To enable a "legacy FreeSWITCH", you have to enable a legacy FeatureServer.
   ## @see featureServerLegacy
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.7.2
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.9.0
 rtpEngine:
   image: cognigy.azurecr.io/vg-rtpengine:0.2.0
   imagePullPolicy: IfNotPresent
@@ -1250,8 +1277,54 @@ rtpEngine:
     limits:
       cpu: "3"
       memory: 1Gi
+####################
+# Media Processor
+####################
+mediaProcessor:
+  ## Enable Media Processor for decoupled STT/TTS processing
+  enabled: false
+  image: cognigy.azurecr.io/vg-media-processor:2026.9.0
+  imagePullPolicy: Always
+  replicaCount: 2
+  serviceName: media-processor
+  ## valid choices are debug, info, warn, error
+  logLevel:
+  cache:
+    ## Cache type: "filesystem" or "redis"
+    type: "filesystem"
+    ## TTL for cache entries in seconds (default: 30 minutes)
+    ttlSeconds: 1800
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                    - media-processor
+            topologyKey: kubernetes.io/hostname
+  nodeSelector: {}
+  priorityClassName: ""
+  podSecurityContext: {}
+  tolerations: []
+  terminationGracePeriodSeconds: 30
+  extraEnvVars: []
+  ports:
+    grpc: 50051
+    ## Metrics port also serves /health endpoint for probes
+    metrics: 9090
+  resources:
+    requests:
+      cpu: "0.5"
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.8.0
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.9.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1266,7 +1339,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/vg-sbc-call-router:2026.8.0
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.9.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1297,7 +1370,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/vg-sbc-inbound:2026.8.0
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.9.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1337,7 +1410,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/vg-sbc-outbound:2026.8.0
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.9.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1375,7 +1448,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.8.0
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.9.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1390,7 +1463,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.8.0
+  image: cognigy.azurecr.io/vg-tcm:2026.9.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1429,7 +1502,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: true
-  image: cognigy.azurecr.io/vg-connector:2026.8.0
+  image: cognigy.azurecr.io/vg-connector:2026.9.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1463,7 +1536,7 @@ vgConnector:
       cpu: "0.100"
       memory: 150Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.8.0
+  image: cognigy.azurecr.io/vg-webapp:2026.9.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1894,6 +1967,36 @@ vgConsole:
   ## Override URL for vg-pagerduty-agent (cross-namespace or external).
   ## When empty and vgPagerdutyAgent.enabled=true, defaults to same-namespace service.
   pagerdutyAgentUrl: ""
+  ## LLM-based enrichment of changelog entries. Requires vgConsole.enabled=true;
+  ## the chart will fail template rendering otherwise. When enabled, vg-console
+  ## runs an enrichment agent that analyzes the actual PR diff via GitHub and
+  ## generates structured signals. Falls back to the deterministic regex
+  ## extractor on any failure so ingestion never blocks.
+  ##
+  ## Two secrets are mounted via envFrom when enabled=true:
+  ##
+  ##   1. vgPagerdutyAgent.secretName (default "vg-pagerduty-agent-secrets") —
+  ##      LLM credentials:
+  ##        - LLM_PROVIDER (anthropic | azure-openai | aws-bedrock)
+  ##        - AZURE_OPENAI_{ENDPOINT,API_KEY,DEPLOYMENT,API_VERSION}
+  ##        - ANTHROPIC_API_KEY
+  ##        - AWS_BEDROCK_{REGION,ACCESS_KEY_ID,SECRET_ACCESS_KEY,MODEL}
+  ##
+  ##   2. githubAppSecretName (default "flux-system-github-app") —
+  ##      GitHub App credentials used to fetch PR diffs. Same sealed secret
+  ##      Flux uses (keys: githubAppID, githubAppInstallationID,
+  ##      githubAppPrivateKey). The agent also accepts the UPPER_SNAKE_CASE
+  ##      variants (GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID,
+  ##      GITHUB_APP_PRIVATE_KEY) if supplied via a different secret.
+  ##
+  ## Both secrets must exist in the target namespace before enabling
+  ## changelogEnrichment, otherwise the pod will fail to start.
+  changelogEnrichment:
+    enabled: false
+    ## Name of the secret holding the GitHub App credentials. Defaults to
+    ## "flux-system-github-app" which is already present in every cluster
+    ## that runs Flux. Override only if you want to use a dedicated secret.
+    githubAppSecretName: "flux-system-github-app"
   ## Extra environment variables
   extraEnvVars: []
 ####################################
@@ -1938,7 +2041,10 @@ vgPagerdutyAgent:
   ##
   ## Per-environment activation (hypercare.activateOnDeploy: true):
   ##   On Helm upgrade, fires a post-upgrade Job that POSTs to the central
-  ##   vg-pagerduty-agent to activate hypercare for this environment only.
+  ##   vg-console to activate a hypercare window for this environment.
+  ##   The Job is intentionally non-blocking: activation failures log a
+  ##   warning and exit 0 so an unrelated vg-console outage cannot fail a
+  ##   helm release.
   ##   Does NOT deploy local CronJob or hypercare infra.
   hypercare:
     enabled: false
@@ -1949,10 +2055,17 @@ vgPagerdutyAgent:
     successfulJobsHistoryLimit: 6
     failedJobsHistoryLimit: 3
     ## --- Per-environment remote activation (deploying clusters) ---
-    ## When true, a post-upgrade Job calls the central agent to activate
-    ## hypercare for this environment. Requires centralAgentUrl and localEnvironment.
+    ## When true, a post-upgrade Job calls the central vg-console to activate
+    ## hypercare for this environment. Requires centralConsoleUrl (or the
+    ## deprecated centralAgentUrl) and localEnvironment.
     activateOnDeploy: false
-    ## External URL of the central vg-pagerduty-agent (e.g. https://hypercare.internal.example.com)
+    ## External URL of the central vg-console API (e.g. https://console.internal.example.com).
+    ## Hypercare window state is owned by vg-console; activation POSTs go to
+    ## ${centralConsoleUrl}/api/hypercare/activate.
+    centralConsoleUrl: ""
+    ## Deprecated: External URL of the central vg-pagerduty-agent. Used as a fallback
+    ## when centralConsoleUrl is not set. The agent forwards /api/hypercare/activate
+    ## to vg-console. Remove once all deploying clusters set centralConsoleUrl.
     centralAgentUrl: ""
     ## This cluster's environment name as known to the agent (e.g. "vg-eu")
     localEnvironment: ""

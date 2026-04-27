@@ -395,12 +395,28 @@ spec:
               {{- else }}
               value: {{ not .Values.global.enableTtsStreaming | quote }}
               {{- end }}
+            - name: FEATURE_TTS_STREAMING_VENDORS
+              value: {{ .Values.featureServer.streamingTtsVendors | join "," | quote }}
             - name: ANCHOR_MEDIA_ALWAYS
               value: {{ .Values.featureServer.anchorMediaAlways | quote }}
             - name: VG_DISABLE_DIAL_PAI_HEADER
               value: {{ .Values.featureServer.disableDialPaiHeader | quote }}
             - name: PRE_CACHE_IGNORE_LIST
               value: {{ .Values.featureServer.preCacheIgnoreList | quote }}
+            - name: MEDIA_PROCESSOR_ENABLED
+              value: {{ and .Values.mediaProcessor.enabled .Values.featureServer.mediaProcessor.enabled | quote }}
+            {{- if and (.Values.mediaProcessor.enabled) (.Values.featureServer.mediaProcessor.enabled) }}
+            - name: MEDIA_PROCESSOR_ADDRESS
+              value: {{ printf "%s:%d" .Values.mediaProcessor.serviceName (int .Values.mediaProcessor.ports.grpc) | quote }}
+            - name: MEDIA_PROCESSOR_STT_VENDORS
+              value: {{ .Values.featureServer.mediaProcessor.sttVendors | join "," | quote }}
+            - name: MEDIA_PROCESSOR_TTS_VENDORS
+              value: {{ .Values.featureServer.mediaProcessor.ttsVendors | join "," | quote }}
+            - name: MEDIA_PROCESSOR_STREAMING_TTS_VENDORS
+              value: {{ .Values.featureServer.mediaProcessor.streamingTtsVendors | join "," | quote }}
+            - name: MEDIA_PROCESSOR_CACHE_TYPE
+              value: {{ .Values.mediaProcessor.cache.type | quote }}
+            {{- end }}
             - name: VG_SPEECH_BILLING_ENABLED
               value: {{ .Values.billing.enabled | quote }}
             - name: VG_CLUSTER_ID

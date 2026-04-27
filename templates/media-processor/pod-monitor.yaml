@@ -1,0 +1,22 @@
+{{- if and (.Values.mediaProcessor.enabled) (.Values.podMonitors.enabled) }}
+{{- with .Values.podMonitors }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: prom-cognigy-monitor-cognigy-vg-media-processor
+  namespace: {{ .namespace }}
+  labels:
+    owner-team: echo
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ $.Release.Namespace }}
+  podMetricsEndpoints:
+    - path: /metrics
+      port: metrics
+  selector:
+    matchLabels:
+      app: media-processor
+{{- end }}
+{{- end }}

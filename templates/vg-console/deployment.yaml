@@ -1,3 +1,6 @@
+{{- if and .Values.vgConsole.changelogEnrichment.enabled (not .Values.vgConsole.enabled) -}}
+{{- fail "vgConsole.changelogEnrichment.enabled=true requires vgConsole.enabled=true" -}}
+{{- end -}}
 {{- if .Values.vgConsole.enabled }}
 ---
 apiVersion: apps/v1
@@ -175,8 +178,26 @@ spec:
                   name: {{ .Values.vgPagerdutyAgent.secretName | default "vg-pagerduty-agent-secrets" }}
                   key: HYPERCARE_API_TOKEN
             {{- end }}
+            - name: CHANGELOG_ENRICHMENT_ENABLED
+              value: {{ .Values.vgConsole.changelogEnrichment.enabled | quote }}
             {{- if .Values.vgConsole.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgConsole.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
+          {{- if .Values.vgConsole.changelogEnrichment.enabled }}
+          envFrom:
+            ## LLM credentials — reuses vg-pagerduty-agent-secrets
+            ## (LLM_PROVIDER, ANTHROPIC_API_KEY, AZURE_OPENAI_*, AWS_BEDROCK_*).
+            ## The secret must exist in this namespace before enabling
+            ## changelogEnrichment, otherwise the pod will fail to start.
+            - secretRef:
+                name: {{ .Values.vgPagerdutyAgent.secretName | default "vg-pagerduty-agent-secrets" }}
+            ## GitHub App credentials used to fetch PR diffs — same sealed
+            ## secret that Flux uses (keys: githubAppID, githubAppInstallationID,
+            ## githubAppPrivateKey). The enrichment agent also accepts the
+            ## UPPER_SNAKE_CASE variants (GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID,
+            ## GITHUB_APP_PRIVATE_KEY) if supplied via a different secret.
+            - secretRef:
+                name: {{ .Values.vgConsole.changelogEnrichment.githubAppSecretName | default "flux-system-github-app" }}
+          {{- end }}
 {{- end }}
 
