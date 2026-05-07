@@ -107,6 +107,8 @@ spec:
               value: {{ .Values.webapp.enableOpenai | quote }}
             - name: ENABLE_NICE
               value: {{ .Values.webapp.enableNice | quote }}
+            - name: FEATURE_TTS_STREAMING_VENDORS
+              value: {{ .Values.featureServer.streamingTtsVendors | join "," | quote }}
             - name: ENABLE_DEEPGRAMFLUX
               value: {{ .Values.webapp.enableDeepgramflux | quote }}
             - name: ENABLE_PING_OPTIONS
