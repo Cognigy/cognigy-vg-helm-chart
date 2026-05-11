@@ -6,6 +6,8 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-feature-server-legacy.git"
 spec:
   selector:
     matchLabels:
@@ -423,8 +425,6 @@ spec:
               value: {{ .Values.featureServerLegacy.mediaProcessor.sttVendors | join "," | quote }}
             - name: MEDIA_PROCESSOR_TTS_VENDORS
               value: {{ .Values.featureServerLegacy.mediaProcessor.ttsVendors | join "," | quote }}
-            - name: MEDIA_PROCESSOR_STREAMING_TTS_VENDORS
-              value: {{ .Values.featureServerLegacy.mediaProcessor.streamingTtsVendors | join "," | quote }}
             - name: MEDIA_PROCESSOR_CACHE_TYPE
               value: {{ .Values.mediaProcessor.cache.type | quote }}
             {{- end }}
@@ -440,6 +440,10 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.billing.mysql.existingSecret | quote }}
                   key: {{ .Values.billing.mysql.secretKey | quote }}
+            {{- end }}
+            {{- if .Values.sileroVad.enabled }}
+            - name: SILERO_VAD_SERVICE_URL
+              value: "ws://silero-vad:{{ .Values.sileroVad.port }}/ws"
             {{- end }}
             {{- if .Values.featureServerLegacy.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerLegacy.extraEnvVars "context" $) | nindent 12 }}

@@ -6,6 +6,7 @@ metadata:
   labels:
     owner-team: echo
   annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-api-server.git"
     {{- if .Values.apiMigrator.hookEnabled }}
     # This is what defines this resource as a hook. Without these lines, the
     # resource is considered part of the release.

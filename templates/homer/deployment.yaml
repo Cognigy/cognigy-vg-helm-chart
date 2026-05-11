@@ -7,6 +7,8 @@ metadata:
   labels:
     app: homer
     owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-external-services.git"
 spec:
   replicas: {{ .Values.homer.replicaCount }}
   selector:

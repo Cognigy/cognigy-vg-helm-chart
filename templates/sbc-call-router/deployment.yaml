@@ -6,6 +6,8 @@ metadata:
   labels:
     app: sbc-call-router
     owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-sbc-call-router.git"
 spec:
   selector:
     matchLabels:

@@ -4,6 +4,10 @@ kind: CronJob
 metadata:
   name: audit-logs-cleanup
   namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-api-server.git"
 spec:
   schedule: {{ .Values.auditLogging.cleanup.schedule | quote }}
   startingDeadlineSeconds: 300

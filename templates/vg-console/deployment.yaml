@@ -11,6 +11,8 @@ metadata:
   labels:
     app: vg-console
     owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-console.git"
 spec:
   selector:
     matchLabels:

@@ -9,6 +9,8 @@ metadata:
     app: vg-billing
     component: pre-aggregate
     owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-api-server.git"
 spec:
   schedule: {{ .Values.billing.preAggregation.schedule | quote }}
   concurrencyPolicy: Forbid

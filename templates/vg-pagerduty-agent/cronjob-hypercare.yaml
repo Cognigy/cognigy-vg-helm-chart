@@ -8,6 +8,8 @@ metadata:
   labels:
     app: vg-pagerduty-agent-hypercare
     owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-pagerduty-agent.git"
 spec:
   schedule: {{ .Values.vgPagerdutyAgent.hypercare.schedule | quote }}
   startingDeadlineSeconds: 300
