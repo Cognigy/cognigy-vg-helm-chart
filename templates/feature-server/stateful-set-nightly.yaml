@@ -446,6 +446,10 @@ spec:
             {{- if .Values.sileroVad.enabled }}
             - name: SILERO_VAD_SERVICE_URL
               value: "ws://silero-vad:{{ .Values.sileroVad.port }}/ws"
+            - name: VG_SILERO_VAD_SHADOW_MODE_ENABLED
+              value: {{ .Values.sileroVad.shadowModeEnabled | quote }}
+            - name: VG_SILERO_VAD_SHADOW_SAMPLE_RATE
+              value: {{ .Values.sileroVad.shadowSampleRate | quote }}
             {{- end }}
             {{- if .Values.featureServerNightly.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.extraEnvVars "context" $) | nindent 12 }}

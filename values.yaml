@@ -1129,13 +1129,16 @@ sileroVad:
       cpu: "1"
       memory: 512Mi
   extraEnvVars: []
+  shadowModeEnabled: false
+  shadowSampleRate: "0.0"
   mysql:
-    enabled: false
-    host: mysql
-    database: jambones
-    user: jambones
-    secretName: voicegateway-mysql-password
-    secretKey: mysql-password
+    enabled: true
+    # host/database/user/secretName/secretKey default to the root mysql.* values when unset
+    host: ""
+    database: ""
+    user: ""
+    secretName: ""
+    secretKey: ""
 featureServerNightly:
   enabled: false
   image: cognigy.azurecr.io/vg-feature-server:2026.10.0
