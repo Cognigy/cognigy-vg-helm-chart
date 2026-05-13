@@ -1002,7 +1002,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.10.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.10.2
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1141,7 +1141,7 @@ sileroVad:
     secretKey: ""
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.10.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.10.2
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
