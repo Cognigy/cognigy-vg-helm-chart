@@ -1270,7 +1270,7 @@ featureServerLegacy:
       cpu: "1"
       memory: 500Mi
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.10.0
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.10.2
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1307,16 +1307,33 @@ freeswitch:
     limits:
       cpu: "2.5"
       memory: 3Gi
+  ## Liveness probe for the FreeSWITCH sidecar.
+  ## Runs `fs_cli status` to round-trip a command through the event socket, so
+  ## a frozen/unresponsive FreeSWITCH (event socket open but not processing) is
+  ## detected and the pod restarted. A plain TCP probe would not catch this.
+  ## Detection window ≈ periodSeconds * failureThreshold.
+  livenessProbe:
+    enabled: true
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  ## Startup probe gives FreeSWITCH time to boot before liveness kicks in.
+  ## With defaults, allows up to periodSeconds * failureThreshold = 150s.
+  startupProbe:
+    enabled: true
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 30
 freeswitchNightly:
   ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
   ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
   ## @see featureServerNightly
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.10.0
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.10.2
 freeswitchLegacy:
   ## You can specify a custom image for the FreeSWITCH in the legacy FeatureServer here
   ## To enable a "legacy FreeSWITCH", you have to enable a legacy FeatureServer.
   ## @see featureServerLegacy
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.10.0
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.10.2
 rtpEngine:
   image: cognigy.azurecr.io/vg-rtpengine:0.2.0
   imagePullPolicy: IfNotPresent
@@ -1520,7 +1537,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.10.0
+  image: cognigy.azurecr.io/vg-tcm:2026.10.1
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
