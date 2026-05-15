@@ -6,8 +6,6 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     owner-team: echo
-  annotations:
-    "cognigy.com/source-code": "git@github.com:Cognigy/vg-tcm.git"
 spec:
   selector:
     matchLabels:

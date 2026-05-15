@@ -6,8 +6,6 @@ metadata:
   labels:
     app: sbc-inbound
     owner-team: echo
-  annotations:
-    "cognigy.com/source-code": "git@github.com:Cognigy/vg-sbc-inbound.git"
 spec:
   selector:
     matchLabels:

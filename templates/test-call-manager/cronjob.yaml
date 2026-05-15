@@ -5,8 +5,6 @@ metadata:
   name: clean-up-test-call-manager
   labels:
     owner-team: echo
-  annotations:
-    "cognigy.com/source-code": "git@github.com:Cognigy/vg-tcm.git"
 spec:
   schedule: {{ .Values.testCallManager.cronjobSchedule | quote }}
   startingDeadlineSeconds: 300

@@ -7,8 +7,6 @@ metadata:
   labels:
     app: jaeger
     owner-team: echo
-  annotations:
-    "cognigy.com/source-code": "git@github.com:Cognigy/vg-external-services.git"
 spec:
   serviceName: jaeger
   replicas: {{ .Values.jaeger.replicaCount }}

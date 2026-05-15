@@ -5,8 +5,6 @@ metadata:
   name: update-api-ban-list
   labels:
     owner-team: echo
-  annotations:
-    "cognigy.com/source-code": "git@github.com:Cognigy/vg-api-ban.git"
 spec:
   schedule: {{ .Values.apiBan.cronjobSchedule | quote }}
   startingDeadlineSeconds: 300

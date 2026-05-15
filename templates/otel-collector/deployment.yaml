@@ -7,8 +7,6 @@ metadata:
   labels:
     app: otel-collector
     owner-team: echo
-  annotations:
-    "cognigy.com/source-code": "git@github.com:Cognigy/vg-otel-collector.git"
 spec:
   replicas: {{ .Values.otelCollector.replicaCount | default 1 }}
   selector:

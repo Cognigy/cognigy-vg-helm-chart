@@ -6,8 +6,6 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     owner-team: echo
-  annotations:
-    "cognigy.com/source-code": "git@github.com:Cognigy/vg-feature-server.git"
 spec:
   selector:
     matchLabels:
@@ -163,7 +161,7 @@ spec:
               protocol: TCP
             - name: fs-freeswitch
               containerPort: {{ .Values.freeswitch.metricsPort }}
-              protocol: TCP
+              protocol: TCP          
           args:
             - freeswitch
             - --username
@@ -198,28 +196,6 @@ spec:
             {{- if .Values.freeswitch.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.freeswitch.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
-          {{- if .Values.freeswitch.livenessProbe.enabled }}
-          livenessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                - fs_cli -p JambonzR0ck$ -P {{ .Values.freeswitch.ports.eventSocket }} -x 'status'
-            periodSeconds: {{ .Values.freeswitch.livenessProbe.periodSeconds }}
-            timeoutSeconds: {{ .Values.freeswitch.livenessProbe.timeoutSeconds }}
-            failureThreshold: {{ .Values.freeswitch.livenessProbe.failureThreshold }}
-          {{- end }}
-          {{- if .Values.freeswitch.startupProbe.enabled }}
-          startupProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                - fs_cli -p JambonzR0ck$ -P {{ .Values.freeswitch.ports.eventSocket }} -x 'status'
-            periodSeconds: {{ .Values.freeswitch.startupProbe.periodSeconds }}
-            timeoutSeconds: {{ .Values.freeswitch.startupProbe.timeoutSeconds }}
-            failureThreshold: {{ .Values.freeswitch.startupProbe.failureThreshold }}
-          {{- end }}
           lifecycle:
             preStop:
               exec:
@@ -229,7 +205,7 @@ spec:
                   "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
                 ]
           volumeMounts:
-            - mountPath: /tmp
+            - mountPath: /tmp 
               name: temp-audio-volume
             - mountPath: /coredumps
               name: fs-core-dumps
@@ -409,34 +385,12 @@ spec:
               {{- else }}
               value: {{ not .Values.global.enableTtsStreaming | quote }}
               {{- end }}
-            - name: FEATURE_TTS_STREAMING_VENDORS
-              value: {{ .Values.featureServer.streamingTtsVendors | join "," | quote }}
             - name: ANCHOR_MEDIA_ALWAYS
               value: {{ .Values.featureServer.anchorMediaAlways | quote }}
             - name: VG_DISABLE_DIAL_PAI_HEADER
               value: {{ .Values.featureServer.disableDialPaiHeader | quote }}
-            - name: MEDIA_PROCESSOR_ENABLED
-              value: {{ and .Values.mediaProcessor.enabled .Values.featureServer.mediaProcessor.enabled | quote }}
-            {{- if and (.Values.mediaProcessor.enabled) (.Values.featureServer.mediaProcessor.enabled) }}
-            - name: MEDIA_PROCESSOR_ADDRESS
-              value: {{ printf "%s:%d" .Values.mediaProcessor.serviceName (int .Values.mediaProcessor.ports.grpc) | quote }}
-            - name: MEDIA_PROCESSOR_STT_VENDORS
-              value: {{ .Values.featureServer.mediaProcessor.sttVendors | join "," | quote }}
-            - name: MEDIA_PROCESSOR_TTS_VENDORS
-              value: {{ .Values.featureServer.mediaProcessor.ttsVendors | join "," | quote }}
-            - name: MEDIA_PROCESSOR_CACHE_TYPE
-              value: {{ .Values.mediaProcessor.cache.type | quote }}
-            {{- end }}
             - name: LOG_REDACTION_ENABLED
               value: {{ $.Values.logRedaction.enabled | default "false" | quote }}
-            {{- if .Values.sileroVad.enabled }}
-            - name: SILERO_VAD_SERVICE_URL
-              value: "ws://silero-vad:{{ .Values.sileroVad.port }}/ws"
-            - name: VG_SILERO_VAD_SHADOW_MODE_ENABLED
-              value: {{ .Values.sileroVad.shadowModeEnabled | quote }}
-            - name: VG_SILERO_VAD_SHADOW_SAMPLE_RATE
-              value: {{ .Values.sileroVad.shadowSampleRate | quote }}
-            {{- end }}
             {{- if .Values.featureServer.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

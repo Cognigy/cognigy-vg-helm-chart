@@ -6,7 +6,6 @@ metadata:
   labels:
     owner-team: echo
   annotations:
-    "cognigy.com/source-code": "git@github.com:Cognigy/vg-api-server.git"
     {{- if .Values.apiMigrator.hookEnabled }}
     # This is what defines this resource as a hook. Without these lines, the
     # resource is considered part of the release.
@@ -125,12 +124,6 @@ spec:
                   name: {{ .Values.billing.mysql.existingSecret | quote }}
                   key: {{ .Values.billing.mysql.secretKey | quote }}
             {{- end }}
-            - name: JAMBONES_DISABLE_TTS_STREAMING
-              {{- if kindIs "bool" .Values.featureServer.enableTtsStreaming }}
-              value: {{ not .Values.featureServer.enableTtsStreaming | quote }}
-              {{- else }}
-              value: {{ not .Values.global.enableTtsStreaming | quote }}
-              {{- end }}
             {{- if .Values.apiMigrator.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.apiMigrator.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

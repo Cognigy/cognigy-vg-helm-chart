@@ -7,8 +7,6 @@ metadata:
   labels:
     app: vg-connector
     owner-team: echo
-  annotations:
-    "cognigy.com/source-code": "git@github.com:Cognigy/vg-connector.git"
 spec:
   selector:
     matchLabels:

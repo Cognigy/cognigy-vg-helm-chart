@@ -8,8 +8,6 @@ metadata:
   labels:
     app: vg-pagerduty-agent
     owner-team: echo
-  annotations:
-    "cognigy.com/source-code": "git@github.com:Cognigy/vg-pagerduty-agent.git"
 spec:
   selector:
     matchLabels:

@@ -9,8 +9,6 @@ metadata:
     owner-team: echo
   annotations:
     "cluster-autoscaler.kubernetes.io/safe-to-evict": "true"
-    "cognigy.com/source-code": "git@github.com:Cognigy/vg-external-services.git"
-    # "cognigy.com/source-code": "git@github.com:Cognigy/vg-sbc-rtpengine-sidecar.git"
 spec:
   selector:
     matchLabels:
