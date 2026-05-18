@@ -1002,7 +1002,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.9.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.9.3
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1082,7 +1082,7 @@ featureServer:
       memory: 500Mi
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.9.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.9.3
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1156,7 +1156,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.9.0
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.9.3
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
@@ -1250,6 +1250,23 @@ freeswitch:
     limits:
       cpu: "2.5"
       memory: 3Gi
+  ## Liveness probe for the FreeSWITCH sidecar.
+  ## Runs `fs_cli status` to round-trip a command through the event socket, so
+  ## a frozen/unresponsive FreeSWITCH (event socket open but not processing) is
+  ## detected and the pod restarted. A plain TCP probe would not catch this.
+  ## Detection window ≈ periodSeconds * failureThreshold.
+  livenessProbe:
+    enabled: true
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  ## Startup probe gives FreeSWITCH time to boot before liveness kicks in.
+  ## With defaults, allows up to periodSeconds * failureThreshold = 150s.
+  startupProbe:
+    enabled: true
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 30
 freeswitchNightly:
   ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
   ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.

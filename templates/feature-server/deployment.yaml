@@ -196,6 +196,28 @@ spec:
             {{- if .Values.freeswitch.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.freeswitch.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
+          {{- if .Values.freeswitch.livenessProbe.enabled }}
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - fs_cli -p JambonzR0ck$ -P {{ .Values.freeswitch.ports.eventSocket }} -x 'status'
+            periodSeconds: {{ .Values.freeswitch.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.freeswitch.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.freeswitch.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.freeswitch.startupProbe.enabled }}
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - fs_cli -p JambonzR0ck$ -P {{ .Values.freeswitch.ports.eventSocket }} -x 'status'
+            periodSeconds: {{ .Values.freeswitch.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.freeswitch.startupProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.freeswitch.startupProbe.failureThreshold }}
+          {{- end }}
           lifecycle:
             preStop:
               exec:
@@ -205,7 +227,7 @@ spec:
                   "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
                 ]
           volumeMounts:
-            - mountPath: /tmp 
+            - mountPath: /tmp
               name: temp-audio-volume
             - mountPath: /coredumps
               name: fs-core-dumps
