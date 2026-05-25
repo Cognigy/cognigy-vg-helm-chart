@@ -1,0 +1,18 @@
+{{- if .Values.sileroVad.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: silero-vad
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: silero-vad
+    owner-team: echo
+spec:
+  selector:
+    app: silero-vad
+  ports:
+    - name: ws
+      port: {{ .Values.sileroVad.port }}
+      targetPort: ws
+      protocol: TCP
+{{- end }}

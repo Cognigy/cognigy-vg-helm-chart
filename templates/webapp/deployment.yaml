@@ -5,6 +5,8 @@ metadata:
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-webapp.git"
 spec:
   selector:
     matchLabels:
@@ -113,6 +115,8 @@ spec:
               value: {{ .Values.webapp.enableDeepgramflux | quote }}
             - name: ENABLE_PING_OPTIONS
               value: {{ .Values.webapp.enablePingOptions | quote }}
+            - name: SIP_HEADER_COGNIGY_CONTACT_DATA
+              value: {{ .Values.nice.sipHeaderCognigyContactData | quote }}
             - name: SYSTEM_SPEECH_CREDENTIAL_LABEL
               value: {{ $.Values.sharedSpeechCredentials.label | quote }}
             - name: FEATURE_ENABLE_SHARED_SPEECH_CREDENTIALS

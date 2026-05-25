@@ -6,6 +6,7 @@ metadata:
   labels:
     owner-team: echo
   annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-api-server.git"
     {{- if .Values.apiMigrator.hookEnabled }}
     # This is what defines this resource as a hook. Without these lines, the
     # resource is considered part of the release.
@@ -83,11 +84,11 @@ spec:
             - |
               set -e
               echo "=== Running vg migrations ==="
-              node /opt/app/migrator/migrate.js release
-              
+              node /opt/app/build/migrator/migrate.js release
+
               echo ""
               echo "=== Setting up billing schema ==="
-              node /opt/app/migrator/setup-billing-schema.js
+              node /opt/app/build/migrator/setup-billing-schema.js
               
               echo ""
               echo "=== All migrations complete ==="

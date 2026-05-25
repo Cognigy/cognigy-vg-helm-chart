@@ -7,6 +7,8 @@ metadata:
   labels:
     app: redis
     owner-team: echo
+  annotations:
+    "cognigy.com/source-code": null
 spec:
   serviceName: redis
   replicas: {{ .Values.redis.replicaCount }}

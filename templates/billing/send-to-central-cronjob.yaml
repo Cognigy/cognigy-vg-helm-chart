@@ -9,6 +9,8 @@ metadata:
     app: vg-billing
     component: send-to-central
     owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-api-server.git"
 spec:
   schedule: {{ .Values.billing.sendToCentral.schedule | quote }}
   concurrencyPolicy: Forbid
@@ -32,7 +34,7 @@ spec:
             - name: send-to-central
               image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.api.image) }}
               imagePullPolicy: {{ .Values.api.imagePullPolicy | default "IfNotPresent" }}
-              command: ["node", "lib/billing/jobs/send-billing-to-central.js"]
+              command: ["node", "build/lib/billing/jobs/send-billing-to-central.js"]
               env:
                 - name: JAMBONES_MYSQL_HOST
                   value: {{ .Values.mysql.host | quote }}

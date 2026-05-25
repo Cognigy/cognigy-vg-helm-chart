@@ -5,6 +5,7 @@ metadata:
   name: homer-password-update
   namespace: {{ $.Release.Namespace | quote }}
   annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-external-services.git"
     {{- if .Values.homer.hookEnabled }}
     "helm.sh/hook": {{ .Values.homer.hook | quote }}
     "helm.sh/hook-weight": "0"

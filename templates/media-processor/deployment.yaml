@@ -7,6 +7,8 @@ metadata:
   labels:
     app: media-processor
     owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-media-processor.git"
 spec:
   selector:
     matchLabels:

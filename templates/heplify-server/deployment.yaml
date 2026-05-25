@@ -6,6 +6,8 @@ metadata:
   labels:
     app: heplify-server
     owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-external-services.git"
 spec:
   serviceName: heplify-server
   replicas: {{ .Values.heplifyServer.replicaCount }}

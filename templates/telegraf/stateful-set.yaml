@@ -6,6 +6,8 @@ metadata:
   labels:
     app: telegraf
     owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-external-services.git"
 spec:
   serviceName: telegraf
   replicas: {{ .Values.telegraf.replicaCount }}

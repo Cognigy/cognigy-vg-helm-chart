@@ -11,6 +11,11 @@ metadata:
   labels:
     app: vg-console
     owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-console.git"
+    "cognigy.com/source-code.db-create-wait": null
+    "cognigy.com/source-code.db-connectivity-wait": null
+    "cognigy.com/source-code.vg-console": "git@github.com:Cognigy/vg-console.git"
 spec:
   selector:
     matchLabels:
@@ -41,8 +46,8 @@ spec:
       {{- end }}
       restartPolicy: Always
       initContainers:
-        - image: kanisterio/mysql-sidecar:0.40.0
-          name: db-user-create
+        - name: db-create-wait
+          image: kanisterio/mysql-sidecar:0.40.0
           env:
             - name: ROOT_PASSWORD
               valueFrom:
@@ -86,8 +91,8 @@ spec:
                 echo "ERROR: Failed to create database/user."
                 exit 1
               fi
-        - image: kanisterio/mysql-sidecar:0.40.0
-          name: db-create-wait
+        - name: db-connectivity-wait
+          image: kanisterio/mysql-sidecar:0.40.0
           env:
             - name: PASSWORD
               valueFrom:

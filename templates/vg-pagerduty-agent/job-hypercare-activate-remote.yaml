@@ -10,6 +10,7 @@ metadata:
     "helm.sh/hook": post-upgrade
     "helm.sh/hook-weight": "10"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-pagerduty-agent.git"
   labels:
     app: vg-pagerduty-agent-hypercare-activate-remote
     owner-team: echo

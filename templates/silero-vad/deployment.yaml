@@ -1,0 +1,108 @@
+{{- if .Values.sileroVad.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: silero-vad
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: silero-vad
+    owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-silero-vad.git"
+spec:
+  {{- /* Intentional: guard includes .sileroVad.enabled so spec.replicas is only suppressed when
+       this service's HPA is actually active. Other services use a two-condition guard and would
+       incorrectly drop spec.replicas even when their per-service HPA entry is disabled. */ -}}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) ($.Values.hpa.services.sileroVad.enabled)) }}
+  replicas: {{ .Values.sileroVad.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: silero-vad
+  template:
+    metadata:
+      labels:
+        app: silero-vad
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- if .Values.sileroVad.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.sileroVad.terminationGracePeriodSeconds }}
+      {{- end }}
+      {{- if .Values.sileroVad.affinity }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sileroVad.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if or (.Values.sileroVad.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector)) }}
+      nodeSelector:
+        {{- if .Values.sileroVad.nodeSelector }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.sileroVad.nodeSelector "context" $) | nindent 8 }}
+        {{- end }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
+          {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.sileroVad.priorityClassName }}
+      priorityClassName: {{ .Values.sileroVad.priorityClassName }}
+      {{- end }}
+      {{- if .Values.sileroVad.podSecurityContext }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sileroVad.podSecurityContext "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if or (.Values.sileroVad.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations)) }}
+      tolerations:
+        {{- if .Values.sileroVad.tolerations }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.sileroVad.tolerations "context" $) | nindent 8 }}
+        {{- end }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
+          {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: silero-vad
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.sileroVad.image) }}
+          imagePullPolicy: {{ .Values.sileroVad.imagePullPolicy }}
+          ports:
+            - name: ws
+              containerPort: {{ .Values.sileroVad.port }}
+              protocol: TCP
+          env:
+            - name: PORT
+              value: {{ .Values.sileroVad.port | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.sileroVad.logLevel | quote }}
+            - name: ALLOWED_ORIGINS
+              value: {{ .Values.sileroVad.allowedOrigins | quote }}
+            - name: DRAIN_TIMEOUT_SECONDS
+              value: {{ .Values.sileroVad.drainTimeoutSeconds | quote }}
+            - name: SHUTDOWN_TIMEOUT_SECONDS
+              value: {{ .Values.sileroVad.shutdownTimeoutSeconds | quote }}
+            {{- if .Values.sileroVad.mysql.enabled }}
+            - name: USE_MYSQL
+              value: "true"
+            - name: VG_MYSQL_HOST
+              value: {{ default .Values.mysql.host .Values.sileroVad.mysql.host | quote }}
+            - name: VG_MYSQL_DATABASE
+              value: {{ default .Values.mysql.database.name .Values.sileroVad.mysql.database | quote }}
+            - name: VG_MYSQL_USER
+              value: {{ default .Values.mysql.auth.username .Values.sileroVad.mysql.user | quote }}
+            - name: VG_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default "voicegateway-mysql-password" .Values.sileroVad.mysql.secretName | quote }}
+                  key: {{ default "mysql-password" .Values.sileroVad.mysql.secretKey | quote }}
+            {{- end }}
+            {{- if .Values.sileroVad.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.sileroVad.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
+          resources: {{- toYaml .Values.sileroVad.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: ws
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: ws
+            initialDelaySeconds: 5
+            periodSeconds: 5
+{{- end }}
