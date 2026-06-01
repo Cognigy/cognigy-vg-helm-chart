@@ -34,7 +34,7 @@ spec:
             - name: pre-aggregate
               image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.api.image) }}
               imagePullPolicy: {{ .Values.api.imagePullPolicy | default "IfNotPresent" }}
-              command: ["node", "build/lib/billing/jobs/pre-aggregate-speech.js"]
+              command: ["node", "lib/billing/jobs/pre-aggregate-speech.js"]
               env:
                 - name: JAMBONES_MYSQL_HOST
                   value: {{ .Values.mysql.host | quote }}

@@ -78,16 +78,16 @@ spec:
             - name: USE_MYSQL
               value: "true"
             - name: VG_MYSQL_HOST
-              value: {{ default .Values.mysql.host .Values.sileroVad.mysql.host | quote }}
+              value: {{ .Values.sileroVad.mysql.host | quote }}
             - name: VG_MYSQL_DATABASE
-              value: {{ default .Values.mysql.database.name .Values.sileroVad.mysql.database | quote }}
+              value: {{ .Values.sileroVad.mysql.database | quote }}
             - name: VG_MYSQL_USER
-              value: {{ default .Values.mysql.auth.username .Values.sileroVad.mysql.user | quote }}
+              value: {{ .Values.sileroVad.mysql.user | quote }}
             - name: VG_MYSQL_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ default "voicegateway-mysql-password" .Values.sileroVad.mysql.secretName | quote }}
-                  key: {{ default "mysql-password" .Values.sileroVad.mysql.secretKey | quote }}
+                  name: {{ .Values.sileroVad.mysql.secretName | quote }}
+                  key: {{ .Values.sileroVad.mysql.secretKey | quote }}
             {{- end }}
             {{- if .Values.sileroVad.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.sileroVad.extraEnvVars "context" $) | nindent 12 }}

@@ -17,15 +17,5 @@
   "else": {
     "required": []
   },
-  "properties": {
-    "nice": {
-      "type": "object",
-      "properties": {
-        "sipHeaderCognigyContactData": {
-          "type": "string",
-          "pattern": "^$|^[A-Za-z][A-Za-z0-9-]*$"
-        }
-      }
-    }
-  }
+  "properties": {}
 }

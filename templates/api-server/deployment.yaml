@@ -10,9 +10,6 @@ metadata:
     owner-team: echo
   annotations:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-api-server.git"
-    "cognigy.com/source-code.db-create-wait": null
-    "cognigy.com/source-code.api-server": "git@github.com:Cognigy/vg-api-server.git"
-
 spec:
   selector:
     matchLabels:
