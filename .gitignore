@@ -37,3 +37,8 @@ minica-key.pem
 minica.pem
 
 PR_REVIEW.md
+
+.claude/worktrees
+
+# Superpowers plans are personal working docs, not chart content
+docs/superpowers/

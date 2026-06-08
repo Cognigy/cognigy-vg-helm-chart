@@ -74,35 +74,50 @@ spec:
               value: {{ .Values.sileroVad.drainTimeoutSeconds | quote }}
             - name: SHUTDOWN_TIMEOUT_SECONDS
               value: {{ .Values.sileroVad.shutdownTimeoutSeconds | quote }}
+            - name: MAX_CONCURRENT_SESSIONS
+              value: {{ .Values.sileroVad.maxConcurrentSessions | quote }}
+            - name: SILERO_MODEL_VERSION_FILE
+              value: {{ .Values.sileroVad.modelVersionFile | quote }}
             {{- if .Values.sileroVad.mysql.enabled }}
             - name: USE_MYSQL
               value: "true"
             - name: VG_MYSQL_HOST
-              value: {{ .Values.sileroVad.mysql.host | quote }}
+              value: {{ default .Values.mysql.host .Values.sileroVad.mysql.host | quote }}
             - name: VG_MYSQL_DATABASE
-              value: {{ .Values.sileroVad.mysql.database | quote }}
+              value: {{ default .Values.mysql.database.name .Values.sileroVad.mysql.database | quote }}
             - name: VG_MYSQL_USER
-              value: {{ .Values.sileroVad.mysql.user | quote }}
+              value: {{ default .Values.mysql.auth.username .Values.sileroVad.mysql.user | quote }}
             - name: VG_MYSQL_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.sileroVad.mysql.secretName | quote }}
-                  key: {{ .Values.sileroVad.mysql.secretKey | quote }}
+                  name: {{ default "voicegateway-mysql-password" .Values.sileroVad.mysql.secretName | quote }}
+                  key: {{ default "mysql-password" .Values.sileroVad.mysql.secretKey | quote }}
             {{- end }}
             {{- if .Values.sileroVad.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.sileroVad.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
           resources: {{- toYaml .Values.sileroVad.resources | nindent 12 }}
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: ws
+            failureThreshold: {{ .Values.sileroVad.probes.startup.failureThreshold }}
+            periodSeconds: {{ .Values.sileroVad.probes.startup.periodSeconds }}
+            timeoutSeconds: {{ .Values.sileroVad.probes.startup.timeoutSeconds }}
           livenessProbe:
             httpGet:
-              path: /health
+              path: /health/liveness
               port: ws
-            initialDelaySeconds: 10
-            periodSeconds: 10
+            initialDelaySeconds: {{ .Values.sileroVad.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.sileroVad.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.sileroVad.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.sileroVad.probes.liveness.failureThreshold }}
           readinessProbe:
             httpGet:
-              path: /health
+              path: /health/readiness
               port: ws
-            initialDelaySeconds: 5
-            periodSeconds: 5
+            periodSeconds: {{ .Values.sileroVad.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.sileroVad.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.sileroVad.probes.readiness.failureThreshold }}
+            successThreshold: {{ .Values.sileroVad.probes.readiness.successThreshold }}
 {{- end }}

@@ -17,5 +17,110 @@
   "else": {
     "required": []
   },
-  "properties": {}
+  "properties": {
+    "nice": {
+      "type": "object",
+      "properties": {
+        "sipHeaderCognigyContactData": {
+          "type": "string",
+          "pattern": "^$|^[A-Za-z][A-Za-z0-9-]*$"
+        }
+      }
+    },
+    "sileroVad": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "type": "string" },
+        "imagePullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] },
+        "replicaCount": { "type": "integer", "minimum": 0 },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "logLevel": { "type": "string", "enum": ["trace", "debug", "info", "warn", "error", "TRACE", "DEBUG", "INFO", "WARN", "ERROR"] },
+        "allowedOrigins": { "type": "string" },
+        "drainTimeoutSeconds": { "type": "integer", "minimum": 0 },
+        "shutdownTimeoutSeconds": { "type": "integer", "minimum": 0 },
+        "terminationGracePeriodSeconds": { "type": "integer", "minimum": 0 },
+        "maxConcurrentSessions": { "type": "integer", "minimum": 0 },
+        "modelVersionFile": { "type": "string" },
+        "shadowModeEnabled": { "type": "boolean" },
+        "shadowSampleRate": { "type": ["string", "number"] },
+        "extraEnvVars": { "type": "array" },
+        "affinity": { "type": "object" },
+        "nodeSelector": { "type": "object" },
+        "priorityClassName": { "type": "string" },
+        "podSecurityContext": { "type": "object" },
+        "tolerations": { "type": "array" },
+        "resources": { "type": "object" },
+        "probes": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "startup": { "type": "object" },
+            "liveness": { "type": "object" },
+            "readiness": { "type": "object" }
+          }
+        },
+        "pdb": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "minAvailable": { "type": ["integer", "string"] },
+            "maxUnavailable": { "type": ["integer", "string"] }
+          },
+          "allOf": [
+            {
+              "oneOf": [
+                { "required": ["minAvailable"], "not": { "required": ["maxUnavailable"] } },
+                { "required": ["maxUnavailable"], "not": { "required": ["minAvailable"] } },
+                { "not": { "anyOf": [ { "required": ["minAvailable"] }, { "required": ["maxUnavailable"] } ] } }
+              ]
+            },
+            {
+              "if": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] },
+              "then": {
+                "oneOf": [
+                  { "required": ["minAvailable"] },
+                  { "required": ["maxUnavailable"] }
+                ]
+              }
+            }
+          ]
+        },
+        "networkPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "ingressFrom": { "type": "array" },
+            "allowMonitoringScrape": { "type": "boolean" },
+            "monitoringNamespaceSelector": { "type": "object" }
+          }
+        },
+        "podMonitor": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "path": { "type": "string" },
+            "interval": { "type": "string" },
+            "scrapeTimeout": { "type": "string" }
+          }
+        },
+        "mysql": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "host": { "type": "string" },
+            "database": { "type": "string" },
+            "user": { "type": "string" },
+            "secretName": { "type": "string" },
+            "secretKey": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
 }

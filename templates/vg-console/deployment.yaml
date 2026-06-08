@@ -13,6 +13,9 @@ metadata:
     owner-team: echo
   annotations:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-console.git"
+    "cognigy.com/source-code.db-create-wait": null
+    "cognigy.com/source-code.db-connectivity-wait": null
+    "cognigy.com/source-code.vg-console": "git@github.com:Cognigy/vg-console.git"
 spec:
   selector:
     matchLabels:
@@ -43,8 +46,8 @@ spec:
       {{- end }}
       restartPolicy: Always
       initContainers:
-        - image: kanisterio/mysql-sidecar:0.40.0
-          name: db-user-create
+        - name: db-create-wait
+          image: kanisterio/mysql-sidecar:0.40.0
           env:
             - name: ROOT_PASSWORD
               valueFrom:
@@ -88,8 +91,8 @@ spec:
                 echo "ERROR: Failed to create database/user."
                 exit 1
               fi
-        - image: kanisterio/mysql-sidecar:0.40.0
-          name: db-create-wait
+        - name: db-connectivity-wait
+          image: kanisterio/mysql-sidecar:0.40.0
           env:
             - name: PASSWORD
               valueFrom:
@@ -180,6 +183,11 @@ spec:
                   name: {{ .Values.vgPagerdutyAgent.secretName | default "vg-pagerduty-agent-secrets" }}
                   key: HYPERCARE_API_TOKEN
             {{- end }}
+            - name: VG_CONSOLE_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vgConsole.ciApiToken.secretName | default "vg-console-secret" }}
+                  key: {{ .Values.vgConsole.ciApiToken.secretKey | default "VG_CONSOLE_API_TOKEN" }}
             - name: CHANGELOG_ENRICHMENT_ENABLED
               value: {{ .Values.vgConsole.changelogEnrichment.enabled | quote }}
             {{- if .Values.vgConsole.extraEnvVars }}

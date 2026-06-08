@@ -176,13 +176,6 @@ tracing:
   sampleRate: ""
   eventsSampleRate: ""
   environment: ""
-  # enable call tracing with sentry
-  callTracingEnabled: false
-  apiBaseUrl: ""
-  # sentry project e.g 'vg-dev'
-  apiProject: ""
-  secret: "vg-sentry-api-token"
-  secretKey: token
 ###########
 # Ingress #
 ###########
@@ -330,6 +323,11 @@ billing:
     ## Secret containing shared secret for HMAC signing between the API Server and the Central Billing Server
     secretName: "vg-billing-secret"
     secretKey: "shared-secret"
+nice:
+  ## SIP header used to propagate the carrier's `nice_business_unit` (composite value `bu:<BU>~sid:<call_sid>`).
+  ## opt-in. Only attached to inbound 200 OK and outbound INVITE when the carrier has a value.
+  ## Empty string disables the header. Header is write-protected: caller-supplied values are stripped.
+  sipHeaderCognigyContactData: "X-Cognigy-ContactData"
 #############
 # SIP & RTP #
 #############
@@ -428,7 +426,7 @@ sbc:
   ec2EipAllocator:
     ## Only for AWS
     enabled: false
-    image: cognigy.azurecr.io/ec2-eip-allocator:1.1.2
+    image: cognigy.azurecr.io/vg-ec2-eip-allocator:2.34.42
     ## Tag key for the SIP EIP Node Pool
     sipEipGroupRoleKey: "role"
     ## Tag value for the SIP EIP Node Pool
@@ -472,7 +470,7 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.10.0
+  image: cognigy.azurecr.io/vg-api-migrator:2026.12.0
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -611,7 +609,7 @@ postgresql:
     serviceMonitor:
       enabled: false
 redis:
-  image: cognigy.azurecr.io/redis:7.4.0-debian-12-r4
+  image: cognigy.azurecr.io/redis:7.4.8-debian-12-r2
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   host: redis
@@ -637,7 +635,7 @@ redisHa:
   image:
     registry: cognigy.azurecr.io
     repository: redis
-    tag: 7.4.0-debian-12-r4
+    tag: 7.4.8-debian-12-r2
   auth:
     enabled: false
     sentinel: false
@@ -680,7 +678,7 @@ redisHa:
     image:
       registry: cognigy.azurecr.io
       repository: redis-sentinel
-      tag: 7.4.0-debian-12-r4
+      tag: 7.4.8-debian-12-r2
     automateClusterRecovery: true
     downAfterMilliseconds: 2000
     failoverTimeout: 10000
@@ -696,7 +694,7 @@ redisHa:
     image:
       registry: cognigy.azurecr.io
       repository: redis-exporter
-      tag: 1.63.0-debian-12-r0
+      tag: 1.83.0-debian-12-r1
     resources:
       requests:
         cpu: 25m
@@ -894,7 +892,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.3
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.10.0
+  image: cognigy.azurecr.io/vg-api-server:2026.12.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1005,7 +1003,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.10.2
+  image: cognigy.azurecr.io/vg-feature-server:2026.12.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1059,7 +1057,7 @@ featureServer:
   ## List of vendors that use per-credential TTS streaming control.
   ## Vendors not listed fall back to global enableTtsStreaming behavior.
   ## Use ["*"] for all vendors.
-  streamingTtsVendors: []
+  streamingTtsVendors: ["*"]
   # Canary deployment configuration for A/B testing between main and nightly feature servers
   canary:
     # Enable canary deployment with traffic splitting
@@ -1087,7 +1085,7 @@ sileroVad:
   ## When enabled, feature server receives SILERO_VAD_SERVICE_URL env var
   ## pointing to this service for Plan B audio-fork VAD.
   enabled: false
-  image: cognigy.azurecr.io/vg-silero-vad:latest
+  image: cognigy.azurecr.io/vg-silero-vad:2026.12.0
   ## Default Always because the default tag is :latest (mutable) — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1107,6 +1105,39 @@ sileroVad:
   ## Post-drain cleanup budget: how long to wait for handler goroutines to unwind after
   ## connections are closed.
   shutdownTimeoutSeconds: 30
+  maxConcurrentSessions: 200 # 0 disables; saturation triggers WS 1013 + readiness flip
+  modelVersionFile: /app/model/silero_vad.version
+  pdb:
+    enabled: true
+    minAvailable: 1 # use one of minAvailable or maxUnavailable
+    # maxUnavailable: 1
+  networkPolicy:
+    enabled: true
+    # Pod labels of clients allowed to call silero-vad. The default selects
+    # feature-server pods; add others (e.g. test harness) by extending the
+    # ingressFrom list.
+    ingressFrom:
+      - podSelector:
+          matchLabels:
+            app: feature-server
+      - podSelector:
+          matchLabels:
+            app: feature-server-nightly
+      - podSelector:
+          matchLabels:
+            app: feature-server-legacy
+    # When true, also allow Prometheus scraping of /metrics from the
+    # monitoring namespace. Leave on unless you scrape via DaemonSet on
+    # node-local IPs.
+    allowMonitoringScrape: true
+    monitoringNamespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: monitoring
+  podMonitor:
+    enabled: true # also gated by global podMonitors.enabled
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
   affinity:
     podAntiAffinity:
       preferredDuringSchedulingIgnoredDuringExecution:
@@ -1124,6 +1155,21 @@ sileroVad:
   podSecurityContext: {}
   tolerations: []
   terminationGracePeriodSeconds: 300
+  probes:
+    startup:
+      failureThreshold: 30 # 30 * periodSeconds = 5 minutes max cold start
+      periodSeconds: 10
+      timeoutSeconds: 5
+    liveness:
+      initialDelaySeconds: 30 # startupProbe gates this; small floor for clarity
+      periodSeconds: 30
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readiness:
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 2
+      successThreshold: 1
   resources:
     requests:
       cpu: "500m"
@@ -1144,7 +1190,7 @@ sileroVad:
     secretKey: ""
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.10.2
+  image: cognigy.azurecr.io/vg-feature-server:2026.12.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1202,7 +1248,7 @@ featureServerNightly:
   ## List of vendors that use per-credential TTS streaming control.
   ## Vendors not listed fall back to global enableTtsStreaming behavior.
   ## Use ["*"] for all vendors.
-  streamingTtsVendors: []
+  streamingTtsVendors: ["*"]
   extraEnvVars: []
   ports:
     tcp: 3000
@@ -1217,7 +1263,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.10.0
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.12.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
@@ -1260,7 +1306,7 @@ featureServerLegacy:
   ## List of vendors that use per-credential TTS streaming control.
   ## Vendors not listed fall back to global enableTtsStreaming behavior.
   ## Use ["*"] for all vendors.
-  streamingTtsVendors: []
+  streamingTtsVendors: ["*"]
   extraEnvVars: []
   ports:
     tcp: 3000
@@ -1273,7 +1319,7 @@ featureServerLegacy:
       cpu: "1"
       memory: 500Mi
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.10.2
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.12.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1287,11 +1333,12 @@ freeswitch:
   ## and until we don't have a solution we will force a specific codec for it. Once we have defintive solution, we uncomment this.
   args:
     - --codec-answer-generous
+    - --log-level
+    - info
     # - --g711-only OR
     # - --g711-only-alaw-preferred (this is recommended for clusters running in EU)
     # - --rtp-range-start the starting UDP port for RTP traffic
     # - --rtp-range-end the ending UDP port for RTP traffic
-    # - --log-level debug (available from R71 freeSWITCH-mrf image)
   ## Enable core dump creation on crash. Requires the host/node kernel core_pattern
   ## to be set to a path inside /coredumps (e.g., /coredumps/core.%e.%p.%t).
   createCoreFile: true
@@ -1331,12 +1378,12 @@ freeswitchNightly:
   ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
   ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
   ## @see featureServerNightly
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.10.2
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.12.0
 freeswitchLegacy:
   ## You can specify a custom image for the FreeSWITCH in the legacy FeatureServer here
   ## To enable a "legacy FreeSWITCH", you have to enable a legacy FeatureServer.
   ## @see featureServerLegacy
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.10.2
+  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.12.0
 rtpEngine:
   image: cognigy.azurecr.io/vg-rtpengine:0.2.0
   imagePullPolicy: IfNotPresent
@@ -1360,7 +1407,7 @@ rtpEngine:
 mediaProcessor:
   ## Enable Media Processor for decoupled STT/TTS processing
   enabled: false
-  image: cognigy.azurecr.io/vg-media-processor:2026.10.0
+  image: cognigy.azurecr.io/vg-media-processor:2026.12.0
   imagePullPolicy: Always
   replicaCount: 2
   serviceName: media-processor
@@ -1386,6 +1433,12 @@ mediaProcessor:
   nodeSelector: {}
   priorityClassName: ""
   podSecurityContext: {}
+  containerSecurityContext:
+    runAsUser: 0
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+      add: ["NET_RAW"]
   tolerations: []
   terminationGracePeriodSeconds: 30
   extraEnvVars: []
@@ -1401,7 +1454,7 @@ mediaProcessor:
       cpu: "1"
       memory: 512Mi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.10.0
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.12.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1416,7 +1469,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/vg-sbc-call-router:2026.10.0
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.12.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1447,7 +1500,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/vg-sbc-inbound:2026.10.0
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.12.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1487,7 +1540,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/vg-sbc-outbound:2026.10.0
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.12.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1525,7 +1578,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.10.0
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.12.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1540,7 +1593,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.10.1
+  image: cognigy.azurecr.io/vg-tcm:2026.12.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1579,7 +1632,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: true
-  image: cognigy.azurecr.io/vg-connector:2026.10.0
+  image: cognigy.azurecr.io/vg-connector:2026.12.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1613,7 +1666,7 @@ vgConnector:
       cpu: "0.100"
       memory: 150Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.10.0
+  image: cognigy.azurecr.io/vg-webapp:2026.12.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1996,6 +2049,11 @@ hpa:
               type: Utilization
               averageUtilization: 70
       behavior: {}
+    # NOTE: the Pods metric "silero_vad_active_sessions" requires
+    # prometheus-adapter (or KEDA) to expose the metric via the custom
+    # metrics API. If neither is installed, drop the Pods metric or set
+    # hpa.services.sileroVad.enabled=false. Verify with:
+    #   kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1/namespaces/<ns>/pods/*/silero_vad_active_sessions"
     sileroVad:
       ## Enable horizontal pod autoscaler for the Silero VAD service.
       ## Silero VAD is CPU-bound (ONNX ML inference per call), making CPU
@@ -2026,6 +2084,16 @@ hpa:
               ## Temporary: gather production baseline data before deciding whether memory
               ## is a meaningful scaling signal. Remove once experience shows it is not needed.
               averageUtilization: 80
+        - type: Pods
+          pods:
+            metric:
+              name: silero_vad_active_sessions
+            target:
+              type: AverageValue
+              # Scale up when each pod averages >120 concurrent sessions
+              # (60% of the default maxConcurrentSessions=200 cap). Tune
+              # together with sileroVad.maxConcurrentSessions.
+              averageValue: "120"
       ## Rate-limit scale-down to 1 pod per 60 s with a 300 s stabilization window.
       ## This aligns with DRAIN_TIMEOUT_SECONDS in the application (vg-silero-vad) to
       ## reduce churn during scale-down while pods are draining active calls. Note: with
@@ -2115,6 +2183,17 @@ vgConsole:
     ## "flux-system-github-app" which is already present in every cluster
     ## that runs Flux. Override only if you want to use a dedicated secret.
     githubAppSecretName: "flux-system-github-app"
+  ## CI service token used to authenticate release-pipeline calls to the
+  ## changelog publish endpoints (POST /api/ci/changelog/{sprint}/publish and
+  ## PATCH .../patch-status). When vgConsole.enabled=true the chart creates this
+  ## secret (templates/common-secrets/vg-console-secret.yaml) with a generated
+  ## token (kept across upgrades) and mounts it as VG_CONSOLE_API_TOKEN. Read the
+  ## value from the cluster and store it as the VG_CONSOLE_API_TOKEN GitHub
+  ## secret in the release repos so CI sends a matching Bearer token. To bring
+  ## your own token, pre-create a secret with this name/key before install.
+  ciApiToken:
+    secretName: "vg-console-secret"
+    secretKey: "VG_CONSOLE_API_TOKEN"
   ## Extra environment variables
   extraEnvVars: []
 ####################################

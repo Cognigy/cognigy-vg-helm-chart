@@ -1,4 +1,3 @@
-{{- if not (.Values.tracing.callTracingEnabled) }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -28,4 +27,3 @@ spec:
       port: 4318
       targetPort: 4318
       protocol: TCP
-{{- end }}

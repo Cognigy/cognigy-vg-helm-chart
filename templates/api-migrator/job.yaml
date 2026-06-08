@@ -84,11 +84,11 @@ spec:
             - |
               set -e
               echo "=== Running vg migrations ==="
-              node /opt/app/migrator/migrate.js release
-              
+              node /opt/app/build/migrator/migrate.js release
+
               echo ""
               echo "=== Setting up billing schema ==="
-              node /opt/app/migrator/setup-billing-schema.js
+              node /opt/app/build/migrator/setup-billing-schema.js
               
               echo ""
               echo "=== All migrations complete ==="

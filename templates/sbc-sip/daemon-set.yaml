@@ -9,6 +9,11 @@ metadata:
     owner-team: echo
   annotations:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-sbc-sip-sidecar.git"
+    "cognigy.com/source-code.ec2-eip-allocator": "git@github.com:Cognigy/vg-external-services.git"
+    "cognigy.com/source-code.sip-dns-updater-azure": "git@github.com:Cognigy/vg-external-services.git"
+    "cognigy.com/source-code.db-create-wait": null
+    "cognigy.com/source-code.drachtio": "git@github.com:Cognigy/vg-drachtio.git"
+    "cognigy.com/source-code.sbc-sip-sidecar": "git@github.com:Cognigy/vg-sbc-sip-sidecar.git"
 spec:
   selector:
     matchLabels:
@@ -98,8 +103,8 @@ spec:
             - name: DNS_BASE_NAME
               value: {{ .Values.sbc.sipDnsUpdaterAzure.dnsBaseName | quote }}
         {{- end }}
-        - image: kanisterio/mysql-sidecar:0.40.0
-          name: db-create-wait
+        - name: db-create-wait
+          image: kanisterio/mysql-sidecar:0.40.0
           env:
             - name: PASSWORD
               valueFrom:

@@ -91,8 +91,6 @@ spec:
               value: {{ .Values.webapp.enableForgotPassword | quote }}
             - name: DISABLE_CALL_RECORDING
               value: {{ .Values.webapp.disableCallRecording | quote }}
-            - name: VG_SENTRY_TRACING_ENABLED
-              value: {{ .Values.tracing.callTracingEnabled | quote }}
             - name: ENABLE_TTS_ELEVENLABS
               value: {{ .Values.webapp.enableTtsElevenlabs | quote }}
             - name: ENABLE_TTS_ELEVENLABS_OPTIONS
@@ -115,6 +113,8 @@ spec:
               value: {{ .Values.webapp.enableDeepgramflux | quote }}
             - name: ENABLE_PING_OPTIONS
               value: {{ .Values.webapp.enablePingOptions | quote }}
+            - name: SIP_HEADER_COGNIGY_CONTACT_DATA
+              value: {{ .Values.nice.sipHeaderCognigyContactData | quote }}
             - name: SYSTEM_SPEECH_CREDENTIAL_LABEL
               value: {{ $.Values.sharedSpeechCredentials.label | quote }}
             - name: FEATURE_ENABLE_SHARED_SPEECH_CREDENTIALS

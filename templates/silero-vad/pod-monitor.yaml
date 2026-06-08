@@ -1,0 +1,22 @@
+{{- if and .Values.podMonitors.enabled .Values.sileroVad.enabled .Values.sileroVad.podMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: silero-vad
+  namespace: {{ .Values.podMonitors.namespace | default $.Release.Namespace | quote }}
+  labels:
+    app: silero-vad
+    owner-team: echo
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ $.Release.Namespace | quote }}
+  selector:
+    matchLabels:
+      app: silero-vad
+  podMetricsEndpoints:
+    - port: ws
+      path: {{ .Values.sileroVad.podMonitor.path | quote }}
+      interval: {{ .Values.sileroVad.podMonitor.interval }}
+      scrapeTimeout: {{ .Values.sileroVad.podMonitor.scrapeTimeout }}
+{{- end }}

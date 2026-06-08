@@ -10,6 +10,9 @@ metadata:
     owner-team: echo
   annotations:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-api-server.git"
+    "cognigy.com/source-code.db-create-wait": null
+    "cognigy.com/source-code.api-server": "git@github.com:Cognigy/vg-api-server.git"
+
 spec:
   selector:
     matchLabels:
@@ -161,6 +164,8 @@ spec:
               value: {{ .Values.influxdb.host }}
             - name: JAMBONES_TRUST_PROXY
               value: "2"
+            - name: SIP_BASE_URL
+              value: {{ required "sbc.sip.uri must be set to a non-empty SIP base URL for api-server" .Values.sbc.sip.uri | quote }}
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -216,19 +221,6 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.cognigyLogin.secret | quote }}
                   key: {{ .Values.cognigyLogin.secretKey | quote }}
-            {{- end }}
-            - name: VG_SENTRY_TRACING_ENABLED
-              value: {{ .Values.tracing.callTracingEnabled | quote }}
-            {{- if .Values.tracing.callTracingEnabled }}
-            - name: VG_SENTRY_API_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.tracing.secret | quote }}
-                  key: {{ .Values.tracing.secretKey | quote }}
-            - name: VG_SENTRY_API_PROJECT
-              value: {{ .Values.tracing.apiProject | quote }}
-            - name: VG_SENTRY_API_BASE_URL
-              value: {{ .Values.tracing.apiBaseUrl | quote }}
             {{- end }}
             - name: ENABLE_PREPARE_COGNIGY_DATA
               value: {{ .Values.api.enablePrepareCognigyData | quote }}

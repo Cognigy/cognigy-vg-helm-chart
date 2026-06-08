@@ -52,6 +52,9 @@ spec:
         - name: media-processor
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.mediaProcessor.image) }}
           imagePullPolicy: {{ .Values.mediaProcessor.imagePullPolicy }}
+          {{- if .Values.mediaProcessor.containerSecurityContext }}
+          securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.mediaProcessor.containerSecurityContext "context" $) | nindent 12 }}
+          {{- end }}
           resources: {{- toYaml .Values.mediaProcessor.resources | nindent 12 }}
           ports:
             - name: grpc

@@ -8,6 +8,10 @@ metadata:
     owner-team: echo
   annotations:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-feature-server.git"
+    "cognigy.com/source-code.db-create-wait": null
+    "cognigy.com/source-code.drachtio": "git@github.com:Cognigy/vg-drachtio.git"
+    "cognigy.com/source-code.freeswitch": "git@github.com:Cognigy/vg-freeswitch-mrf.git"
+    "cognigy.com/source-code.feature-server": "git@github.com:Cognigy/vg-feature-server.git"
 spec:
   selector:
     matchLabels:
@@ -284,6 +288,8 @@ spec:
               value: "true"
             - name: JAMBONZ_CLEANUP_INTERVAL_MINS
               value: "60"
+            - name: SIP_HEADER_COGNIGY_CONTACT_DATA
+              value: {{ .Values.nice.sipHeaderCognigyContactData | quote }}
             - name: JAMBONES_API_BASE_URL
               value: {{ .Values.ingress.api.host }}/v1
             - name: JAMBONZ_RECORD_WS_BASE_URL
@@ -397,8 +403,6 @@ spec:
               value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
             - name: SIGTERM_FORCE_CLOSE_TIMEOUT
               value: {{ .Values.featureServer.sigtermForceCloseTimeoutMs | quote }}
-            - name: VG_SENTRY_TRACING_ENABLED
-              value: {{ .Values.tracing.callTracingEnabled | quote }}
             - name: NODE_OPTIONS
               value: {{ .Values.featureServer.nodeOptions | quote }}
             - name: VG_EAGERLY_PRE_CACHE_AUDIO

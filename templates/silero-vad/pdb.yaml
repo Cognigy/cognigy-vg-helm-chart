@@ -1,0 +1,21 @@
+{{- if and .Values.sileroVad.enabled .Values.sileroVad.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: silero-vad
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: silero-vad
+    owner-team: echo
+spec:
+  selector:
+    matchLabels:
+      app: silero-vad
+  {{- if hasKey .Values.sileroVad.pdb "minAvailable" }}
+  minAvailable: {{ .Values.sileroVad.pdb.minAvailable }}
+  {{- else if hasKey .Values.sileroVad.pdb "maxUnavailable" }}
+  maxUnavailable: {{ .Values.sileroVad.pdb.maxUnavailable }}
+  {{- else }}
+  {{- fail "sileroVad.pdb.enabled is true but neither sileroVad.pdb.minAvailable nor sileroVad.pdb.maxUnavailable is set" }}
+  {{- end }}
+{{- end }}

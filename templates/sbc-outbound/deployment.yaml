@@ -8,6 +8,8 @@ metadata:
     owner-team: echo
   annotations:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-sbc-outbound.git"
+    "cognigy.com/source-code.db-create-wait": null
+    "cognigy.com/source-code.sbc-outbound": "git@github.com:Cognigy/vg-sbc-outbound.git"
 spec:
   selector:
     matchLabels:
@@ -116,6 +118,8 @@ spec:
               value: {{ .Values.sbcOutbound.ports.tcp | quote }}
             - name: DTMF_LISTEN_PORT
               value: {{ .Values.sbcOutbound.ports.dtmf | quote }}
+            - name: SIP_HEADER_COGNIGY_CONTACT_DATA
+              value: {{ .Values.nice.sipHeaderCognigyContactData | quote }}
             - name: JAMBONES_LOGLEVEL
               value: {{ if .Values.sbcOutbound.logLevel }}{{ .Values.sbcOutbound.logLevel }}{{ else }}{{ .Values.global.logLevel }}{{ end }}
             - name: CALL_COUNTER_TRACK_ACCOUNT_CALLS
