@@ -486,7 +486,7 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-server:2026.13.0-rc2
+  image: cognigy.azurecr.io/vg-api-server:2026.13.0
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -908,7 +908,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.3
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.13.0-rc2
+  image: cognigy.azurecr.io/vg-api-server:2026.13.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1019,7 +1019,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.13.0-rc1
+  image: cognigy.azurecr.io/vg-feature-server:2026.13.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1101,7 +1101,7 @@ sileroVad:
   ## When enabled, feature server receives SILERO_VAD_SERVICE_URL env var
   ## pointing to this service for Plan B audio-fork VAD.
   enabled: false
-  image: cognigy.azurecr.io/vg-silero-vad:2026.13.0-rc1
+  image: cognigy.azurecr.io/vg-silero-vad:2026.13.0
   ## Default Always because the default tag is :latest (mutable) — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1206,7 +1206,7 @@ sileroVad:
     secretKey: ""
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.13.0-rc1
+  image: cognigy.azurecr.io/vg-feature-server:2026.13.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1279,7 +1279,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.13.0-rc2
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.13.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
@@ -1423,7 +1423,7 @@ rtpEngine:
 mediaProcessor:
   ## Enable Media Processor for decoupled STT/TTS processing
   enabled: false
-  image: cognigy.azurecr.io/vg-media-processor:2026.13.0-rc2
+  image: cognigy.azurecr.io/vg-media-processor:2026.13.0
   imagePullPolicy: Always
   replicaCount: 2
   serviceName: media-processor
@@ -1470,7 +1470,7 @@ mediaProcessor:
       cpu: "1"
       memory: 512Mi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.13.0-rc1
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.13.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1485,7 +1485,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/vg-sbc-call-router:2026.13.0-rc1
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.13.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1516,7 +1516,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/vg-sbc-inbound:2026.13.0-rc2
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.13.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1556,7 +1556,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/vg-sbc-outbound:2026.13.0-rc3
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.13.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1594,7 +1594,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.13.0-rc2
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.13.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1609,7 +1609,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.13.0-rc3
+  image: cognigy.azurecr.io/vg-tcm:2026.13.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1648,7 +1648,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: true
-  image: cognigy.azurecr.io/vg-connector:2026.13.0-rc2
+  image: cognigy.azurecr.io/vg-connector:2026.13.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1684,7 +1684,7 @@ vgConnector:
       cpu: "0.100"
       memory: 150Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.13.0-rc2
+  image: cognigy.azurecr.io/vg-webapp:2026.13.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
