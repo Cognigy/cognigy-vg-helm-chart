@@ -13,8 +13,8 @@ metadata:
     owner-team: echo
   annotations:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-console.git"
-    "cognigy.com/source-code.db-create-wait": null
-    "cognigy.com/source-code.db-connectivity-wait": null
+    "cognigy.com/source-code.db-create-wait": "empty"
+    "cognigy.com/source-code.db-connectivity-wait": "empty"
     "cognigy.com/source-code.vg-console": "git@github.com:Cognigy/vg-console.git"
 spec:
   selector:

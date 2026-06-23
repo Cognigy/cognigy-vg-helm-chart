@@ -8,7 +8,7 @@ metadata:
     owner-team: echo
   annotations:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-feature-server-legacy.git"
-    "cognigy.com/source-code.db-create-wait": null
+    "cognigy.com/source-code.db-create-wait": "empty"
     "cognigy.com/source-code.drachtio": "git@github.com:Cognigy/vg-drachtio.git"
     "cognigy.com/source-code.freeswitch": "git@github.com:Cognigy/vg-freeswitch-mrf.git"
     "cognigy.com/source-code.feature-server": "git@github.com:Cognigy/vg-feature-server-legacy.git"

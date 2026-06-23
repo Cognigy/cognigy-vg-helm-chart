@@ -1,13 +1,13 @@
-{{- /* if billing.enabled is true and billing.sendToCentral.serverUrl is not empty, then deploy the send-to-central-cronjob */ -}}
+{{- /* Deploy the daily-billing-reporting-v1 CronJob when billing and sendToCentral are enabled */ -}}
 {{ if and .Values.billing.enabled .Values.billing.sendToCentral.enabled .Values.billing.sendToCentral.serverUrl }}
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: vg-send-billing-to-central
+  name: vg-daily-billing-reporting
   namespace: {{ .Release.Namespace | quote }}
   labels:
     app: vg-billing
-    component: send-to-central
+    component: daily-billing-reporting
     owner-team: echo
   annotations:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-api-server.git"
@@ -24,17 +24,17 @@ spec:
         metadata:
           labels:
             app: vg-billing
-            component: send-to-central
+            component: daily-billing-reporting
           annotations:
             sidecar.istio.io/inject: "false"
         spec:
           {{- include "image.pullSecrets" $ | nindent 10 }}
           restartPolicy: Never
           containers:
-            - name: send-to-central
+            - name: daily-billing-reporting
               image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.api.image) }}
               imagePullPolicy: {{ .Values.api.imagePullPolicy | default "IfNotPresent" }}
-              command: ["node", "build/lib/billing/jobs/send-billing-to-central.js"]
+              command: ["node", "build/lib/billing/jobs/daily-billing-reporting-v1/index.js"]
               env:
                 - name: JAMBONES_MYSQL_HOST
                   value: {{ .Values.mysql.host | quote }}
@@ -49,15 +49,14 @@ spec:
                     secretKeyRef:
                       name: {{ .Values.billing.mysql.existingSecret | quote }}
                       key: {{ .Values.billing.mysql.secretKey | quote }}
-                - name: VG_CLUSTER_ID
-                  value: {{ .Values.billing.clusterId | default .Values.ingress.webapp.host | quote }}
                 - name: VG_SPEECH_BILLING_SERVER_URL
                   value: {{ .Values.billing.sendToCentral.serverUrl | quote }}
-                - name: VG_SPEECH_BILLING_SHARED_SECRET
-                  valueFrom:
-                    secretKeyRef:
-                      name: {{ .Values.billing.sendToCentral.secretName | default "vg-billing-secret" | quote }}
-                      key: {{ .Values.billing.sendToCentral.secretKey | default "shared-secret" | quote }}
+                - name: BILLING_VG_PRIVATE_KEY_PATH
+                  value: {{ .Values.billing.sendToCentral.privateKeyPath | default "" | quote }}
+                - name: VG_SPEECH_BILLING_REPORTING_LAG_DAYS
+                  value: {{ .Values.billing.sendToCentral.reportingLagDays | quote }}
+                - name: COGNIGY_AI_VERSION
+                  value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
                 - name: JAMBONES_LOGLEVEL
                   value: {{ if .Values.billing.logLevel }}{{ .Values.billing.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
               resources:

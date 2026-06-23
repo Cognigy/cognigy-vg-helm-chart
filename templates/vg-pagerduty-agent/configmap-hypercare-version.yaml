@@ -1,0 +1,14 @@
+{{- $hypercareTargetUrl := coalesce .Values.vgPagerdutyAgent.hypercare.centralConsoleUrl .Values.vgPagerdutyAgent.hypercare.centralAgentUrl -}}
+{{- if and .Values.vgPagerdutyAgent.hypercare.activateOnDeploy $hypercareTargetUrl .Values.vgPagerdutyAgent.hypercare.localEnvironment }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vg-hypercare-version
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-pagerduty-agent-hypercare
+    owner-team: echo
+data:
+  chartVersion: {{ .Chart.Version | quote }}
+{{- end }}

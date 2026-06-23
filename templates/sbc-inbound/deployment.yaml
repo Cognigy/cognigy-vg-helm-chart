@@ -8,7 +8,7 @@ metadata:
     owner-team: echo
   annotations:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-sbc-inbound.git"
-    "cognigy.com/source-code.db-create-wait": null
+    "cognigy.com/source-code.db-create-wait": "empty"
     "cognigy.com/source-code.sbc-inbound": "git@github.com:Cognigy/vg-sbc-inbound.git"
 spec:
   selector:

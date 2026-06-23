@@ -11,8 +11,8 @@ metadata:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-sbc-sip-sidecar.git"
     "cognigy.com/source-code.ec2-eip-allocator": "git@github.com:Cognigy/vg-external-services.git"
     "cognigy.com/source-code.sip-dns-updater-azure": "git@github.com:Cognigy/vg-external-services.git"
-    "cognigy.com/source-code.stackit-external-ip-detector": null
-    "cognigy.com/source-code.db-create-wait": null
+    "cognigy.com/source-code.stackit-external-ip-detector": "empty"
+    "cognigy.com/source-code.db-create-wait": "empty"
     "cognigy.com/source-code.drachtio": "git@github.com:Cognigy/vg-drachtio.git"
     "cognigy.com/source-code.sbc-sip-sidecar": "git@github.com:Cognigy/vg-sbc-sip-sidecar.git"
 spec:

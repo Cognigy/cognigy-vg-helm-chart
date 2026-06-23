@@ -10,7 +10,7 @@ metadata:
     owner-team: echo
   annotations:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-api-server.git"
-    "cognigy.com/source-code.db-create-wait": null
+    "cognigy.com/source-code.db-create-wait": "empty"
     "cognigy.com/source-code.api-server": "git@github.com:Cognigy/vg-api-server.git"
 
 spec:
@@ -114,6 +114,10 @@ spec:
               value: {{ .Values.global.nodeEnv | quote }}
             - name: HTTP_PORT
               value: {{ .Values.api.port | quote }}
+            ## Genesys AudioHook master switch — gates the vendor_integrations
+            ## CRUD route mount in lib/routes/api/vendor-integrations.ts.
+            - name: ENABLE_GENESYS_AUDIOHOOK
+              value: {{ .Values.global.enableGenesysAudioHook | quote }}
             - name: K8S
               value: {{ .Values.global.k8s | quote }}
             - name: K8S_NAMESPACE

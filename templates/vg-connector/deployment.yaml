@@ -9,6 +9,7 @@ metadata:
     owner-team: echo
   annotations:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-connector.git"
+    "cognigy.com/source-code.drachtio": "git@github.com:Cognigy/vg-drachtio.git"
 spec:
   selector:
     matchLabels:
@@ -92,6 +93,16 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+            - name: DRACHTIO_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-drachtio-secret
+                  key: secret
+            ## Genesys AudioHook master switch — uniform env name across all
+            ## three services so the helm chart fans out one value to one name
+            ## everywhere. vg-connector PR #35 renames the source to read this.
+            - name: ENABLE_GENESYS_AUDIOHOOK
+              value: {{ .Values.global.enableGenesysAudioHook | quote }}
             {{- if hasKey .Values.vgConnector "modules" }}
             {{- if hasKey .Values.vgConnector.modules "webrtc" }}
             - name: FEATURE_ENABLE_WEBRTC
@@ -122,4 +133,31 @@ spec:
           envFrom:
             - configMapRef:
                 name: cognigy-env
+        - name: drachtio
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.drachtio.image) }}
+          imagePullPolicy: {{ .Values.drachtio.imagePullPolicy }}
+          resources: {{- toYaml .Values.drachtio.resources | nindent 12 }}
+          args:
+            - drachtio
+            - --loglevel
+            - {{ if .Values.drachtio.logLevel }}{{ .Values.drachtio.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+            - --sofia-loglevel
+            - {{ .Values.vgConnector.sofiaLoglevel | quote }}
+          env:
+            - name: DRACHTIO_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-drachtio-secret
+                  key: secret
+            - name: DRACHTIO_SUPPORT_BEST_EFFORT_TLS
+              value: {{ if .Values.drachtio.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            - name: PRIVATE_IP_ONLY
+              value: {{ .Values.drachtio.privateIpOnly | quote }}
+            - name: SOFIA_SEARCH_DOMAINS
+              value: "1"
+            - name: SOFIA_SRES_NO_CACHE
+              value: "1"
+            {{- if .Values.drachtio.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.drachtio.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
 {{- end }}

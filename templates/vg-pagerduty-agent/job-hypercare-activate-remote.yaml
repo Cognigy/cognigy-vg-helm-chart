@@ -1,5 +1,7 @@
 {{- $hypercareTargetUrl := coalesce .Values.vgPagerdutyAgent.hypercare.centralConsoleUrl .Values.vgPagerdutyAgent.hypercare.centralAgentUrl -}}
-{{- if and .Values.vgPagerdutyAgent.hypercare.activateOnDeploy $hypercareTargetUrl .Values.vgPagerdutyAgent.hypercare.localEnvironment }}
+{{- if and .Values.vgPagerdutyAgent.hypercare.activateOnDeploy $hypercareTargetUrl .Values.vgPagerdutyAgent.hypercare.localEnvironment -}}
+{{- $existingVersion := dig "data" "chartVersion" "" (lookup "v1" "ConfigMap" $.Release.Namespace "vg-hypercare-version") -}}
+{{- if ne $existingVersion .Chart.Version }}
 ---
 apiVersion: batch/v1
 kind: Job
@@ -89,4 +91,5 @@ spec:
               echo "WARNING: Failed to activate hypercare window on ${HYPERCARE_TARGET_KIND} (HTTP ${http_code:-no-response})."
               echo "WARNING: Release will continue; SRE should verify hypercare coverage manually."
               exit 0
+{{- end }}
 {{- end }}

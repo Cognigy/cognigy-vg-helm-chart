@@ -26,6 +26,15 @@ global:
   ## Global Log Level valid choices are debug, error, info, warn (sbc.sip: warning)
   logLevel: info
   enableTtsStreaming: true
+  ## Genesys AudioHook integration master switch. One flag fans out to vg-connector,
+  ## vg-api-server, and vg-webapp so an operator flips it once per environment
+  ## rather than three times. Default false — clusters where AudioHook isn't
+  ## deployed or wanted stay dark. NB: this is NOT "Genesys generally" — a
+  ## customer can already use Genesys as a SIP-trunk carrier without this flag;
+  ## the flag specifically gates the in-cluster AudioHook bridge (vg-connector's
+  ## Genesys router + vg-api-server's vendor_integrations CRUD + vg-webapp's
+  ## Genesys AudioHook UI).
+  enableGenesysAudioHook: false
 ###############
 # Cognigy ENV #
 ###############
@@ -296,6 +305,10 @@ logRedaction:
 ##################
 billing:
   enabled: false
+  ## Seed test organisations and usage records on deploy. For reviewer testing only — never enable in production.
+  seedTestData: false
+  ## cluster_host value written into the seeded organisations rows. Must match the value the reporter resolves.
+  seedClusterHost: ""
   ## Cluster identifier for billing data (defaults to webapp ingress host if not set)
   # clusterId: ""
 
@@ -313,16 +326,19 @@ billing:
     enabled: false
     ## Schedule: Daily at 02:00 UTC
     schedule: "0 2 * * *"
-  ## Send-to-central job - sends aggregated data to Central Billing Server
+  ## Daily billing reporting job - ships signed tar archives to the Central Billing Server
   sendToCentral:
     enabled: false
     ## Schedule: Daily at 03:00 UTC (after pre-aggregation)
     schedule: "0 3 * * *"
-    ## Central Billing Server URL (required if enabled)
+    ## Central Billing Server multipart POST endpoint (required if enabled)
     serverUrl: ""
-    ## Secret containing shared secret for HMAC signing between the API Server and the Central Billing Server
-    secretName: "vg-billing-secret"
-    secretKey: "shared-secret"
+    ## How many days behind today to set the reporting cutoff (default 2 — ensures
+    ## late-arriving call records are included before the day is shipped)
+    reportingLagDays: 2
+    ## Path to PEM-encoded ED25519 private key file inside the container.
+    ## Leave empty to use the dev fallback key (CBS will reject archives in production).
+    privateKeyPath: ""
 nice:
   ## SIP header used to propagate the carrier's `nice_business_unit` (composite value `bu:<BU>~sid:<call_sid>`).
   ## opt-in. Only attached to inbound 200 OK and outbound INVITE when the carrier has a value.
@@ -470,7 +486,7 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.12.0
+  image: cognigy.azurecr.io/vg-api-server:2026.13.0-rc2
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -892,7 +908,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.3
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.12.0
+  image: cognigy.azurecr.io/vg-api-server:2026.13.0-rc2
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1003,7 +1019,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.12.1
+  image: cognigy.azurecr.io/vg-feature-server:2026.13.0-rc1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1085,7 +1101,7 @@ sileroVad:
   ## When enabled, feature server receives SILERO_VAD_SERVICE_URL env var
   ## pointing to this service for Plan B audio-fork VAD.
   enabled: false
-  image: cognigy.azurecr.io/vg-silero-vad:2026.12.0
+  image: cognigy.azurecr.io/vg-silero-vad:2026.13.0-rc1
   ## Default Always because the default tag is :latest (mutable) — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1190,7 +1206,7 @@ sileroVad:
     secretKey: ""
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.12.1
+  image: cognigy.azurecr.io/vg-feature-server:2026.13.0-rc1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1263,7 +1279,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.12.0
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.13.0-rc2
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
@@ -1407,7 +1423,7 @@ rtpEngine:
 mediaProcessor:
   ## Enable Media Processor for decoupled STT/TTS processing
   enabled: false
-  image: cognigy.azurecr.io/vg-media-processor:2026.12.0
+  image: cognigy.azurecr.io/vg-media-processor:2026.13.0-rc2
   imagePullPolicy: Always
   replicaCount: 2
   serviceName: media-processor
@@ -1454,7 +1470,7 @@ mediaProcessor:
       cpu: "1"
       memory: 512Mi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.12.0
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.13.0-rc1
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1469,7 +1485,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/vg-sbc-call-router:2026.12.0
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.13.0-rc1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1500,7 +1516,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/vg-sbc-inbound:2026.12.0
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.13.0-rc2
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1540,7 +1556,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/vg-sbc-outbound:2026.12.0
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.13.0-rc3
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1578,7 +1594,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.12.0
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.13.0-rc2
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1593,7 +1609,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.12.0
+  image: cognigy.azurecr.io/vg-tcm:2026.13.0-rc3
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1632,7 +1648,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: true
-  image: cognigy.azurecr.io/vg-connector:2026.12.0
+  image: cognigy.azurecr.io/vg-connector:2026.13.0-rc2
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1656,6 +1672,8 @@ vgConnector:
       enabled: true
     msTeams:
       enabled: false
+  ## sofia loglevel for the drachtio sidecar (msTeams only)
+  sofiaLoglevel: "5"
   port: 8000
   extraEnvVars: []
   resources:
@@ -1666,7 +1684,7 @@ vgConnector:
       cpu: "0.100"
       memory: 150Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.12.0
+  image: cognigy.azurecr.io/vg-webapp:2026.13.0-rc2
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:

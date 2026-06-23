@@ -36,43 +36,53 @@ spec:
             - -c
             - |
               set -eu
-              
+
               echo "Creating vg_speech_billing database..."
               MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h "$MYSQL_HOST" -u root -e "
                 CREATE DATABASE IF NOT EXISTS vg_speech_billing
                   CHARACTER SET utf8mb4
                   COLLATE utf8mb4_unicode_ci;
               "
-              
+
               echo "Creating dedicated billing user..."
               MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h "$MYSQL_HOST" -u root -e "
                 CREATE USER IF NOT EXISTS '$BILLING_USER'@'%' IDENTIFIED BY '$BILLING_PASSWORD';
                 GRANT ALL PRIVILEGES ON vg_speech_billing.* TO '$BILLING_USER'@'%';
                 FLUSH PRIVILEGES;
               "
-              
+
+              echo "Granting jambones user full access to vg_speech_billing..."
+              MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h "$MYSQL_HOST" -u root -e "
+                GRANT ALL PRIVILEGES ON vg_speech_billing.* TO '$JAMBONES_USER'@'%';
+                FLUSH PRIVILEGES;
+              "
+
               echo "Verifying database exists..."
               MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h "$MYSQL_HOST" -u root -e "USE vg_speech_billing" || {
                 echo "CRITICAL: Failed to verify vg_speech_billing database"
                 exit 1
               }
-              
+
               echo "Billing database and user ready."
           env:
             - name: MYSQL_HOST
               value: {{ .Values.mysql.host | quote }}
             - name: BILLING_USER
               value: {{ .Values.billing.mysql.username | quote }}
+            - name: JAMBONES_USER
+              value: {{ .Values.mysql.auth.username | quote }}
             - name: BILLING_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.billing.mysql.existingSecret | quote }}
                   key: {{ .Values.billing.mysql.secretKey | quote }}
+            - name: JAMBONES_DATABASE
+              value: {{ .Values.mysql.database.name | quote }}
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: voicegateway-mysql-password
-                  key: mysql-root-password     
+                  key: mysql-root-password
       containers:
         - name: api-migrator-init
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.apiMigrator.image) }}
@@ -89,7 +99,13 @@ spec:
               echo ""
               echo "=== Setting up billing schema ==="
               node /opt/app/build/migrator/setup-billing-schema.js
-              
+
+              if [ "${VG_BILLING_SEED_TEST_DATA}" = "true" ]; then
+                echo ""
+                echo "=== Seeding billing test data ==="
+                node /opt/app/build/migrator/seed-billing-test-data.js
+              fi
+
               echo ""
               echo "=== All migrations complete ==="
           {{- end }}
@@ -114,6 +130,12 @@ spec:
               value: {{ .Values.influxdb.host }}
             - name: API_MIGRATION_TARGET
               value: {{ .Values.apiMigrator.migrationTarget }}
+            {{- if .Values.billing.seedTestData }}
+            - name: VG_BILLING_SEED_TEST_DATA
+              value: "true"
+            - name: VG_BILLING_SEED_CLUSTER_HOST
+              value: {{ .Values.billing.seedClusterHost | default "test.billing.local" | quote }}
+            {{- end }}
             {{- if .Values.billing.enabled }}
             - name: VG_SPEECH_BILLING_MYSQL_HOST
               value: {{ .Values.mysql.host | quote }}

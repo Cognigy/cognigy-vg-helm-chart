@@ -75,6 +75,11 @@ spec:
               value: {{ .Values.webapp.disableSpLimits | quote }}
             - name: ENABLE_MSTEAMS_ROUTING
               value: {{ .Values.webapp.enableMsTeamsRouting | quote }}
+            ## Genesys AudioHook master switch — surfaces the Genesys AudioHook
+            ## sidebar entry + routes via window.VG.ENABLE_GENESYS_AUDIOHOOK
+            ## (entrypoint.sh threads this into the runtime config script).
+            - name: ENABLE_GENESYS_AUDIOHOOK
+              value: {{ .Values.global.enableGenesysAudioHook | quote }}
             - name: DISABLE_CUSTOM_SPEECH
               value: {{ .Values.webapp.disableCustomSpeech | quote }}
             - name: ENABLE_ALL_SPEECH_PROVIDERS
