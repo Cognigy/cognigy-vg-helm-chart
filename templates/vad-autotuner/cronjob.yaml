@@ -1,0 +1,67 @@
+{{- if .Values.vadAutotuner.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: vad-autotuner
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vad-autotuner
+    owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-vad-autotuner.git"
+spec:
+  schedule: {{ .Values.vadAutotuner.schedule | quote }}
+  startingDeadlineSeconds: 300
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: {{ .Values.vadAutotuner.ttlSecondsAfterFinished }}
+      template:
+        metadata:
+          labels:
+            app: vad-autotuner
+        spec:
+          {{- include "image.pullSecrets" $ | nindent 10 }}
+          restartPolicy: Never
+          containers:
+            - name: vad-autotuner
+              image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.vadAutotuner.image) }}
+              imagePullPolicy: {{ .Values.vadAutotuner.imagePullPolicy }}
+              env:
+                - name: PROMETHEUS_URL
+                  value: {{ .Values.vadAutotuner.prometheusUrl | quote }}
+                - name: PUSHGATEWAY_URL
+                  value: {{ .Values.vadAutotuner.pushgatewayUrl | quote }}
+                - name: AUTOTUNE_WINDOW
+                  value: {{ .Values.vadAutotuner.window | quote }}
+                - name: AUTOTUNE_DRY_RUN
+                  value: {{ .Values.vadAutotuner.dryRun | quote }}
+                - name: AUTOTUNE_MIN_GATHERS
+                  value: {{ .Values.vadAutotuner.minGathers | quote }}
+                - name: AUTOTUNE_MISS_CEILING
+                  value: {{ .Values.vadAutotuner.missCeiling | quote }}
+                - name: AUTOTUNE_TARGET_FF
+                  value: {{ .Values.vadAutotuner.targetFF | quote }}
+                {{- if .Values.vadAutotuner.mysql.enabled }}
+                - name: USE_MYSQL
+                  value: "true"
+                - name: VG_MYSQL_HOST
+                  value: {{ default .Values.mysql.host .Values.vadAutotuner.mysql.host | quote }}
+                - name: VG_MYSQL_DATABASE
+                  value: {{ default .Values.mysql.database.name .Values.vadAutotuner.mysql.database | quote }}
+                - name: VG_MYSQL_USER
+                  value: {{ default .Values.mysql.auth.username .Values.vadAutotuner.mysql.user | quote }}
+                - name: VG_MYSQL_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ default "voicegateway-mysql-password" .Values.vadAutotuner.mysql.secretName | quote }}
+                      key: {{ default "mysql-password" .Values.vadAutotuner.mysql.secretKey | quote }}
+                {{- end }}
+                {{- if .Values.vadAutotuner.extraEnvVars }}
+                {{- include "vg.common.tplvalues.render" (dict "value" .Values.vadAutotuner.extraEnvVars "context" $) | nindent 16 }}
+                {{- end }}
+              resources: {{- toYaml .Values.vadAutotuner.resources | nindent 16 }}
+{{- end }}

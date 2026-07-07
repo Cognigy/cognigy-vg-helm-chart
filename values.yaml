@@ -147,7 +147,7 @@ stats:
 tls:
   ## Enable traefik tls
   ## NOTE: If traefik is enabled ("traefik.enabled: true"), and you provide "tls.enable: false", then the auto redirection of http to https
-  ## also must be disabled by setting traefik.ports.web.redirections: null
+  ## also must be disabled by setting traefik.ports.web.http.redirections: null
   enabled: true
   ## Add Custom CA certificate. A tls type secret named "cognigy-traefik" will be created based on the values of tls.crt and tls.key
   ## Careful with the indentation
@@ -321,14 +321,20 @@ billing:
     username: billing
     existingSecret: vg-billing-mysql-password
     secretKey: billing-password
+  ## Refresh-organisations job - keeps the organisations cache warm so the
+  ## reporting job's lazy handshake fallback rarely has to run
+  refreshOrganisations:
+    enabled: true
+    ## Schedule: Daily at 01:00 UTC (ahead of pre-aggregation)
+    schedule: "0 1 * * *"
   ## Pre-aggregation job - runs daily to calculate 10-minute billing packages
   preAggregation:
-    enabled: false
+    enabled: true
     ## Schedule: Daily at 02:00 UTC
     schedule: "0 2 * * *"
   ## Daily billing reporting job - ships signed tar archives to the Central Billing Server
   sendToCentral:
-    enabled: false
+    enabled: true
     ## Schedule: Daily at 03:00 UTC (after pre-aggregation)
     schedule: "0 3 * * *"
     ## Central Billing Server multipart POST endpoint (required if enabled)
@@ -486,7 +492,7 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.13.0
+  image: cognigy.azurecr.io/vg-api-migrator:2026.14.0
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -908,7 +914,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.3
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.13.0
+  image: cognigy.azurecr.io/vg-api-server:2026.14.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1019,7 +1025,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.13.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.14.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1101,7 +1107,7 @@ sileroVad:
   ## When enabled, feature server receives SILERO_VAD_SERVICE_URL env var
   ## pointing to this service for Plan B audio-fork VAD.
   enabled: false
-  image: cognigy.azurecr.io/vg-silero-vad:2026.13.0
+  image: cognigy.azurecr.io/vg-silero-vad:2026.14.0
   ## Default Always because the default tag is :latest (mutable) — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1196,6 +1202,20 @@ sileroVad:
   extraEnvVars: []
   shadowModeEnabled: false
   shadowSampleRate: "0.0"
+  ## Per-layer production VAD graduation kill-switches (default off).
+  ## Each var gates one validated VAD layer onto the LIVE barge-in fork in the
+  ## feature-server's resolveProdVadLayers (treats "true"/"1" as on, anything
+  ## else as off). Defaulting "false" makes the chart upgrade a no-op — flip
+  ## per-cluster to graduate a validated layer. NOTE: also requires per-account
+  ## opt-in via the account's sileroVad.graduation config; the cluster flag is
+  ## necessary but not sufficient on its own. Rendered verbatim as feature-server
+  ## env vars (gated by sileroVad.enabled), so the YAML keys ARE the env names.
+  prodGraduationEnv:
+    SILERO_PROD_AEC_ENABLED: "false"
+    SILERO_PROD_NS_ENABLED: "false"
+    SILERO_PROD_ENERGY_GATE_ENABLED: "false"
+    SILERO_PROD_MIN_SPEECH_FRAMES_ENABLED: "false"
+    SILERO_PROD_THRESHOLD_ENABLED: "false"
   mysql:
     enabled: true
     # host/database/user/secretName/secretKey default to the root mysql.* values when unset
@@ -1204,9 +1224,58 @@ sileroVad:
     user: ""
     secretName: ""
     secretKey: ""
+## vg-vad-autotuner: short-lived CronJob that closes the Silero VAD tuning loop.
+## Reads shadow-mode false-fire / miss rates from Prometheus, computes a
+## guardrailed per-account endpointing threshold, and writes it back to the
+## jambones MySQL DB. Disabled by default — opt in per cluster.
+vadAutotuner:
+  enabled: false
+  image: cognigy.azurecr.io/vg-vad-autotuner:2026.14.0-24
+  ## Default Always because the default tag may be mutable — prevents
+  ## cached/stale images after upgrades. Override to IfNotPresent when pinning
+  ## an immutable tag.
+  imagePullPolicy: Always
+  ## Cron schedule (UTC). Offset from other nightly jobs to avoid contention.
+  schedule: "17 3 * * *"
+  ## Reap finished Job/Pod 10 min after completion so a scrape of the
+  ## CronJob's own short lifetime has a chance to land before GC.
+  ttlSecondsAfterFinished: 600
+  ## Prometheus query endpoint used to read shadow FF/miss rates.
+  prometheusUrl: "http://prometheus-server.monitoring.svc.cluster.local"
+  ## Pushgateway endpoint for autotuner run metrics. A CronJob lives too
+  ## briefly to be reliably scraped, so it pushes terminal metrics here.
+  pushgatewayUrl: "http://pushgateway.monitoring.svc.cluster.local:9091"
+  ## Lookback window for the FF/miss PromQL queries.
+  window: "24h"
+  ## When "true", compute and log the proposed threshold but do NOT write to
+  ## the DB. Keep "true" for at least one full window when first rolling out.
+  dryRun: "true"
+  ## Minimum gathers per account in the window before a threshold is trusted.
+  minGathers: "200"
+  ## Hard ceiling on shadow miss rate; above this the account is skipped.
+  missCeiling: "0.05"
+  ## Target shadow false-fire rate the controller drives each account toward.
+  targetFF: "0.03"
+  mysql:
+    enabled: true
+    # host/database/user/secretName/secretKey default to the root mysql.* values when unset
+    host: ""
+    database: ""
+    user: ""
+    secretName: ""
+    secretKey: ""
+  ## Small footprint — runs briefly, queries Prometheus, writes a few rows.
+  resources:
+    requests:
+      cpu: "100m"
+      memory: 128Mi
+    limits:
+      cpu: "500m"
+      memory: 256Mi
+  extraEnvVars: []
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.13.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.14.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1279,7 +1348,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.13.0
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.14.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
@@ -1335,7 +1404,7 @@ featureServerLegacy:
       cpu: "1"
       memory: 500Mi
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.12.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.14.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1394,12 +1463,12 @@ freeswitchNightly:
   ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
   ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
   ## @see featureServerNightly
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.12.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.14.0
 freeswitchLegacy:
   ## You can specify a custom image for the FreeSWITCH in the legacy FeatureServer here
   ## To enable a "legacy FreeSWITCH", you have to enable a legacy FeatureServer.
   ## @see featureServerLegacy
-  image: cognigy.azurecr.io/vg-freeswitch-mrf:2026.12.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.14.0
 rtpEngine:
   image: cognigy.azurecr.io/vg-rtpengine:0.2.0
   imagePullPolicy: IfNotPresent
@@ -1423,7 +1492,7 @@ rtpEngine:
 mediaProcessor:
   ## Enable Media Processor for decoupled STT/TTS processing
   enabled: false
-  image: cognigy.azurecr.io/vg-media-processor:2026.13.0
+  image: cognigy.azurecr.io/vg-media-processor:2026.14.0
   imagePullPolicy: Always
   replicaCount: 2
   serviceName: media-processor
@@ -1470,7 +1539,7 @@ mediaProcessor:
       cpu: "1"
       memory: 512Mi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.13.0
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.14.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1485,7 +1554,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/vg-sbc-call-router:2026.13.0
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.14.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1516,7 +1585,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/vg-sbc-inbound:2026.13.0
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.14.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1556,7 +1625,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/vg-sbc-outbound:2026.13.0
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.14.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1594,7 +1663,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.13.0
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.14.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1609,7 +1678,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.13.0
+  image: cognigy.azurecr.io/vg-tcm:2026.14.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1648,7 +1717,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: true
-  image: cognigy.azurecr.io/vg-connector:2026.13.0
+  image: cognigy.azurecr.io/vg-connector:2026.14.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1672,9 +1741,15 @@ vgConnector:
       enabled: true
     msTeams:
       enabled: false
+  pdb:
+    enabled: true
+    minAvailable: 1 # use one of minAvailable or maxUnavailable
+    # maxUnavailable: 1
   ## sofia loglevel for the drachtio sidecar (msTeams only)
   sofiaLoglevel: "5"
   port: 8000
+  sigtermForceCloseTimeoutMs: "270000"
+  terminationGracePeriodSeconds: 300
   extraEnvVars: []
   resources:
     requests:
@@ -1684,7 +1759,7 @@ vgConnector:
       cpu: "0.100"
       memory: 150Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.13.0
+  image: cognigy.azurecr.io/vg-webapp:2026.14.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1744,12 +1819,15 @@ webapp:
 # For more information, see: https://github.com/traefik/traefik-helm-chart
 traefik:
   enabled: true
+  global:
+    checkNewVersion: false
+    sendAnonymousUsage: false
   instanceLabelOverride: "voicegateway"
   fullnameOverride: traefik
   image:
     registry: cognigy.azurecr.io
     repository: traefik
-    tag: "3.4.0"
+    tag: "3.6.19"
     pullPolicy: IfNotPresent
   deployment:
     ## Specify imagePullSecrets to pull the image from private repository
@@ -1773,14 +1851,15 @@ traefik:
         headers:
           defaultmode: drop
           names: {}
+  api:
+    # -- Enable the insecure API (HTTP)
+    insecure: true
   ingressClass:
     enabled: true
     isDefaultClass: true
   ingressRoute:
     dashboard:
       enabled: false
-  globalArguments:
-    - "--api.insecure=true"
   additionalArguments: []
   ports:
     traefik:
@@ -1797,11 +1876,12 @@ traefik:
       exposedPort: 80
       protocol: TCP
       ## Note: If traefik is enabled, and tls not, then the auto redirection of http to https also must be disabled
-      ## Do that by setting traefik.ports.web.redirections: null
-      redirections:
-        entryPoint:
-          to: websecure
-          scheme: https
+      ## Do that by setting traefik.ports.web.http.redirections: null
+      http:
+        redirections:
+          entryPoint:
+            to: websecure
+            scheme: https
       # Trust forwarded headers information (X-Forwarded-*).
       forwardedHeaders:
         trustedIPs: []
@@ -1824,11 +1904,12 @@ traefik:
       proxyProtocol:
         trustedIPs: []
         insecure: true
-      tls:
-        enabled: true
-        options: ""
-        certResolver: ""
-        domains: []
+      http:
+        tls:
+          enabled: true
+          options: ""
+          certResolver: ""
+          domains: []
     metrics:
       port: 9100
       expose:
@@ -1838,12 +1919,12 @@ traefik:
       protocol: TCP
   service:
     enabled: true
+    spec: {}
     type: LoadBalancer
     annotations: {}
     annotationsTCP: {}
     annotationsUDP: {}
     labels: {}
-    spec: {}
     loadBalancerSourceRanges: []
     externalIPs: []
   resources:
@@ -2488,3 +2569,103 @@ phraseList: |
       "no hi som"
     ]
   }
+# ── Test harness ────────────────────────────────────────────────────────────
+# Optional in-cluster test fixtures. Disabled by default. Currently only the
+# streaming custom-TTS bridge is wired here; the broader vgTestHarness mock
+# stack (mock-cognigy, mock-speech, sip-caller, …) is tracked separately.
+vgTestHarness:
+  # Master switch for the in-cluster mock test harness (mock-cognigy,
+  # mock-speech, sip-caller). When true, the FreeSWITCH sidecars are also
+  # given TESTING_OVERRIDE_TTS_URL / TESTING_OVERRIDE_STT_URL so in-scope
+  # speech vendors hit mock-speech over plain HTTP/WS. Requires an
+  # asan/debug freeswitch image (the override is compiled out of prod).
+  enabled: false
+  mockCognigy:
+    image: cognigydevelopment.azurecr.io/vg-mock-cognigy:main
+    logLevel: info
+    resources:
+      requests: {cpu: "0.100", memory: 128Mi}
+      limits: {cpu: "0.200", memory: 256Mi}
+  mockSpeech:
+    image: cognigydevelopment.azurecr.io/vg-mock-speech:main
+    # Default STT transcript returned for every recognized utterance.
+    defaultTranscript: "mock transcript"
+    resources:
+      requests: {cpu: "0.100", memory: 128Mi}
+      limits: {cpu: "0.200", memory: 256Mi}
+  sipCaller:
+    image: cognigydevelopment.azurecr.io/vg-sip-caller:main
+    resources:
+      requests: {cpu: "0.100", memory: 128Mi}
+      limits: {cpu: "0.200", memory: 256Mi}
+  minio:
+    # Optional S3-compatible endpoint for call-recording scenarios. Off by
+    # default; the quality gate does not need it.
+    enabled: false
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    resources:
+      requests: {cpu: "0.100", memory: 256Mi}
+      limits: {cpu: "0.500", memory: 512Mi}
+  autoProvision:
+    # Post-install Job that idempotently creates a service provider, account,
+    # application (webhook -> mock-cognigy) and phone number in the local
+    # api-server.
+    enabled: false
+    adminUser: "admin" # users.name column, NOT an email
+    adminPass: "" # plain password — use adminPassSecretRef instead to avoid committing credentials
+    adminPassSecretRef: # alternative to adminPass: read password from an existing K8s secret
+      name: "" # secret name (e.g. vg-api-cognigy-ai-creds); leave empty to use adminPass
+      key: "password" # key inside the secret
+    phoneNumber: "+15005550001"
+    # Pod CIDR of the cluster — allow-listed as the test carrier's SIP gateway
+    # source so sbc-inbound accepts INVITEs from sip-caller pods. Set to the
+    # cluster pod network address (e.g. "10.104.0.0" with netmask 16 for a
+    # 10.104.0.0/16 pod CIDR). Defaults to 127.0.0.1/32 which fails closed.
+    carrierSourceIPv4: ""
+    carrierSourceNetmask: 16
+    recording:
+      # When enabled, the provision Job also creates the MinIO bucket, sets
+      # record_all_calls + record_format on the account, and adds an
+      # s3_compatible bucket_credential pointing at the in-cluster MinIO so
+      # call-recording scenarios produce objects in MinIO. Requires
+      # minio.enabled: true.
+      enabled: false
+      endpoint: "http://minio:9000"
+      bucket: "recordings"
+      accessKey: "minioadmin" # MinIO default root user
+      secretKey: "minioadmin" # MinIO default root password
+      format: "wav" # wav (recommended, parseable) or mp3
+  deepgramBridge:
+    # Streaming custom-TTS test fixture. Implements the VoiceGateway streaming
+    # custom-TTS contract on its inbound side (POST /v1/speak, Bearer auth) and
+    # proxies each request to the real Deepgram /v1/speak API, streaming the WAV
+    # response back. Point a custom: speech credential's custom_tts_url at
+    #   http://deepgram-bridge.<namespace>.svc.cluster.local:8080/v1/speak
+    # HTTP (not HTTPS) is intentional: the runtime call path does not require
+    # TLS. The webapp "Test" button WILL fail for this URL — api-server's
+    # credential test requires https and rejects .local/private hosts as an
+    # SSRF guard. That is expected and does not affect actual calls.
+    # See https://github.com/Cognigy/vg-test-harness (cmd/deepgram-bridge).
+    enabled: false
+    # Pinned to a concrete, immutable tag (no :latest). This is the image built
+    # and pushed by the vg-test-harness CI (Cognigy/vg-test-harness#15). Update
+    # to a main-built tag once that PR merges.
+    image: cognigydevelopment.azurecr.io/vg-deepgram-bridge:feat-custom-streaming-tts-bridge-e9effc9c13a2-1780919449
+    imagePullPolicy: Always
+    logLevel: info
+    # Deepgram API key. Either set deepgramApiKey here (a Secret named
+    # "deepgram-bridge" is created for you) OR set existingSecret to the name of
+    # a Secret you manage and existingSecretKey to the key within it.
+    deepgramApiKey: ""
+    existingSecret: ""
+    existingSecretKey: apiKey
+    # Optional override of the upstream Deepgram endpoint. Empty = public API
+    # (https://api.deepgram.com/v1/speak).
+    deepgramUrl: ""
+    resources:
+      requests:
+        cpu: "0.100"
+        memory: 128Mi
+      limits:
+        cpu: "0.200"
+        memory: 256Mi

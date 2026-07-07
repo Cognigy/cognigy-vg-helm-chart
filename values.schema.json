@@ -27,6 +27,73 @@
         }
       }
     },
+    "vgTestHarness": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "mockCognigy": {
+          "type": "object",
+          "properties": {
+            "image": { "type": "string" },
+            "logLevel": { "type": "string" },
+            "resources": { "type": "object" }
+          }
+        },
+        "mockSpeech": {
+          "type": "object",
+          "properties": {
+            "image": { "type": "string" },
+            "defaultTranscript": { "type": "string" },
+            "resources": { "type": "object" }
+          }
+        },
+        "sipCaller": {
+          "type": "object",
+          "properties": {
+            "image": { "type": "string" },
+            "resources": { "type": "object" }
+          }
+        },
+        "minio": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "image": { "type": "string" },
+            "resources": { "type": "object" }
+          }
+        },
+        "autoProvision": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "adminUser": { "type": "string" },
+            "adminPass": { "type": "string" },
+            "adminPassSecretRef": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "key": { "type": "string" }
+              }
+            },
+            "phoneNumber": { "type": "string" },
+            "carrierSourceIPv4": { "type": "string" },
+            "carrierSourceNetmask": { "type": "integer" },
+            "recording": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "endpoint": { "type": "string" },
+                "bucket": { "type": "string" },
+                "accessKey": { "type": "string" },
+                "secretKey": { "type": "string" },
+                "format": { "type": "string", "enum": ["wav", "mp3"] }
+              }
+            }
+          }
+        },
+        "deepgramBridge": { "type": "object" }
+      }
+    },
     "sileroVad": {
       "type": "object",
       "additionalProperties": false,
@@ -45,6 +112,10 @@
         "modelVersionFile": { "type": "string" },
         "shadowModeEnabled": { "type": "boolean" },
         "shadowSampleRate": { "type": ["string", "number"] },
+        "prodGraduationEnv": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
         "extraEnvVars": { "type": "array" },
         "affinity": { "type": "object" },
         "nodeSelector": { "type": "object" },

@@ -1,0 +1,50 @@
+{{- if .Values.vgTestHarness.deepgramBridge.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deepgram-bridge
+  namespace: {{ .Release.Namespace | quote }}
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-test-harness.git"
+  labels:
+    app: deepgram-bridge
+    owner-team: echo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: deepgram-bridge
+  template:
+    metadata:
+      labels:
+        app: deepgram-bridge
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      containers:
+        - name: deepgram-bridge
+          image: {{ .Values.vgTestHarness.deepgramBridge.image }}
+          imagePullPolicy: {{ .Values.vgTestHarness.deepgramBridge.imagePullPolicy | default "Always" }}
+          args:
+            - --addr=:8080
+            - --log-level={{ .Values.vgTestHarness.deepgramBridge.logLevel | default "info" }}
+            {{- with .Values.vgTestHarness.deepgramBridge.deepgramUrl }}
+            - --deepgram-url={{ . }}
+            {{- end }}
+          env:
+            - name: DEEPGRAM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vgTestHarness.deepgramBridge.existingSecret | default "deepgram-bridge" }}
+                  key: {{ .Values.vgTestHarness.deepgramBridge.existingSecretKey | default "apiKey" }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources: {{- toYaml .Values.vgTestHarness.deepgramBridge.resources | nindent 12 }}
+{{- end }}

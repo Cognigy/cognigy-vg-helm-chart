@@ -1,0 +1,64 @@
+{{- if and .Values.vgTestHarness.enabled .Values.vgTestHarness.autoProvision.enabled .Values.vgTestHarness.autoProvision.recording.enabled (not .Values.vgTestHarness.minio.enabled) }}
+{{- fail "vgTestHarness.autoProvision.recording.enabled requires vgTestHarness.minio.enabled=true (the recording bucket lives in the in-cluster MinIO)" }}
+{{- end }}
+{{- if and .Values.vgTestHarness.enabled .Values.vgTestHarness.autoProvision.enabled }}
+{{- $useSecretRef := .Values.vgTestHarness.autoProvision.adminPassSecretRef.name }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vg-test-harness-provision
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-test-harness.git"
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: OnFailure
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      containers:
+        - name: provision
+          image: {{ .Values.vgTestHarness.mockCognigy.image }}
+          imagePullPolicy: Always
+          # Distroless image: invoke the binary directly, no shell. The
+          # provision subcommand has built-in retry to wait for api-server.
+          command:
+            - /mock-cognigy
+            - provision
+            - --api-base=http://api-server:3000
+            - "--admin-user={{ .Values.vgTestHarness.autoProvision.adminUser | default "admin" }}"
+            {{- if $useSecretRef }}
+            - "--admin-pass=$(ADMIN_PASS)"
+            {{- else }}
+            - "--admin-pass={{ required "vgTestHarness.autoProvision.adminPass is required when autoProvision is enabled (or set adminPassSecretRef.name)" .Values.vgTestHarness.autoProvision.adminPass }}"
+            {{- end }}
+            - --webhook-url=http://mock-cognigy:8080/voiceGateway
+            - --phone-number={{ .Values.vgTestHarness.autoProvision.phoneNumber | default "+15005550001" }}
+            {{- with .Values.vgTestHarness.autoProvision.carrierSourceIPv4 }}
+            - "--carrier-source-ipv4={{ . }}"
+            {{- end }}
+            {{- with .Values.vgTestHarness.autoProvision.carrierSourceNetmask }}
+            - "--carrier-source-netmask={{ . }}"
+            {{- end }}
+            {{- if .Values.vgTestHarness.autoProvision.recording.enabled }}
+            - --enable-recording
+            - "--minio-endpoint={{ .Values.vgTestHarness.autoProvision.recording.endpoint | default "http://minio:9000" }}"
+            - "--minio-bucket={{ .Values.vgTestHarness.autoProvision.recording.bucket | default "recordings" }}"
+            - "--minio-access-key={{ .Values.vgTestHarness.autoProvision.recording.accessKey | default "minioadmin" }}"
+            - "--minio-secret-key={{ .Values.vgTestHarness.autoProvision.recording.secretKey | default "minioadmin" }}"
+            - "--record-format={{ .Values.vgTestHarness.autoProvision.recording.format | default "wav" }}"
+            {{- end }}
+          {{- if $useSecretRef }}
+          env:
+            - name: ADMIN_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vgTestHarness.autoProvision.adminPassSecretRef.name }}
+                  key: {{ .Values.vgTestHarness.autoProvision.adminPassSecretRef.key | default "password" }}
+          {{- end }}
+{{- end }}

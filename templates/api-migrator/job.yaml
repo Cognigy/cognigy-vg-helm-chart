@@ -23,7 +23,7 @@ spec:
       annotations:
         sidecar.istio.io/inject: "false"
     spec:
-    {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- include "image.pullSecrets" $ | nindent 6 }}
       restartPolicy: OnFailure
       initContainers:
         # Create billing database, dedicated billing user, and grant privileges using root credentials
@@ -54,6 +54,14 @@ spec:
               echo "Granting jambones user full access to vg_speech_billing..."
               MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h "$MYSQL_HOST" -u root -e "
                 GRANT ALL PRIVILEGES ON vg_speech_billing.* TO '$JAMBONES_USER'@'%';
+                FLUSH PRIVILEGES;
+              "
+
+              echo "Granting billing user access to jambones tables used by the organisations lazy-resolution fallback..."
+              MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h "$MYSQL_HOST" -u root -e "
+                GRANT SELECT, INSERT, UPDATE ON \`$JAMBONES_DATABASE\`.organisations TO '$BILLING_USER'@'%';
+                GRANT SELECT ON \`$JAMBONES_DATABASE\`.applications TO '$BILLING_USER'@'%';
+                GRANT SELECT ON \`$JAMBONES_DATABASE\`.webhooks TO '$BILLING_USER'@'%';
                 FLUSH PRIVILEGES;
               "
 

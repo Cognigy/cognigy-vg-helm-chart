@@ -1,0 +1,42 @@
+{{- if .Values.vgTestHarness.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sip-caller
+  namespace: {{ .Release.Namespace | quote }}
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-test-harness.git"
+  labels:
+    app: sip-caller
+    owner-team: echo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sip-caller
+  template:
+    metadata:
+      labels:
+        app: sip-caller
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      containers:
+        - name: sip-caller
+          image: {{ .Values.vgTestHarness.sipCaller.image }}
+          imagePullPolicy: Always
+          args:
+            - --addr=:8090
+            - --sbc-host={{ .Values.sbc.sip.headlessServiceName | default "sbc-sip-headless" }}
+            - --sbc-port=5060
+          ports:
+            - name: http
+              containerPort: 8090
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8090
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources: {{- toYaml .Values.vgTestHarness.sipCaller.resources | nindent 12 }}
+{{- end }}

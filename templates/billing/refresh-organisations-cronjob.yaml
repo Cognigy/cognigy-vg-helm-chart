@@ -1,18 +1,18 @@
-{{- /* if billing.enabled is true and billing.preAggregation.enabled is true, then deploy the pre-aggregate-cronjob */ -}}
-{{ if and .Values.billing.enabled .Values.billing.preAggregation.enabled }}
+{{- /* if billing.enabled is true and billing.refreshOrganisations.enabled is true, then deploy the refresh-organisations-cronjob */ -}}
+{{ if and .Values.billing.enabled .Values.billing.refreshOrganisations.enabled }}
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: vg-pre-aggregate-speech
+  name: vg-refresh-organisations
   namespace: {{ .Release.Namespace | quote }}
   labels:
     app: vg-billing
-    component: pre-aggregate
+    component: refresh-organisations
     owner-team: echo
   annotations:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-api-server.git"
 spec:
-  schedule: {{ .Values.billing.preAggregation.schedule | quote }}
+  schedule: {{ .Values.billing.refreshOrganisations.schedule | quote }}
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
@@ -24,27 +24,27 @@ spec:
         metadata:
           labels:
             app: vg-billing
-            component: pre-aggregate
+            component: refresh-organisations
           annotations:
             sidecar.istio.io/inject: "false"
         spec:
           {{- include "image.pullSecrets" $ | nindent 10 }}
           restartPolicy: Never
           containers:
-            - name: pre-aggregate
+            - name: refresh-organisations
               image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.api.image) }}
               imagePullPolicy: {{ .Values.api.imagePullPolicy | default "IfNotPresent" }}
-              command: ["node", "build/lib/billing/jobs/pre-aggregate-speech.js"]
+              command: ["node", "build/lib/billing/jobs/refresh-organisations.js"]
               env:
-                - name: VG_SPEECH_BILLING_MYSQL_HOST
+                - name: JAMBONES_MYSQL_HOST
                   value: {{ .Values.mysql.host | quote }}
-                - name: VG_SPEECH_BILLING_MYSQL_PORT
+                - name: JAMBONES_MYSQL_PORT
                   value: {{ .Values.mysql.port | default "3306" | quote }}
-                - name: VG_SPEECH_BILLING_MYSQL_DATABASE
-                  value: {{ .Values.billing.mysql.database | quote }}
-                - name: VG_SPEECH_BILLING_MYSQL_USER
+                - name: JAMBONES_MYSQL_DATABASE
+                  value: {{ .Values.mysql.database.name | quote }}
+                - name: JAMBONES_MYSQL_USER
                   value: {{ .Values.billing.mysql.username | quote }}
-                - name: VG_SPEECH_BILLING_MYSQL_PASSWORD
+                - name: JAMBONES_MYSQL_PASSWORD
                   valueFrom:
                     secretKeyRef:
                       name: {{ .Values.billing.mysql.existingSecret | quote }}

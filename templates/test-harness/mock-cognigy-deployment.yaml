@@ -1,0 +1,41 @@
+{{- if .Values.vgTestHarness.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-cognigy
+  namespace: {{ .Release.Namespace | quote }}
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-test-harness.git"
+  labels:
+    app: mock-cognigy
+    owner-team: echo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-cognigy
+  template:
+    metadata:
+      labels:
+        app: mock-cognigy
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      containers:
+        - name: mock-cognigy
+          image: {{ .Values.vgTestHarness.mockCognigy.image }}
+          imagePullPolicy: Always
+          args:
+            - --addr=:8080
+            - --log-level={{ .Values.vgTestHarness.mockCognigy.logLevel | default "info" }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources: {{- toYaml .Values.vgTestHarness.mockCognigy.resources | nindent 12 }}
+{{- end }}

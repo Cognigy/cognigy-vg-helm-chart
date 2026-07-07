@@ -177,4 +177,18 @@ Usage:
   {{- else -}}
     {{- printf "%s" .defaultSecret -}}
   {{- end -}}
+{{- end }}
+
+{{/*
+Test-harness FreeSWITCH speech-endpoint overrides (vg-freeswitch PR #255).
+Origin-only, plain HTTP/WS, port 8080 on the in-cluster mock-speech Service.
+No-op unless vgTestHarness.enabled. Requires an asan/debug freeswitch image.
+*/}}
+{{- define "vg.testHarness.freeswitchEnv" -}}
+{{- if .Values.vgTestHarness.enabled }}
+- name: TESTING_OVERRIDE_TTS_URL
+  value: "http://mock-speech.{{ .Release.Namespace }}.svc.cluster.local:8080"
+- name: TESTING_OVERRIDE_STT_URL
+  value: "ws://mock-speech.{{ .Release.Namespace }}.svc.cluster.local:8080"
+{{- end }}
 {{- end -}}

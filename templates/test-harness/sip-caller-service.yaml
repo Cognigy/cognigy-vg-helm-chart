@@ -1,0 +1,19 @@
+{{- if .Values.vgTestHarness.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: sip-caller
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: sip-caller
+    owner-team: echo
+spec:
+  type: ClusterIP
+  selector:
+    app: sip-caller
+  ports:
+    - name: http
+      port: 8090
+      targetPort: 8090
+      protocol: TCP
+{{- end }}

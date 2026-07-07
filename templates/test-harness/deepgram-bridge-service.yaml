@@ -1,0 +1,19 @@
+{{- if .Values.vgTestHarness.deepgramBridge.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: deepgram-bridge
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: deepgram-bridge
+    owner-team: echo
+spec:
+  type: ClusterIP
+  selector:
+    app: deepgram-bridge
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+{{- end }}

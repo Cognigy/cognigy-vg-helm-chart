@@ -41,10 +41,23 @@ spec:
                 - name: JAMBONES_MYSQL_PORT
                   value: {{ .Values.mysql.port | default "3306" | quote }}
                 - name: JAMBONES_MYSQL_DATABASE
-                  value: {{ .Values.billing.mysql.database | quote }}
+                  value: {{ .Values.mysql.database.name | quote }}
                 - name: JAMBONES_MYSQL_USER
                   value: {{ .Values.billing.mysql.username | quote }}
                 - name: JAMBONES_MYSQL_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.billing.mysql.existingSecret | quote }}
+                      key: {{ .Values.billing.mysql.secretKey | quote }}
+                - name: VG_SPEECH_BILLING_MYSQL_HOST
+                  value: {{ .Values.mysql.host | quote }}
+                - name: VG_SPEECH_BILLING_MYSQL_PORT
+                  value: {{ .Values.mysql.port | default "3306" | quote }}
+                - name: VG_SPEECH_BILLING_MYSQL_DATABASE
+                  value: {{ .Values.billing.mysql.database | quote }}
+                - name: VG_SPEECH_BILLING_MYSQL_USER
+                  value: {{ .Values.billing.mysql.username | quote }}
+                - name: VG_SPEECH_BILLING_MYSQL_PASSWORD
                   valueFrom:
                     secretKeyRef:
                       name: {{ .Values.billing.mysql.existingSecret | quote }}
