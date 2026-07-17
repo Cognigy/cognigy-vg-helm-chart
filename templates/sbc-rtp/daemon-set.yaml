@@ -89,10 +89,11 @@ spec:
             - name: rtp-engine
               containerPort: {{ .Values.rtpEngine.port }}
               protocol: TCP            
-          args: 
+          args:
             - rtpengine
             - --listen-udp=22222
             - --listen-http=0.0.0.0:22222
+            - --listen-cli=127.0.0.1:9900
             - --port-min={{ .Values.rtpEngine.startPort }}
             - --port-max={{ .Values.rtpEngine.endPort }}
             - --homer

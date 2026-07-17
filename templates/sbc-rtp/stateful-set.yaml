@@ -118,6 +118,7 @@ spec:
               exec /entrypoint.sh rtpengine \
                 --listen-udp=22222 \
                 --listen-http=0.0.0.0:22222 \
+                --listen-cli=127.0.0.1:9900 \
                 --port-min={{ .Values.rtpEngine.startPort }} \
                 --port-max={{ .Values.rtpEngine.endPort }} \
                 --homer {{ .Values.heplifyServer.serviceName }}:{{ .Values.heplifyServer.ports.udp }} \
@@ -125,10 +126,11 @@ spec:
                 --homer-id {{ .Values.rtpEngine.homerId | quote }} \
                 --log-level {{ if .Values.rtpEngine.logLevel }}{{ .Values.rtpEngine.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
           {{- else }}
-          args: 
+          args:
             - rtpengine
             - --listen-udp=22222
             - --listen-http=0.0.0.0:22222
+            - --listen-cli=127.0.0.1:9900
             - --port-min={{ .Values.rtpEngine.startPort }}
             - --port-max={{ .Values.rtpEngine.endPort }}
             - --homer
