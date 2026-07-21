@@ -1,0 +1,87 @@
+{{- if .Values.vgTrafficSniffer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vg-traffic-sniffer
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-traffic-sniffer
+    owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-traffic-sniffer.git"
+spec:
+  selector:
+    matchLabels:
+      app: vg-traffic-sniffer
+  # Dormant by default: scaled up on demand (vg-console / flux edit), back to 0 after use.
+  replicas: {{ .Values.vgTrafficSniffer.replicaCount }}
+  strategy:
+    type: Recreate # PVC is ReadWriteOnce; never two pods fighting over it
+  template:
+    metadata:
+      labels:
+        app: vg-traffic-sniffer
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      serviceAccountName: vg-traffic-sniffer
+      # The image runs as the node user (uid 1000); fsGroup makes kubelet chown
+      # the pcap volume so the service can create capture directories on it.
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      restartPolicy: Always
+      containers:
+        - name: vg-traffic-sniffer
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.vgTrafficSniffer.image) }}
+          imagePullPolicy: {{ .Values.vgTrafficSniffer.imagePullPolicy }}
+          resources: {{- toYaml .Values.vgTrafficSniffer.resources | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.vgTrafficSniffer.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.vgTrafficSniffer.port }}
+            failureThreshold: 3
+            periodSeconds: 30
+            timeoutSeconds: 5
+          env:
+            - name: PORT
+              value: {{ .Values.vgTrafficSniffer.port | quote }}
+            - name: NAMESPACE
+              value: {{ $.Release.Namespace | quote }}
+            - name: SNIFFER_IMAGE
+              value: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.vgTrafficSniffer.image) | quote }}
+            - name: PCAP_DIR
+              value: "/data/pcaps"
+            - name: MAX_DURATION_SEC
+              value: {{ .Values.vgTrafficSniffer.maxDurationSec | quote }}
+            - name: MAX_SIZE_MB
+              value: {{ .Values.vgTrafficSniffer.maxSizeMb | quote }}
+            - name: RETENTION_DAYS
+              value: {{ .Values.vgTrafficSniffer.retentionDays | quote }}
+            - name: RTP_PORT_RANGE
+              value: {{ printf "%d-%d" (int .Values.rtpEngine.startPort) (int .Values.rtpEngine.endPort) | quote }}
+            - name: VG_CONNECTOR_PORT
+              value: {{ .Values.vgConnector.port | quote }}
+            {{- if .Values.vgTrafficSniffer.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgTrafficSniffer.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: pcaps
+              mountPath: /data/pcaps
+      volumes:
+        - name: pcaps
+          {{- if .Values.vgTrafficSniffer.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: vg-traffic-sniffer-pcaps
+          {{- else }}
+          # Fallback for clusters without dynamic volume provisioning:
+          # captures must be downloaded before the pod is scaled down.
+          emptyDir:
+            sizeLimit: {{ .Values.vgTrafficSniffer.persistence.size }}
+          {{- end }}
+{{- end }}

@@ -94,6 +94,11 @@ spec:
                 secretKeyRef:
                   name: {{- include "interactionPanelServiceProvider" $ | indent 1 }}
                   key: apiKey
+            - name: VG_ADMIN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{- include "interactionPanelServiceProvider" $ | indent 1 }}
+                  key: adminApiKey
             - name: VG_TEST_CALL_MANAGER_SERVICE_PROVIDER_ID
               valueFrom:
                 secretKeyRef:

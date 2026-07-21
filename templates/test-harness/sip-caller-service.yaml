@@ -16,4 +16,8 @@ spec:
       port: 8090
       targetPort: 8090
       protocol: TCP
+    - name: sip-srs
+      port: 5072
+      targetPort: 5072
+      protocol: UDP
 {{- end }}

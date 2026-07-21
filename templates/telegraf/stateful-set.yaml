@@ -38,6 +38,28 @@ spec:
       {{- if .Values.telegraf.tolerations }}
       tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.telegraf.tolerations "context" $) | nindent 8 }}
       {{- end }}
+      initContainers:
+        - name: wait-for-influxdb
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.telegraf.image) }}
+          imagePullPolicy: {{ .Values.telegraf.imagePullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              host="{{ .Values.influxdb.host }}:{{ .Values.influxdb.port }}"
+              timeout={{ .Values.telegraf.influxdbWaitTimeoutSeconds | default 600 }}
+              echo "waiting up to ${timeout}s for influxdb at ${host} to be healthy..."
+              elapsed=0
+              until wget -q -O /dev/null "http://${host}/health"; do
+                if [ "$elapsed" -ge "$timeout" ]; then
+                  echo "influxdb not healthy after ${elapsed}s, giving up"
+                  exit 1
+                fi
+                echo "influxdb not ready, retrying in 3s (${elapsed}s elapsed)"
+                sleep 3
+                elapsed=$((elapsed + 3))
+              done
+              echo "influxdb is healthy"
       containers:
         - name: telegraf
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.telegraf.image) }}

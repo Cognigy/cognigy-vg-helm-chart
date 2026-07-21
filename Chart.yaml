@@ -1,8 +1,8 @@
 apiVersion: v2
 name: voicegateway
 description: A Helm Chart for Cognigy VoiceGateway
-version: "2026.14.1"
-appVersion: "2026.14.1"
+version: "2026.15.0"
+appVersion: "2026.15.0"
 kubeVersion: "<v1.35.0-0"
 home: https://cognigy.com
 icon: https://www.cognigy.com/hubfs/Cognigy.svg
@@ -30,3 +30,7 @@ dependencies:
     repository: "https://raw.githubusercontent.com/bitnami/charts/archive-full-index/bitnami"
     condition: redisHa.enabled
     alias: redisHa
+  - name: keda
+    version: "2.16.1"
+    repository: "https://kedacore.github.io/charts"
+    condition: hpa.keda.enabled

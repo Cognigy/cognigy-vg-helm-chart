@@ -67,14 +67,10 @@ testCallManager:
   interactionPanelServiceProvider:
     id: ""
     apiKey: ""
+    adminApiKey: ""
 
 vgConnector:
   enabled: true
-  modules:
-    webrtc:
-      enabled: true
-    msTeams:
-      enabled: false
 
 webapp:
   disableSipClient: true

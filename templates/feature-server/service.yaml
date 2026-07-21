@@ -1,11 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  {{- if .Values.featureServer.useStatefulSet }}
+  ## Always headless (clusterIP: None) so SIP/in-dialog routing resolves to real
+  ## pod IPs in both StatefulSet and Deployment modes. A regular ClusterIP VIP
+  ## breaks SIP (response source-IP mismatch, unreliable UDP conntrack).
   name: {{ .Values.featureServer.headlessServiceName | quote }}
-  {{- else}}
-  name: {{ .Values.featureServer.serviceName | quote }}
-  {{- end }}
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     app: feature-server
@@ -13,10 +12,8 @@ metadata:
 spec:
   selector:
     app: feature-server
-  {{- if .Values.featureServer.useStatefulSet }}
   type: ClusterIP
   clusterIP: None
-  {{- end }}
   ports:
     - name: sip
       port: {{ .Values.featureServer.ports.udp }}

@@ -14,7 +14,7 @@ spec:
   selector:
     matchLabels:
       app: sbc-inbound
-  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas)) }}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) ($.Values.hpa.services.sbcInbound.enabled)) }}
   replicas: {{ .Values.sbcInbound.replicaCount }}
   {{- end }}
   template:
@@ -31,12 +31,12 @@ spec:
       {{- if .Values.sbcInbound.affinity }}
       affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcInbound.affinity "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.sbcInbound.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector))}}
+      {{- if or (.Values.sbcInbound.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.sbcInbound.enabled))}}
       nodeSelector:
         {{- if .Values.sbcInbound.nodeSelector }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcInbound.nodeSelector "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.sbcInbound.enabled) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
@@ -46,12 +46,12 @@ spec:
       {{- if .Values.sbcInbound.podSecurityContext }}
       securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcInbound.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.sbcInbound.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
+      {{- if or (.Values.sbcInbound.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.sbcInbound.enabled))}}
       tolerations: 
         {{- if or (.Values.sbcInbound.tolerations) }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcInbound.tolerations "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.sbcInbound.enabled) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
@@ -113,11 +113,8 @@ spec:
               value: "tcp"
           {{- end }}
             - name: K8S_FEATURE_SERVER_SERVICE_NAME
-              {{- if .Values.featureServer.useStatefulSet }}
+              ## Always the headless service (works for StatefulSet and Deployment)
               value: {{ .Values.featureServer.headlessServiceName | quote }}
-              {{- else}}
-              value: {{ .Values.featureServer.serviceName | quote }}
-              {{- end }}
             - name: K8S_FEATURE_SERVER_CANARY_ENABLED
               value: {{ .Values.featureServer.canary.enabled | quote }}
             - name: K8S_FEATURE_SERVER_CANARY_PERCENTAGE
@@ -221,6 +218,12 @@ spec:
                 secretKeyRef:
                   name: vg-api-admin-creds
                   key: password
+            - name: VG_REDIS_BAN_THRESHOLD
+              value: {{ .Values.tmpban.invite.banThreshold | quote }}
+            - name: VG_REDIS_TRACKING_WINDOW_MINUTES
+              value: {{ .Values.tmpban.invite.trackingWindowMinutes | quote }}
+            - name: VG_REDIS_BAN_DURATION_HOURS
+              value: {{ .Values.tmpban.invite.banDurationHours | quote }}
             {{- if .Values.sbcInbound.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcInbound.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

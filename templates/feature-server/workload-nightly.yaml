@@ -1,8 +1,14 @@
-{{- if not .Values.featureServer.useStatefulSet }}
+{{- if .Values.featureServerNightly.enabled }}
+{{- /*
+  Unified feature-server-nightly workload. StatefulSet when
+  featureServerNightly.useStatefulSet is true (default), otherwise a Deployment.
+  Pod spec is identical in both modes; only kind + serviceName differ.
+  Relies on the always-headless nightly service for SIP/in-dialog routing.
+*/ -}}
 apiVersion: apps/v1
-kind: Deployment
+kind: {{ if .Values.featureServerNightly.useStatefulSet }}StatefulSet{{ else }}Deployment{{ end }}
 metadata:
-  name: feature-server
+  name: feature-server-nightly
   namespace: {{ $.Release.Namespace | quote }}
   labels:
     owner-team: echo
@@ -15,45 +21,48 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: feature-server
-  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas)) }}
-  replicas: {{ .Values.featureServer.replicaCount }}
+      app: feature-server-nightly
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) ($.Values.hpa.services.featureServer.enabled)) }}
+  replicas: {{ .Values.featureServerNightly.replicaCount }}
+  {{- end }}
+  {{- if .Values.featureServerNightly.useStatefulSet }}
+  serviceName: {{ .Values.featureServerNightly.headlessServiceName }}
   {{- end }}
   template:
     metadata:
       labels:
-        app: feature-server
+        app: feature-server-nightly
       annotations:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
-      {{- if .Values.featureServer.terminationGracePeriodSeconds }}
-      terminationGracePeriodSeconds: {{ .Values.featureServer.terminationGracePeriodSeconds }}
+      {{- if .Values.featureServerNightly.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.featureServerNightly.terminationGracePeriodSeconds }}
       {{- end }}
-      {{- if .Values.featureServer.affinity }}
-      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.affinity "context" $) | nindent 8 }}
+      {{- if .Values.featureServerNightly.affinity }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.affinity "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.featureServer.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector))}}
+      {{- if or (.Values.featureServerNightly.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.featureServer.enabled))}}
       nodeSelector:
-        {{- if .Values.featureServer.nodeSelector }}
-          {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.nodeSelector "context" $) | nindent 8 }}
+        {{- if .Values.featureServerNightly.nodeSelector }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.nodeSelector "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.featureServer.enabled) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
-      {{- if .Values.featureServer.priorityClassName }}
-      priorityClassName: {{ .Values.featureServer.priorityClassName }}
+      {{- if .Values.featureServerNightly.priorityClassName }}
+      priorityClassName: {{ .Values.featureServerNightly.priorityClassName }}
       {{- end }}
-      {{- if .Values.featureServer.podSecurityContext }}
-      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.podSecurityContext "context" $) | nindent 8 }}
+      {{- if .Values.featureServerNightly.podSecurityContext }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.featureServer.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
-      tolerations: 
-        {{- if or (.Values.featureServer.tolerations) }}
-          {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.tolerations "context" $) | nindent 8 }}
+      {{- if or (.Values.featureServerNightly.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.featureServer.enabled))}}
+      tolerations:
+        {{- if or (.Values.featureServerNightly.tolerations) }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.tolerations "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.featureServer.enabled) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
@@ -63,7 +72,7 @@ spec:
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
-              app: feature-server
+              app: feature-server-nightly
       restartPolicy: Always
       initContainers:
         - image: kanisterio/mysql-sidecar:0.40.0
@@ -91,7 +100,7 @@ spec:
             - name: drachtio
               containerPort: {{ .Values.drachtio.port }}
               protocol: TCP
-            - name: drachtiometrics
+            - name: fs-drachtio
               containerPort: {{ .Values.drachtio.metricsPort }}
               protocol: TCP
           env: 
@@ -123,11 +132,15 @@ spec:
             {{- end }}
           lifecycle:
             preStop:
+              # 200 = feature-server drained, 000 = feature-server gone (fail open),
+              # 503 = calls still active (keep waiting). Anything else (e.g. 404 from a
+              # feature-server image without the route) fails open after 6 consecutive
+              # hits instead of hanging until terminationGracePeriodSeconds.
               exec:
                 command: [
                   "/bin/sh",
                   "-c",
-                  "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
+                  "misses=0; while true; do code=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 4 http://127.0.0.1:${HEALTH_CHECK_PORT:-8001}/health/ready-to-shutdown 2>/dev/null); case \"$code\" in 200|000) exit 0;; 503) misses=0;; *) misses=$((misses+1)); if [ \"$misses\" -ge 6 ]; then exit 0; fi;; esac; sleep 5; done"
                 ]
           {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
           args:
@@ -135,9 +148,9 @@ spec:
             - --contact
             - 'sip:*:5060;transport=udp,tcp'
             - --loglevel
-            - {{ if .Values.featureServer.logLevel }}{{ .Values.featureServer.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+            - {{ if .Values.drachtio.logLevel }}{{ .Values.drachtio.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
             - --sofia-loglevel
-            - {{ .Values.featureServer.sofiaLoglevel | quote }}
+            - {{ .Values.featureServerNightly.sofiaLoglevel | quote }}
             - --prometheus-scrape-port
             - {{ .Values.drachtio.metricsPort | quote }}
           {{- else }}
@@ -148,9 +161,9 @@ spec:
             - --mtu ## max packet size for UDP
             - '4096'
             - --loglevel
-            - {{ if .Values.featureServer.logLevel }}{{ .Values.featureServer.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+            - {{ if .Values.drachtio.logLevel }}{{ .Values.drachtio.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
             - --sofia-loglevel
-            - {{ .Values.featureServer.sofiaLoglevel | quote }}
+            - {{ .Values.featureServerNightly.sofiaLoglevel | quote }}
             - --prometheus-scrape-port
             - {{ .Values.drachtio.metricsPort | quote }}
           {{- end }}
@@ -158,7 +171,11 @@ spec:
             - configMapRef:
                 name: cognigy-env
         - name: freeswitch
+          {{- if .Values.freeswitchNightly.image }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.freeswitchNightly.image) }}
+          {{- else }}
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.freeswitch.image) }}
+          {{- end }}
           imagePullPolicy: {{ .Values.freeswitch.imagePullPolicy }}
           resources: {{- toYaml .Values.freeswitch.resources | nindent 12 }}
           ports:
@@ -199,6 +216,7 @@ spec:
               value: {{ if .Values.freeswitch.azureSttUseSingleConnection }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: DISABLE_HTTP2_FOR_TTS_STREAMING
               value: {{ if .Values.freeswitch.disableHttp2ForTtsStreaming }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            {{- include "vg.testHarness.freeswitchEnv" . | nindent 12 }}
             {{- if .Values.freeswitch.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.freeswitch.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
@@ -227,11 +245,7 @@ spec:
           lifecycle:
             preStop:
               exec:
-                command: [
-                  "/bin/sh",
-                  "-c",
-                  "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
-                ]
+                command: ["/bin/bash", "/usr/local/freeswitch/cognigy/k8s-pre-stop-hook.sh"]
           volumeMounts:
             - mountPath: /tmp
               name: temp-audio-volume
@@ -241,12 +255,12 @@ spec:
             - configMapRef:
                 name: cognigy-env
         - name: feature-server
-          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.featureServer.image) }}
-          imagePullPolicy: {{ .Values.featureServer.imagePullPolicy }}
-          resources: {{- toYaml .Values.featureServer.resources | nindent 12 }}
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.featureServerNightly.image) }}
+          imagePullPolicy: {{ .Values.featureServerNightly.imagePullPolicy }}
+          resources: {{- toYaml .Values.featureServerNightly.resources | nindent 12 }}
           ports:
             - name: feature-server
-              containerPort: {{ .Values.featureServer.ports.tcp }}
+              containerPort: {{ .Values.featureServerNightly.ports.tcp }}
               protocol: TCP
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
@@ -254,6 +268,7 @@ spec:
             - name: health
               containerPort: {{ .Values.health.port }}
               protocol: TCP
+          {{- if not .Values.featureServerNightly.forDevelopment }}
           livenessProbe:
             httpGet:
               path: /health/liveness
@@ -266,22 +281,37 @@ spec:
             httpGet:
               path: /health/startup
               port: {{ .Values.health.port }}
-          # lifecycle:
-          #   preStop:
-          #     exec:
-          #       command: ["/bin/sh", "-c", "/opt/app/bin/k8s-pre-stop-hook.js"]
+          {{- end }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "/opt/app/bin/k8s-pre-stop-hook.js"]
           volumeMounts:
             - mountPath: /tmp 
               name: temp-audio-volume
           env:
             - name: NODE_ENV
+              {{- if .Values.featureServerNightly.forDevelopment }}
+              value: "development"
+              {{- else }}
               value: {{ .Values.global.nodeEnv | quote }}
+              {{- end }}
             - name: HTTP_PORT
-              value: {{ .Values.featureServer.ports.tcp | quote }}
+              value: {{ .Values.featureServerNightly.ports.tcp | quote }}
             - name: K8S 
               value: {{ .Values.global.k8s | quote }}
             - name: K8S_SBC_SIP_SERVICE_NAME 
-              value: {{ .Values.sbc.sip.serviceName }}
+              value: {{ .Values.sbc.sip.headlessServiceName }}
+            - name: SYSTEM_SPEECH_CREDENTIAL_LABEL
+              value: {{ $.Values.sharedSpeechCredentials.label | quote }}
+            - name: FEATURE_ENABLE_SHARED_SPEECH_CREDENTIALS
+              value: {{ $.Values.sharedSpeechCredentials.enabled | quote }}
+            - name: ENABLE_CLUSTER_WIDE_SHARED_CREDENTIALS
+              value: {{ $.Values.sharedSpeechCredentials.clusterWide | quote }}
+            - name: SHARED_SPEECH_CREDENTIALS_MICROSOFT_HD_VOICES_ENABLED
+              value: {{ $.Values.sharedSpeechCredentials.microsoftHdVoiceEnabled | quote }}
+            - name: JAMBONES_OTEL_SERVICE_NAME
+              value: {{ .Values.featureServerNightly.serviceName | quote }}
             - name: JAMBONZ_GATHER_EARLY_HINTS_MATCH
               value: "true"
             - name: JAMBONES_INJECT_CONTENT
@@ -305,7 +335,7 @@ spec:
                   name: voicegateway-call-recording-credentials
                   key: password
             - name: JAMBONES_FREESWITCH
-              value: {{ .Values.featureServer.freeswitchConnection | quote }}
+              value: {{ .Values.featureServerNightly.freeswitchConnection | quote }}
             - name: ENABLE_METRICS
               value: {{ if .Values.stats.enabled }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: K8S_POD_NAME
@@ -334,9 +364,9 @@ spec:
                   name: voicegateway-drachtio-secret
                   key: secret
             - name: LOG_LEVEL
-              value: {{ if .Values.featureServer.logLevel }}{{ .Values.featureServer.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+              value: {{ if .Values.featureServerNightly.logLevel }}{{ .Values.featureServerNightly.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
             - name: JAMBONES_LOGLEVEL
-              value: {{ if .Values.featureServer.logLevel }}{{ .Values.featureServer.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+              value: {{ if .Values.featureServerNightly.logLevel }}{{ .Values.featureServerNightly.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
             - name: JAMBONES_MYSQL_HOST
               value: {{ .Values.mysql.host }}
             - name: JAMBONES_MYSQL_DATABASE
@@ -363,9 +393,9 @@ spec:
               value: |
                 {{ .Values.phraseList | trim | nindent 16 }}
             - name: JAMBONES_OTEL_ENABLED
-              value: {{ default "true" .Values.featureServer.otelEnabled | quote }}
+              value: {{ default "true" .Values.featureServerNightly.otelEnabled | quote }}
             - name: VG_TTS_TRIM_SILENCE
-              value: {{ .Values.featureServer.trimTts | quote }}
+              value: {{ .Values.featureServerNightly.trimTts | quote }}
             {{- $tracing := .Values.otelCollector.tracing | default dict }}
             {{- $jaegerHost := "" }}
             {{- if $tracing.enabled }}
@@ -398,38 +428,53 @@ spec:
             - name: TRACING_EVENTS_SAMPLE_RATE
               value: {{ .Values.tracing.eventsSampleRate | quote }}
             - name: ENVIRONMENT
-              value: {{ .Values.tracing.environment | quote }}            
+              value: {{ .Values.tracing.environment | quote }}
             - name: COGNIGY_AI_VERSION
               value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
             - name: SIGTERM_FORCE_CLOSE_TIMEOUT
-              value: {{ .Values.featureServer.sigtermForceCloseTimeoutMs | quote }}
+              value: {{ .Values.featureServerNightly.sigtermForceCloseTimeoutMs | quote }}
             - name: NODE_OPTIONS
-              value: {{ .Values.featureServer.nodeOptions | quote }}
+              value: {{ .Values.featureServerNightly.nodeOptions | quote }}
             - name: VG_EAGERLY_PRE_CACHE_AUDIO
-              value: {{ .Values.featureServer.preCacheAudio | quote }}
+              value: {{ .Values.featureServerNightly.preCacheAudio | quote }}
             - name: JAMBONES_DISABLE_TTS_STREAMING
-              {{- if kindIs "bool" .Values.featureServer.enableTtsStreaming }}
-              value: {{ not .Values.featureServer.enableTtsStreaming | quote }}
+              {{- if kindIs "bool" .Values.featureServerNightly.enableTtsStreaming }}
+              value: {{ not .Values.featureServerNightly.enableTtsStreaming | quote }}
               {{- else }}
               value: {{ not .Values.global.enableTtsStreaming | quote }}
               {{- end }}
             - name: FEATURE_TTS_STREAMING_VENDORS
-              value: {{ .Values.featureServer.streamingTtsVendors | join "," | quote }}
+              value: {{ .Values.featureServerNightly.streamingTtsVendors | join "," | quote }}
             - name: ANCHOR_MEDIA_ALWAYS
-              value: {{ .Values.featureServer.anchorMediaAlways | quote }}
+              value: {{ .Values.featureServerNightly.anchorMediaAlways | quote }}
             - name: VG_DISABLE_DIAL_PAI_HEADER
-              value: {{ .Values.featureServer.disableDialPaiHeader | quote }}
+              value: {{ .Values.featureServerNightly.disableDialPaiHeader | quote }}
+            - name: PRE_CACHE_IGNORE_LIST
+              value: {{ .Values.featureServerNightly.preCacheIgnoreList | quote }}
             - name: MEDIA_PROCESSOR_ENABLED
-              value: {{ and .Values.mediaProcessor.enabled .Values.featureServer.mediaProcessor.enabled | quote }}
-            {{- if and (.Values.mediaProcessor.enabled) (.Values.featureServer.mediaProcessor.enabled) }}
+              value: {{ and .Values.mediaProcessor.enabled .Values.featureServerNightly.mediaProcessor.enabled | quote }}
+            {{- if and (.Values.mediaProcessor.enabled) (.Values.featureServerNightly.mediaProcessor.enabled) }}
             - name: MEDIA_PROCESSOR_ADDRESS
               value: {{ printf "%s:%d" .Values.mediaProcessor.serviceName (int .Values.mediaProcessor.ports.grpc) | quote }}
             - name: MEDIA_PROCESSOR_STT_VENDORS
-              value: {{ .Values.featureServer.mediaProcessor.sttVendors | join "," | quote }}
+              value: {{ .Values.featureServerNightly.mediaProcessor.sttVendors | join "," | quote }}
             - name: MEDIA_PROCESSOR_TTS_VENDORS
-              value: {{ .Values.featureServer.mediaProcessor.ttsVendors | join "," | quote }}
+              value: {{ .Values.featureServerNightly.mediaProcessor.ttsVendors | join "," | quote }}
             - name: MEDIA_PROCESSOR_CACHE_TYPE
               value: {{ .Values.mediaProcessor.cache.type | quote }}
+            {{- end }}
+            - name: VG_SPEECH_BILLING_ENABLED
+              value: {{ .Values.billing.enabled | quote }}
+            - name: VG_CLUSTER_ID
+              value: {{ .Values.billing.clusterId | default .Values.ingress.webapp.host | quote }}
+            {{- if .Values.billing.enabled }}
+            - name: VG_SPEECH_BILLING_MYSQL_USER
+              value: {{ .Values.billing.mysql.username | quote }}
+            - name: VG_SPEECH_BILLING_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.billing.mysql.existingSecret | quote }}
+                  key: {{ .Values.billing.mysql.secretKey | quote }}
             {{- end }}
             - name: LOG_REDACTION_ENABLED
               value: {{ $.Values.logRedaction.enabled | default "false" | quote }}
@@ -448,8 +493,8 @@ spec:
               value: {{ $val | quote }}
             {{- end }}
             {{- end }}
-            {{- if .Values.featureServer.extraEnvVars }}
-            {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.extraEnvVars "context" $) | nindent 12 }}
+            {{- if .Values.featureServerNightly.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
           envFrom:
             - configMapRef:

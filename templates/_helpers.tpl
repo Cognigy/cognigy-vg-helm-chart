@@ -96,12 +96,13 @@ Return the proper interaction panel service provider info
   {{- if .Values.testCallManager.enabled -}}
     {{- if .Values.testCallManager.interactionPanelServiceProvider.existingCredentials -}}
       {{- $interactionPanelServiceProviderInfo = .Values.testCallManager.interactionPanelServiceProvider.existingCredentials -}}
-    {{- else if and (.Values.testCallManager.interactionPanelServiceProvider.id) (.Values.testCallManager.interactionPanelServiceProvider.apiKey) -}}
+    {{- else if and (.Values.testCallManager.interactionPanelServiceProvider.id) (.Values.testCallManager.interactionPanelServiceProvider.apiKey) (.Values.testCallManager.interactionPanelServiceProvider.adminApiKey) -}}
       {{- $interactionPanelServiceProviderInfo = "voicegateway-interaction-panel-service-provider" -}}
     {{- else -}}
-      {{ required "A valid value for .Values.testCallManager.interactionPanelServiceProvider is required!" .Values.testCallManager.interactionPanelServiceProvider.id }}
-      {{ required "A valid value for .Values.testCallManager.interactionPanelServiceProvider is required!" .Values.testCallManager.interactionPanelServiceProvider.apiKey }}
-      {{ required "A valid value for .Values.testCallManager.interactionPanelServiceProvider is required!" .Values.testCallManager.interactionPanelServiceProvider.existingCredentials }}
+      {{ required "A valid value for .Values.testCallManager.interactionPanelServiceProvider.id is required!" .Values.testCallManager.interactionPanelServiceProvider.id }}
+      {{ required "A valid value for .Values.testCallManager.interactionPanelServiceProvider.apiKey is required!" .Values.testCallManager.interactionPanelServiceProvider.apiKey }}
+      {{ required "A valid value for .Values.testCallManager.interactionPanelServiceProvider.adminApiKey is required!" .Values.testCallManager.interactionPanelServiceProvider.adminApiKey }}
+      {{ required "A valid value for .Values.testCallManager.interactionPanelServiceProvider.existingCredentials is required!" .Values.testCallManager.interactionPanelServiceProvider.existingCredentials }}
     {{- end -}}
   {{- end -}}
 

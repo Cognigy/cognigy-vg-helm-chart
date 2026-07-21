@@ -35,6 +35,10 @@ global:
   ## Genesys router + vg-api-server's vendor_integrations CRUD + vg-webapp's
   ## Genesys AudioHook UI).
   enableGenesysAudioHook: false
+  ## MS Teams integration master switch. Mirrors enableGenesysAudioHook — one
+  ## flag flipped per environment that the vg-connector reads as
+  ## ENABLE_MICROSOFT_TEAMS to mount the Teams module. Default false.
+  enableMsTeams: false
 ###############
 # Cognigy ENV #
 ###############
@@ -448,7 +452,7 @@ sbc:
   ec2EipAllocator:
     ## Only for AWS
     enabled: false
-    image: cognigy.azurecr.io/vg-ec2-eip-allocator:2.34.42
+    image: cognigy.azurecr.io/vg-ec2-eip-allocator:2.35.11
     ## Tag key for the SIP EIP Node Pool
     sipEipGroupRoleKey: "role"
     ## Tag value for the SIP EIP Node Pool
@@ -462,7 +466,7 @@ sbc:
   sipDnsUpdaterAzure:
     ## Only for Azure with private IPs for SIP/RTP Nodes
     enabled: false
-    image: cognigy.azurecr.io/vg-sip-dns-updater-azure:1.2.0
+    image: cognigy.azurecr.io/vg-sip-dns-updater-azure:1.2.1
     ## Service Principal (SP) with the permissions to update private DNS zone
     ## Provide credentials either via existingSecret or clear text.
     servicePrincipal:
@@ -492,7 +496,7 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.14.0
+  image: cognigy.azurecr.io/vg-api-migrator:2026.15.0
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -502,13 +506,18 @@ additionalDbParameters:
     host: postgres
     port: 5432
 influxdb:
-  image: cognigy.azurecr.io/vg-influx:1.8.10-alpine
+  image: cognigy.azurecr.io/vg-influx:1.11.8-alpine
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
   nodeSelector: {}
   priorityClassName: ""
-  podSecurityContext: {}
+  ## influxdb >=1.11 runs as non-root uid 1500 (1.8.x ran as root); fsGroup
+  ## chowns the data PVC so the new user can write the existing/new volume
+  podSecurityContext:
+    runAsUser: 1500
+    runAsGroup: 1500
+    fsGroup: 1500
   tolerations: []
   storage: 20Gi
   storageClassName: influxdb
@@ -731,7 +740,7 @@ redisHa:
 ##############
 heplifyServer:
   ## We build and tag this image by ourselves
-  image: cognigy.azurecr.io/vg-heplify-server:1.59.7-1
+  image: cognigy.azurecr.io/vg-heplify-server:1.60.3
   imagePullPolicy: IfNotPresent
   ## It is not recommended to scale HEPlify-server horizontally since this might take additional load balancing or db queries
   replicaCount: 1
@@ -763,7 +772,7 @@ heplifyServer:
 homer:
   enabled: true
   ## We build and tag this image by ourselves
-  image: cognigy.azurecr.io/vg-homer:1.5.3
+  image: cognigy.azurecr.io/vg-homer:1.5.15
   imagePullPolicy: IfNotPresent
   ## It is not recommended to scale HOMER horizontally since this might take additional load balancing or db queries
   replicaCount: 1
@@ -877,7 +886,7 @@ metrics:
 health:
   port: 8001
 telegraf:
-  image: cognigy.azurecr.io/vg-telegraf:1.37.0
+  image: cognigy.azurecr.io/vg-telegraf:1.39.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -887,6 +896,9 @@ telegraf:
   tolerations: []
   serviceName: telegraf
   port: 8125
+  ## Max seconds the wait-for-influxdb initContainer blocks before failing
+  ## (so a broken influxdb surfaces as Init:Error instead of hanging forever)
+  influxdbWaitTimeoutSeconds: 600
   resources:
     requests:
       cpu: "0.05"
@@ -914,7 +926,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.3
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.14.0
+  image: cognigy.azurecr.io/vg-api-server:2026.15.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -994,8 +1006,28 @@ apiBan:
   bannedIpsList: ""
   cronjobSchedule: "0 * * * *"
   extraEnvVars: []
+## Temporary (Redis TTL-backed) per-IP bans for rejected-request floods, distinct from the
+## permanent apiBan blocklist above. sbc-inbound (INVITE) and sbc-sip-sidecar (REGISTER) share
+## the same VG_REDIS_BAN_* env var names/semantics, so each gets its own threshold/window/duration
+## here even though the defaults currently match. drachtio's separate raw-REGISTER-volume guard
+## is intentionally not unified with these and is configured under `drachtio.*` instead.
+tmpban:
+  invite:
+    ## Rejected INVITEs (no matching account/carrier) before banning the source IP.
+    banThreshold: 5
+    ## Sliding window (minutes) the rejection counter above is tracked over.
+    trackingWindowMinutes: 15
+    ## Ban duration (hours) applied once banThreshold is reached.
+    banDurationHours: 1
+  register:
+    ## Rejected REGISTERs (no realm / deactivated account / failed auth) before banning the source IP.
+    banThreshold: 5
+    ## Sliding window (minutes) the rejection counter above is tracked over.
+    trackingWindowMinutes: 15
+    ## Ban duration (hours) applied once banThreshold is reached.
+    banDurationHours: 1
 drachtio:
-  image: cognigy.azurecr.io/vg-drachtio-server:0.8.27-rc17
+  image: cognigy.azurecr.io/vg-drachtio:1.3.0
   imagePullPolicy: IfNotPresent
   host: 127.0.0.1
   port: 9022
@@ -1011,6 +1043,14 @@ drachtio:
     chainFile: /etc/letsencrypt/tls.crt
   supportBestEffortTls: false
   rejectRegisterWithNoRealm: true
+  ## Bans a source IP once it sends this many raw REGISTERs within registerSpamWindowSecs,
+  ## counted before any realm/account check. 0 disables the feature. Known carrier gateway
+  ## IPs (sip_gateways) are never banned regardless of this threshold.
+  registerSpamThreshold: 10
+  ## Rolling window (seconds) the REGISTER-spam counter above is tracked over.
+  registerSpamWindowSecs: 60
+  ## Ban duration (seconds) applied once registerSpamThreshold is reached.
+  registerSpamTtlSecs: 3600
   ## if true - do not advertise public IPs
   privateIpOnly: false
   extraEnvVars: []
@@ -1025,7 +1065,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.14.1
+  image: cognigy.azurecr.io/vg-feature-server:2026.15.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1059,8 +1099,12 @@ featureServer:
   tolerations: []
   sigtermForceCloseTimeoutMs: ""
   terminationGracePeriodSeconds: 300
-  ## Please set featureServer.useStatefulSet to false if you don't want to use StatefulSet for Feature Server (headless service)
-  ## Setting it to false is not recommended and does not work if Azure cloud.
+  ## Set to false to run feature-server as a Deployment instead of a StatefulSet
+  ## (faster, non-sequential rolling upgrades). The service is always headless,
+  ## so SIP/in-dialog routing resolves to real pod IPs in both modes. The old
+  ## "does not work on Azure" caveat came from the Deployment falling back to a
+  ## non-headless ClusterIP VIP, which is now fixed. Verified on AWS; expected to
+  ## work on Azure (AKS) too — confirm on an AKS cluster before enabling in prod.
   useStatefulSet: true
   headlessServiceName: feature-server-headless
   freeswitchConnection: "127.0.0.1:8021:JambonzR0ck$"
@@ -1107,7 +1151,7 @@ sileroVad:
   ## When enabled, feature server receives SILERO_VAD_SERVICE_URL env var
   ## pointing to this service for Plan B audio-fork VAD.
   enabled: false
-  image: cognigy.azurecr.io/vg-silero-vad:2026.14.0
+  image: cognigy.azurecr.io/vg-silero-vad:2026.15.0
   ## Default Always because the default tag is :latest (mutable) — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1275,7 +1319,7 @@ vadAutotuner:
   extraEnvVars: []
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.14.1
+  image: cognigy.azurecr.io/vg-feature-server:2026.15.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1309,8 +1353,10 @@ featureServerNightly:
   tolerations: []
   sigtermForceCloseTimeoutMs: ""
   terminationGracePeriodSeconds: 300
-  ## Please set featureServer.useStatefulSet to false if you don't want to use StatefulSet for Feature Server (headless service)
-  ## Setting it to false is not recommended and does not work if Azure cloud.
+  ## Set to false to run feature-server-nightly as a Deployment instead of a
+  ## StatefulSet (faster, non-sequential rolling upgrades). The service is always
+  ## headless, so SIP/in-dialog routing resolves to real pod IPs in both modes.
+  ## Verified on AWS; expected to work on Azure (AKS) too — confirm before prod.
   useStatefulSet: true
   headlessServiceName: feature-server-headless-nightly
   freeswitchConnection: "127.0.0.1:8021:JambonzR0ck$"
@@ -1348,7 +1394,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.14.0
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.15.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
@@ -1404,7 +1450,7 @@ featureServerLegacy:
       cpu: "1"
       memory: 500Mi
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch:2026.15.0-rc1
+  image: cognigy.azurecr.io/vg-freeswitch:2026.15.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1463,14 +1509,14 @@ freeswitchNightly:
   ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
   ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
   ## @see featureServerNightly
-  image: cognigy.azurecr.io/vg-freeswitch:2026.15.0-rc1
+  image: cognigy.azurecr.io/vg-freeswitch:2026.15.0
 freeswitchLegacy:
   ## You can specify a custom image for the FreeSWITCH in the legacy FeatureServer here
   ## To enable a "legacy FreeSWITCH", you have to enable a legacy FeatureServer.
   ## @see featureServerLegacy
-  image: cognigy.azurecr.io/vg-freeswitch:2026.15.0-rc1
+  image: cognigy.azurecr.io/vg-freeswitch:2026.15.0
 rtpEngine:
-  image: cognigy.azurecr.io/vg-rtpengine:0.2.0
+  image: cognigy.azurecr.io/vg-rtpengine:mr13.5.1.17-1
   imagePullPolicy: IfNotPresent
   # During runtime, the log level can be decreased by sending the signal SIGURS1 to the daemon and can be increased with the signal SIGUSR2
   logLevel: 3
@@ -1492,7 +1538,7 @@ rtpEngine:
 mediaProcessor:
   ## Enable Media Processor for decoupled STT/TTS processing
   enabled: false
-  image: cognigy.azurecr.io/vg-media-processor:2026.14.0
+  image: cognigy.azurecr.io/vg-media-processor:2026.15.0
   imagePullPolicy: Always
   replicaCount: 2
   serviceName: media-processor
@@ -1539,7 +1585,7 @@ mediaProcessor:
       cpu: "1"
       memory: 512Mi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.14.0
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.15.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1554,7 +1600,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/vg-sbc-call-router:2026.14.0
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.15.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1585,7 +1631,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/vg-sbc-inbound:2026.14.0
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.15.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1625,7 +1671,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/vg-sbc-outbound:2026.14.0
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.15.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1663,7 +1709,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.14.0
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.15.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1678,7 +1724,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.14.0
+  image: cognigy.azurecr.io/vg-tcm:2026.15.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1701,11 +1747,18 @@ testCallManager:
   interactionPanelServiceProvider:
     id: ""
     apiKey: ""
-    ## For existing service provider info, the secret must have the following two keys:
+    ## Admin (system) API key, i.e. one whose service_provider_sid and account_sid are both null.
+    ## Required for the voiceGateway credentialSource path: cloning a speech credential reads a
+    ## source credential that may live under a different service provider than the ephemeral test
+    ## account, which only an admin-scoped key can do. A provider- or account-scoped key gets a 403.
+    adminApiKey: ""
+    ## For existing service provider info, the secret must have the following three keys:
     ## "id": Containing the ID of the Service Provider
     ## "apiKey": Containing API Key of the above Service Provider
+    ## "adminApiKey": Containing an admin (system) API Key
     ## NOTE: When interactionPanelServiceProvider.existingCredentials is set, the values in the previous parameters
-    ## "interactionPanelServiceProvider.id" and "interactionPanelServiceProvider.apiKey" are ignored.
+    ## "interactionPanelServiceProvider.id", "interactionPanelServiceProvider.apiKey" and
+    ## "interactionPanelServiceProvider.adminApiKey" are ignored.
     existingCredentials: ""
   extraEnvVars: []
   resources:
@@ -1717,7 +1770,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: true
-  image: cognigy.azurecr.io/vg-connector:2026.14.0
+  image: cognigy.azurecr.io/vg-connector:2026.15.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1736,11 +1789,11 @@ vgConnector:
   priorityClassName: ""
   podSecurityContext: {}
   tolerations: []
-  modules:
-    webrtc:
-      enabled: true
-    msTeams:
-      enabled: false
+  ## MS Teams is gated by global.enableMsTeams (mirrors Genesys AudioHook).
+  msTeams:
+    ## Record inbound/outbound audio to disk for debugging. Read as
+    ## MSTEAMS_FEATURE_RECORD_AUDIO by the connector.
+    recordAudio: false
   pdb:
     enabled: true
     minAvailable: 1 # use one of minAvailable or maxUnavailable
@@ -1758,8 +1811,40 @@ vgConnector:
     limits:
       cpu: "0.100"
       memory: 150Mi
+vgTrafficSniffer:
+  ## On-demand packet-capture service (see github.com/Cognigy/vg-traffic-sniffer).
+  ## Dormant by default: nothing (deployment, service, PVC, RBAC) is created
+  ## unless enabled, and even then it idles at 0 replicas until scaled up for a
+  ## capture session (via vg-console / flux edit). Scale back to 0 after use.
+  enabled: false
+  image: cognigy.azurecr.io/vg-traffic-sniffer:2.0.0
+  imagePullPolicy: IfNotPresent
+  replicaCount: 0
+  port: 8080
+  ## Per-capture caps (requests may lower, never raise; hard duration ceiling 3600s)
+  maxDurationSec: 900
+  maxSizeMb: 500
+  ## Days before captured pcaps are deleted from the volume
+  retentionDays: 7
+  persistence:
+    ## PVC keeps pcaps downloadable across restarts/scale-to-zero. Disable only
+    ## on clusters without dynamic volume provisioning (falls back to emptyDir:
+    ## download captures before scaling down). Disabling the feature entirely
+    ## deletes the PVC together with any undownloaded captures.
+    enabled: true
+    size: 10Gi
+    ## Empty = cluster default StorageClass
+    storageClass: ""
+  extraEnvVars: []
+  resources:
+    requests:
+      cpu: "0.100"
+      memory: 128Mi
+    limits:
+      cpu: "0.250"
+      memory: 256Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.14.0
+  image: cognigy.azurecr.io/vg-webapp:2026.15.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1992,15 +2077,22 @@ priorityClass:
 ## Optionally enable HorizontalPodAutoscaler for pods
 ## ref: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
 ##
-## Make sure that pods have resources limits and requests defined and the 'metrics server' has been deployed and configured in the cluster.
-## https://github.com/kubernetes-sigs/metrics-server
-##
-## Note: This is an experimental feature and should not be used in production.
-## Please don't enable this flag for now if you are a customer running Cognigy Voice Gateway using this Helm Chart.
-## This note will be removed once we are done with the testing and the feature will be production ready.
+## Services can render either native HPAs or KEDA ScaledObjects; the latter requires
+## hpa.keda.enabled=true (deploys the kedacore/keda subchart) so triggers can query
+## their metric sources. Make sure each workload sets requests/limits and that the
+## metrics-server or the referenced external metrics backend (for example Prometheus)
+## is reachable. The sample service definitions below assume KEDA is managing their
+## autoscaling.
 ##
 hpa:
   enabled: false
+  ## KEDA (Kubernetes Event-driven Autoscaling). Deploys the KEDA operator via the
+  ## kedacore/keda subchart. Required before enabling any hpa.services.<svc>.keda.enabled
+  ## (which renders a ScaledObject instead of a native HPA). Mirrors the Cognigy.AI
+  ## chart convention. KEDA registers the cluster-wide external.metrics.k8s.io API, so
+  ## treat it as a platform component (one per cluster).
+  keda:
+    enabled: false
   ## When set to true, and "hpa.enabled" is true, the "spec.replicas" field will be omitted from the deployment manifest of all the HPA managed services.
   ##
   removeReplicas: true
@@ -2049,69 +2141,86 @@ hpa:
       ## Maximum allowed replicas to which the scaling target can be scaled up
       ##
       maxReplicas: 10
-      ## Define metrics against which HorizontalPodAutoscaler will react
-      ## metrics:
-      ##   - type: Resource
-      ##     resource:
-      ##       name: memory
-      ##       target:
-      ##         type: Utilization
-      ##         averageUtilization: 80
-      ##   - type: Resource
-      ##     resource:
-      ##       name: cpu
-      ##       target:
-      ##         type: Utilization
-      ##         averageUtilization: 70
-      ##
+      ## KEDA-managed autoscaling (opt-in). Requires hpa.keda.enabled=true.
+      ## When enabled, a ScaledObject REPLACES the native HPA above and the triggers
+      ## here drive scaling; the behavior above is reused via advanced HPA config.
+      ## Example: CPU + calls-per-pod via the existing kube-prometheus-stack.
+      keda:
+        enabled: true
+        triggers:
+          - type: cpu
+            metricType: Utilization
+            metadata:
+              value: "50"
+          - type: prometheus
+            metricType: AverageValue
+            metadata:
+              serverAddress: http://monitoring-stack-kubeproms-prometheus.monitoring.svc.cluster.local:9090
+              query: sum(vg_feature_server_call_session_count{namespace="{{ .Release.Namespace }}",pod!~".*nightly.*"})
+              threshold: "120"
+      ## Native HPA fallback if keda.enabled is set to false for this service.
       metrics:
         - type: Resource
           resource:
             name: cpu
             target:
               type: Utilization
-              ## Define the CPU target to trigger the scaling actions (utilization percentage)
-              ##
               averageUtilization: 50
-        - type: Resource
-          resource:
-            name: memory
+        - type: Pods
+          pods:
+            metric:
+              name: vg_feature_server_call_session_count
             target:
-              type: Utilization
-              ## Define the memory target to trigger the scaling actions (utilization percentage)
-              ##
-              averageUtilization: 70
-      behavior: {}
+              type: AverageValue
+              averageValue: "120"
+      ## Fast scale-up (spikes need capacity now); slow, rate-limited scale-down so a
+      ## call-bearing pod drains one at a time (pairs with the graceful pre-stop hooks)
+      ## and node churn stays low (~1 feature-server pod ≈ 1 node).
+      behavior:
+        scaleUp: {}
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 120
     api:
       enabled: true
       name: api-server
+      keda:
+        enabled: true
+        triggers:
+          ## CPU-only: idle Node.js RSS sits above a 50% memory target, which would pin
+          ## replicas at max and block scale-down. api-server load is CPU/request-bound.
+          - type: cpu
+            metricType: Utilization
+            metadata:
+              value: "50"
+      ## Native HPA fallback if keda.enabled is set to false for this service.
+      metrics:
+        - type: Resource
+          resource:
+            name: cpu
+            target:
+              type: Utilization
+              averageUtilization: 50
       scaleTargetRef:
         apiVersion: apps/v1
         kind: Deployment
       minReplicas: 2
       maxReplicas: 10
-      metrics:
-        - type: Resource
-          resource:
-            name: cpu
-            target:
-              type: Utilization
-              averageUtilization: 50
-        - type: Resource
-          resource:
-            name: memory
-            target:
-              type: Utilization
-              averageUtilization: 70
       behavior: {}
     sbcInbound:
       enabled: true
       name: sbc-inbound
-      scaleTargetRef:
-        apiVersion: apps/v1
-        kind: Deployment
-      minReplicas: 2
-      maxReplicas: 10
+      keda:
+        enabled: true
+        triggers:
+          - type: cpu
+            metricType: Utilization
+            metadata:
+              value: "50"
+      ## Native HPA fallback if keda.enabled is set to false for this service.
       metrics:
         - type: Resource
           resource:
@@ -2119,21 +2228,22 @@ hpa:
             target:
               type: Utilization
               averageUtilization: 50
-        - type: Resource
-          resource:
-            name: memory
-            target:
-              type: Utilization
-              averageUtilization: 70
-      behavior: {}
+      scaleTargetRef:
+        apiVersion: apps/v1
+        kind: Deployment
+      minReplicas: 2
+      maxReplicas: 10
     sbcOutbound:
       enabled: true
       name: sbc-outbound
-      scaleTargetRef:
-        apiVersion: apps/v1
-        kind: Deployment
-      minReplicas: 2
-      maxReplicas: 10
+      keda:
+        enabled: true
+        triggers:
+          - type: cpu
+            metricType: Utilization
+            metadata:
+              value: "50"
+      ## Native HPA fallback if keda.enabled is set to false for this service.
       metrics:
         - type: Resource
           resource:
@@ -2141,13 +2251,11 @@ hpa:
             target:
               type: Utilization
               averageUtilization: 50
-        - type: Resource
-          resource:
-            name: memory
-            target:
-              type: Utilization
-              averageUtilization: 70
-      behavior: {}
+      scaleTargetRef:
+        apiVersion: apps/v1
+        kind: Deployment
+      minReplicas: 2
+      maxReplicas: 10
     # NOTE: the Pods metric "silero_vad_active_sessions" requires
     # prometheus-adapter (or KEDA) to expose the metric via the custom
     # metrics API. If neither is installed, drop the Pods metric or set
@@ -2160,12 +2268,27 @@ hpa:
       ## entire duration, so load distributes naturally across pods on new
       ## connections — no sticky sessions are needed.
       enabled: false
-      name: silero-vad
-      scaleTargetRef:
-        apiVersion: apps/v1
-        kind: Deployment
-      minReplicas: 2
-      maxReplicas: 10
+      keda:
+        enabled: true
+        triggers:
+          ## Tune after running the VAD benchmark (vg-resources/docs/tdd/03-silero-vad/vad-benchmark-design.md).
+          ## 70% leaves headroom before inference latency degrades under contention.
+          - type: cpu
+            metricType: Utilization
+            metadata:
+              value: "70"
+          - type: memory
+            metricType: Utilization
+            metadata:
+              value: "80"
+          - type: prometheus
+            metricType: AverageValue
+            metadata:
+              serverAddress: http://monitoring-stack-kubeproms-prometheus.monitoring.svc.cluster.local:9090
+              metricName: silero-vad-active-sessions
+              query: sum(silero_vad_active_sessions{namespace="{{ .Release.Namespace }}"})
+              threshold: "120"
+      ## Native HPA fallback if keda.enabled is set to false for this service.
       metrics:
         - type: Resource
           resource:
@@ -2193,6 +2316,12 @@ hpa:
               # (60% of the default maxConcurrentSessions=200 cap). Tune
               # together with sileroVad.maxConcurrentSessions.
               averageValue: "120"
+      name: silero-vad
+      scaleTargetRef:
+        apiVersion: apps/v1
+        kind: Deployment
+      minReplicas: 2
+      maxReplicas: 10
       ## Rate-limit scale-down to 1 pod per 60 s with a 300 s stabilization window.
       ## This aligns with DRAIN_TIMEOUT_SECONDS in the application (vg-silero-vad) to
       ## reduce churn during scale-down while pods are draining active calls. Note: with

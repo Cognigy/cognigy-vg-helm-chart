@@ -1,0 +1,19 @@
+{{- if and .Values.vgTrafficSniffer.enabled .Values.vgTrafficSniffer.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vg-traffic-sniffer-pcaps
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-traffic-sniffer
+    owner-team: echo
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.vgTrafficSniffer.persistence.size }}
+  {{- if .Values.vgTrafficSniffer.persistence.storageClass }}
+  storageClassName: {{ .Values.vgTrafficSniffer.persistence.storageClass | quote }}
+  {{- end }}
+{{- end }}

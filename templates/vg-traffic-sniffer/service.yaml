@@ -1,0 +1,21 @@
+{{- if .Values.vgTrafficSniffer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: vg-traffic-sniffer
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-traffic-sniffer
+    owner-team: echo
+spec:
+  # Cluster-internal only by design — no ingress. Engineers use port-forward;
+  # console access path is decided in the console integration phase.
+  type: ClusterIP
+  selector:
+    app: vg-traffic-sniffer
+  ports:
+    - name: http
+      port: {{ .Values.vgTrafficSniffer.port }}
+      targetPort: http
+      protocol: TCP
+{{- end }}
