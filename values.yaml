@@ -1065,7 +1065,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.15.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.15.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1319,7 +1319,7 @@ vadAutotuner:
   extraEnvVars: []
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.15.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.15.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1524,6 +1524,11 @@ rtpEngine:
   startPort: 40000
   endPort: 60000
   homerId: 11
+  # Enables rtpengine's --measure-rtp (RTP-stream-observed jitter/loss/MOS,
+  # no RTCP from either call leg required) and --mos (CQ=conversational,
+  # LQ=listening quality) flags. Off by default -- opt in per environment.
+  measureRtp: false
+  mos: CQ
   extraEnvVars: []
   resources:
     requests:
