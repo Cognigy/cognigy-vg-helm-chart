@@ -1,8 +1,8 @@
 apiVersion: v2
 name: voicegateway
 description: A Helm Chart for Cognigy VoiceGateway
-version: "2026.15.3"
-appVersion: "2026.15.3"
+version: "2026.13.1"
+appVersion: "2026.13.1"
 kubeVersion: "<v1.35.0-0"
 home: https://cognigy.com
 icon: https://www.cognigy.com/hubfs/Cognigy.svg
@@ -14,7 +14,7 @@ sources:
   - https://github.com/Cognigy/cognigy-vg-helm-chart
 dependencies:
   - name: traefik
-    version: "39.0.9"
+    version: "35.4.0"
     repository: "https://helm.traefik.io/traefik"
     condition: traefik.enabled
   - name: postgresql
@@ -30,7 +30,3 @@ dependencies:
     repository: "https://raw.githubusercontent.com/bitnami/charts/archive-full-index/bitnami"
     condition: redisHa.enabled
     alias: redisHa
-  - name: keda
-    version: "2.16.1"
-    repository: "https://kedacore.github.io/charts"
-    condition: hpa.keda.enabled

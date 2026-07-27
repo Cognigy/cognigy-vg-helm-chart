@@ -1,12 +1,6 @@
 {{- if .Values.featureServerNightly.enabled }}
-{{- /*
-  Unified feature-server-nightly workload. StatefulSet when
-  featureServerNightly.useStatefulSet is true (default), otherwise a Deployment.
-  Pod spec is identical in both modes; only kind + serviceName differ.
-  Relies on the always-headless nightly service for SIP/in-dialog routing.
-*/ -}}
 apiVersion: apps/v1
-kind: {{ if .Values.featureServerNightly.useStatefulSet }}StatefulSet{{ else }}Deployment{{ end }}
+kind: StatefulSet
 metadata:
   name: feature-server-nightly
   namespace: {{ $.Release.Namespace | quote }}
@@ -22,12 +16,10 @@ spec:
   selector:
     matchLabels:
       app: feature-server-nightly
-  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) ($.Values.hpa.services.featureServer.enabled)) }}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas)) }}
   replicas: {{ .Values.featureServerNightly.replicaCount }}
   {{- end }}
-  {{- if .Values.featureServerNightly.useStatefulSet }}
-  serviceName: {{ .Values.featureServerNightly.headlessServiceName }}
-  {{- end }}
+  serviceName: feature-server-headless-nightly
   template:
     metadata:
       labels:
@@ -42,12 +34,12 @@ spec:
       {{- if .Values.featureServerNightly.affinity }}
       affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.affinity "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.featureServerNightly.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.featureServer.enabled))}}
+      {{- if or (.Values.featureServerNightly.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector))}}
       nodeSelector:
         {{- if .Values.featureServerNightly.nodeSelector }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.nodeSelector "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.featureServer.enabled) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
@@ -57,12 +49,12 @@ spec:
       {{- if .Values.featureServerNightly.podSecurityContext }}
       securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.featureServerNightly.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.featureServer.enabled))}}
-      tolerations:
+      {{- if or (.Values.featureServerNightly.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
+      tolerations: 
         {{- if or (.Values.featureServerNightly.tolerations) }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.tolerations "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.featureServer.enabled) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
@@ -132,15 +124,11 @@ spec:
             {{- end }}
           lifecycle:
             preStop:
-              # 200 = feature-server drained, 000 = feature-server gone (fail open),
-              # 503 = calls still active (keep waiting). Anything else (e.g. 404 from a
-              # feature-server image without the route) fails open after 6 consecutive
-              # hits instead of hanging until terminationGracePeriodSeconds.
               exec:
                 command: [
                   "/bin/sh",
                   "-c",
-                  "misses=0; while true; do code=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 4 http://127.0.0.1:${HEALTH_CHECK_PORT:-8001}/health/ready-to-shutdown 2>/dev/null); case \"$code\" in 200|000) exit 0;; 503) misses=0;; *) misses=$((misses+1)); if [ \"$misses\" -ge 6 ]; then exit 0; fi;; esac; sleep 5; done"
+                  "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
                 ]
           {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
           args:
@@ -216,7 +204,6 @@ spec:
               value: {{ if .Values.freeswitch.azureSttUseSingleConnection }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: DISABLE_HTTP2_FOR_TTS_STREAMING
               value: {{ if .Values.freeswitch.disableHttp2ForTtsStreaming }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
-            {{- include "vg.testHarness.freeswitchEnv" . | nindent 12 }}
             {{- if .Values.freeswitch.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.freeswitch.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
@@ -245,7 +232,11 @@ spec:
           lifecycle:
             preStop:
               exec:
-                command: ["/bin/bash", "/usr/local/freeswitch/cognigy/k8s-pre-stop-hook.sh"]
+                command: [
+                  "/bin/sh",
+                  "-c",
+                  "fs_cli -p JambonzR0ck$ -x 'fsctl shutdown elegant restart'"
+                ]
           volumeMounts:
             - mountPath: /tmp
               name: temp-audio-volume
@@ -485,13 +476,6 @@ spec:
               value: {{ .Values.sileroVad.shadowModeEnabled | quote }}
             - name: VG_SILERO_VAD_SHADOW_SAMPLE_RATE
               value: {{ .Values.sileroVad.shadowSampleRate | quote }}
-            ## Per-layer production VAD graduation kill-switches (default off;
-            ## flip per-cluster + per-account to graduate a validated layer).
-            {{- range $key := .Values.sileroVad.prodGraduationEnv | keys | sortAlpha }}
-            {{- $val := index $.Values.sileroVad.prodGraduationEnv $key }}
-            - name: {{ $key }}
-              value: {{ $val | quote }}
-            {{- end }}
             {{- end }}
             {{- if .Values.featureServerNightly.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.extraEnvVars "context" $) | nindent 12 }}

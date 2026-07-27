@@ -96,13 +96,12 @@ Return the proper interaction panel service provider info
   {{- if .Values.testCallManager.enabled -}}
     {{- if .Values.testCallManager.interactionPanelServiceProvider.existingCredentials -}}
       {{- $interactionPanelServiceProviderInfo = .Values.testCallManager.interactionPanelServiceProvider.existingCredentials -}}
-    {{- else if and (.Values.testCallManager.interactionPanelServiceProvider.id) (.Values.testCallManager.interactionPanelServiceProvider.apiKey) (.Values.testCallManager.interactionPanelServiceProvider.adminApiKey) -}}
+    {{- else if and (.Values.testCallManager.interactionPanelServiceProvider.id) (.Values.testCallManager.interactionPanelServiceProvider.apiKey) -}}
       {{- $interactionPanelServiceProviderInfo = "voicegateway-interaction-panel-service-provider" -}}
     {{- else -}}
-      {{ required "A valid value for .Values.testCallManager.interactionPanelServiceProvider.id is required!" .Values.testCallManager.interactionPanelServiceProvider.id }}
-      {{ required "A valid value for .Values.testCallManager.interactionPanelServiceProvider.apiKey is required!" .Values.testCallManager.interactionPanelServiceProvider.apiKey }}
-      {{ required "A valid value for .Values.testCallManager.interactionPanelServiceProvider.adminApiKey is required!" .Values.testCallManager.interactionPanelServiceProvider.adminApiKey }}
-      {{ required "A valid value for .Values.testCallManager.interactionPanelServiceProvider.existingCredentials is required!" .Values.testCallManager.interactionPanelServiceProvider.existingCredentials }}
+      {{ required "A valid value for .Values.testCallManager.interactionPanelServiceProvider is required!" .Values.testCallManager.interactionPanelServiceProvider.id }}
+      {{ required "A valid value for .Values.testCallManager.interactionPanelServiceProvider is required!" .Values.testCallManager.interactionPanelServiceProvider.apiKey }}
+      {{ required "A valid value for .Values.testCallManager.interactionPanelServiceProvider is required!" .Values.testCallManager.interactionPanelServiceProvider.existingCredentials }}
     {{- end -}}
   {{- end -}}
 
@@ -178,18 +177,4 @@ Usage:
   {{- else -}}
     {{- printf "%s" .defaultSecret -}}
   {{- end -}}
-{{- end }}
-
-{{/*
-Test-harness FreeSWITCH speech-endpoint overrides (vg-freeswitch PR #255).
-Origin-only, plain HTTP/WS, port 8080 on the in-cluster mock-speech Service.
-No-op unless vgTestHarness.enabled. Requires an asan/debug freeswitch image.
-*/}}
-{{- define "vg.testHarness.freeswitchEnv" -}}
-{{- if .Values.vgTestHarness.enabled }}
-- name: TESTING_OVERRIDE_TTS_URL
-  value: "http://mock-speech.{{ .Release.Namespace }}.svc.cluster.local:8080"
-- name: TESTING_OVERRIDE_STT_URL
-  value: "ws://mock-speech.{{ .Release.Namespace }}.svc.cluster.local:8080"
-{{- end }}
 {{- end -}}

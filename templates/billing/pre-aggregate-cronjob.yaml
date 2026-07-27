@@ -36,15 +36,15 @@ spec:
               imagePullPolicy: {{ .Values.api.imagePullPolicy | default "IfNotPresent" }}
               command: ["node", "build/lib/billing/jobs/pre-aggregate-speech.js"]
               env:
-                - name: VG_SPEECH_BILLING_MYSQL_HOST
+                - name: JAMBONES_MYSQL_HOST
                   value: {{ .Values.mysql.host | quote }}
-                - name: VG_SPEECH_BILLING_MYSQL_PORT
+                - name: JAMBONES_MYSQL_PORT
                   value: {{ .Values.mysql.port | default "3306" | quote }}
-                - name: VG_SPEECH_BILLING_MYSQL_DATABASE
+                - name: JAMBONES_MYSQL_DATABASE
                   value: {{ .Values.billing.mysql.database | quote }}
-                - name: VG_SPEECH_BILLING_MYSQL_USER
+                - name: JAMBONES_MYSQL_USER
                   value: {{ .Values.billing.mysql.username | quote }}
-                - name: VG_SPEECH_BILLING_MYSQL_PASSWORD
+                - name: JAMBONES_MYSQL_PASSWORD
                   valueFrom:
                     secretKeyRef:
                       name: {{ .Values.billing.mysql.existingSecret | quote }}
