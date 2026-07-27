@@ -278,6 +278,15 @@ spec:
               value: {{ .Values.billing.clusterId | default .Values.ingress.webapp.host | quote }}
             - name: VG_SPEECH_BILLING_ENABLED
               value: {{ .Values.billing.enabled | quote }}
+            {{- if .Values.billing.enabled }}
+            - name: VG_SPEECH_BILLING_MYSQL_USER
+              value: {{ .Values.billing.mysql.username | quote }}
+            - name: VG_SPEECH_BILLING_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.billing.mysql.existingSecret | quote }}
+                  key: {{ .Values.billing.mysql.secretKey | quote }}
+            {{- end }}
             - name: SYSTEM_SPEECH_CREDENTIAL_LABEL
               value: {{ $.Values.sharedSpeechCredentials.label | quote }}
             - name: FEATURE_ENABLE_SHARED_SPEECH_CREDENTIALS

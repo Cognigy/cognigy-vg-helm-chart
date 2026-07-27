@@ -54,6 +54,10 @@ spec:
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
               protocol: TCP
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "5"]
           livenessProbe:
             httpGet:
               path: /health/liveness
@@ -66,6 +70,9 @@ spec:
             httpGet:
               path: /health/startup
               port: {{ .Values.health.port }}
+            failureThreshold: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
           env:
             - name: COGNIGY_AI_VERSION
               value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
@@ -127,6 +134,8 @@ spec:
               value: {{ .Values.vgConnector.port | quote }}
             - name: SIP_BASE_URL
               value: {{ .Values.sbc.sip.uri | quote }}
+            - name: SIGTERM_FORCE_CLOSE_TIMEOUT_MS
+              value: {{ .Values.vgConnector.sigtermForceCloseTimeoutMs | quote }}
             {{- if .Values.vgConnector.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgConnector.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

@@ -440,6 +440,13 @@ spec:
               value: {{ .Values.sileroVad.shadowModeEnabled | quote }}
             - name: VG_SILERO_VAD_SHADOW_SAMPLE_RATE
               value: {{ .Values.sileroVad.shadowSampleRate | quote }}
+            ## Per-layer production VAD graduation kill-switches (default off;
+            ## flip per-cluster + per-account to graduate a validated layer).
+            {{- range $key := .Values.sileroVad.prodGraduationEnv | keys | sortAlpha }}
+            {{- $val := index $.Values.sileroVad.prodGraduationEnv $key }}
+            - name: {{ $key }}
+              value: {{ $val | quote }}
+            {{- end }}
             {{- end }}
             {{- if .Values.featureServer.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.extraEnvVars "context" $) | nindent 12 }}
