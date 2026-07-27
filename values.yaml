@@ -1516,7 +1516,7 @@ freeswitchLegacy:
   ## @see featureServerLegacy
   image: cognigy.azurecr.io/vg-freeswitch:2026.15.0
 rtpEngine:
-  image: cognigy.azurecr.io/vg-rtpengine:mr13.5.1.17-1
+  image: cognigy.azurecr.io/vg-rtpengine:0.2.0
   imagePullPolicy: IfNotPresent
   # During runtime, the log level can be decreased by sending the signal SIGURS1 to the daemon and can be increased with the signal SIGUSR2
   logLevel: 3
