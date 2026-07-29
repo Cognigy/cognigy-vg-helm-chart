@@ -1,0 +1,23 @@
+{{- if .Values.vgConnector.enabled }}
+# We'll create a Kubernetes Service for each replica to target specific pods
+{{- range $i := until (int .Values.vgConnector.replicaCount) }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: vg-connector-pod-{{ $i }}
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-connector
+    pod-index: "{{ $i }}"
+spec:
+  selector:
+    app: vg-connector
+    statefulset.kubernetes.io/pod-name: vg-connector-{{ $i }}
+  ports:
+    - name: http
+      protocol: TCP
+      port: {{ $.Values.vgConnector.port }}
+      targetPort: {{ $.Values.vgConnector.port }}
+---
+{{- end }}
+{{- end }}

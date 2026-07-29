@@ -14,7 +14,7 @@ spec:
   selector:
     matchLabels:
       app: sbc-outbound
-  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas)) }}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) ($.Values.hpa.services.sbcOutbound.enabled)) }}
   replicas: {{ .Values.sbcOutbound.replicaCount }}
   {{- end }}
   template:
@@ -31,12 +31,12 @@ spec:
       {{- if .Values.sbcOutbound.affinity }}
       affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcOutbound.affinity "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.sbcOutbound.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector))}}
+      {{- if or (.Values.sbcOutbound.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.sbcOutbound.enabled))}}
       nodeSelector:
         {{- if .Values.sbcOutbound.nodeSelector }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcOutbound.nodeSelector "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.sbcOutbound.enabled) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
@@ -46,12 +46,12 @@ spec:
       {{- if .Values.sbcOutbound.podSecurityContext }}
       securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcOutbound.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.sbcOutbound.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
+      {{- if or (.Values.sbcOutbound.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.sbcOutbound.enabled))}}
       tolerations: 
         {{- if or (.Values.sbcOutbound.tolerations) }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcOutbound.tolerations "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.sbcOutbound.enabled) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}

@@ -1,6 +1,6 @@
 {{- if .Values.vgConnector.enabled }}
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: vg-connector
   namespace: {{ $.Release.Namespace | quote }}
@@ -11,6 +11,7 @@ metadata:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-connector.git"
     "cognigy.com/source-code.drachtio": "git@github.com:Cognigy/vg-drachtio.git"
 spec:
+  serviceName: vg-connector-headless
   selector:
     matchLabels:
       app: vg-connector
@@ -48,6 +49,9 @@ spec:
           imagePullPolicy: {{ .Values.vgConnector.imagePullPolicy }}
           resources: {{- toYaml .Values.vgConnector.resources | nindent 12 }}
           ports:
+            - name: http
+              containerPort: {{ .Values.vgConnector.port }}
+              protocol: TCP
             - name: health
               containerPort: {{ .Values.health.port }}
               protocol: TCP
@@ -95,7 +99,7 @@ spec:
                   name: voicegateway-jwt
                   key: jwt
             - name: CONNECTOR_BASE_URL
-              value: {{ .Values.ingress.vgConnector.host | quote }}
+              value: {{ printf "%s://%s" (ternary "https" "http" .Values.tls.enabled) .Values.ingress.vgConnector.host | quote }}
             - name: POD_IP
               valueFrom:
                 fieldRef:
@@ -110,30 +114,27 @@ spec:
             ## everywhere. vg-connector PR #35 renames the source to read this.
             - name: ENABLE_GENESYS_AUDIOHOOK
               value: {{ .Values.global.enableGenesysAudioHook | quote }}
-            {{- if hasKey .Values.vgConnector "modules" }}
-            {{- if hasKey .Values.vgConnector.modules "webrtc" }}
-            - name: FEATURE_ENABLE_WEBRTC
-              value: {{ .Values.vgConnector.modules.webrtc.enabled | quote }}
-            {{- end }}
-            {{- if hasKey .Values.vgConnector.modules "msTeams" }}
-            - name: FEATURE_ENABLE_MSTEAMS
-              value: {{ .Values.vgConnector.modules.msTeams.enabled | quote }}
-            - name: SYSTEM_SPEECH_CREDENTIAL_LABEL
-              value: {{ $.Values.sharedSpeechCredentials.label | quote }}
-            - name: FEATURE_ENABLE_SHARED_SPEECH_CREDENTIALS
-              value: {{ $.Values.sharedSpeechCredentials.enabled | quote }}
-            {{- if eq (.Values.vgConnector.modules.msTeams.enabled | toString) "true" }}
-            - name: FEATURE_MSTEAMS_RECORD_AUDIO
-              value: {{ default "false" .Values.vgConnector.modules.msTeams.recordAudio | quote }}
-            {{- end }}
-            {{- end }}
-            {{- end }}
+            ## MS Teams master switch — mirrors enableGenesysAudioHook: one
+            ## global flag flipped per environment, no per-module gating. The
+            ## connector reads ENABLE_MICROSOFT_TEAMS to mount the Teams module.
+            - name: ENABLE_MICROSOFT_TEAMS
+              value: {{ .Values.global.enableMsTeams | quote }}
+            - name: MSTEAMS_FEATURE_RECORD_AUDIO
+              value: {{ default "false" .Values.vgConnector.msTeams.recordAudio | quote }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: SBC_BASE_URL
+              {{- if .Values.sbc.sip.useStatefulSet }}
+              value: {{ .Values.sbc.sip.headlessServiceName | quote }}
+              {{- else }}
+              value: {{ .Values.sbc.sip.uri | quote }}
+              {{- end }}
             - name: NODE_ENV
               value: {{ .Values.global.nodeEnv | quote }}
             - name: PORT
               value: {{ .Values.vgConnector.port | quote }}
-            - name: SIP_BASE_URL
-              value: {{ .Values.sbc.sip.uri | quote }}
             - name: SIGTERM_FORCE_CLOSE_TIMEOUT_MS
               value: {{ .Values.vgConnector.sigtermForceCloseTimeoutMs | quote }}
             {{- if .Values.vgConnector.extraEnvVars }}

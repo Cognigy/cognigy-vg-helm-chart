@@ -31,12 +31,12 @@ spec:
       {{- if .Values.sileroVad.affinity }}
       affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sileroVad.affinity "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.sileroVad.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector)) }}
+      {{- if or (.Values.sileroVad.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.sileroVad.enabled)) }}
       nodeSelector:
         {{- if .Values.sileroVad.nodeSelector }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.sileroVad.nodeSelector "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.sileroVad.enabled) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
@@ -46,12 +46,12 @@ spec:
       {{- if .Values.sileroVad.podSecurityContext }}
       securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sileroVad.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.sileroVad.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations)) }}
+      {{- if or (.Values.sileroVad.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.sileroVad.enabled)) }}
       tolerations:
         {{- if .Values.sileroVad.tolerations }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.sileroVad.tolerations "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.sileroVad.enabled) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}

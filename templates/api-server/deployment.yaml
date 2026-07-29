@@ -17,7 +17,7 @@ spec:
   selector:
     matchLabels:
       app: api-server
-  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas)) }}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) ($.Values.hpa.services.api.enabled)) }}
   replicas: {{ .Values.api.replicaCount }}
   {{- end }}
   template:
@@ -38,12 +38,12 @@ spec:
       {{- if .Values.api.affinity }}
       affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.api.affinity "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.api.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector))}}
+      {{- if or (.Values.api.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.api.enabled))}}
       nodeSelector:
         {{- if .Values.api.nodeSelector }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.api.nodeSelector "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.api.enabled) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
@@ -53,12 +53,12 @@ spec:
       {{- if .Values.api.podSecurityContext }}
       securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.api.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.api.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
+      {{- if or (.Values.api.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.api.enabled))}}
       tolerations: 
         {{- if or (.Values.api.tolerations) }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.api.tolerations "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.api.enabled) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
@@ -125,11 +125,8 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: K8S_FEATURE_SERVER_SERVICE_NAME
-              {{- if .Values.featureServer.useStatefulSet }}
+              ## Always the headless service (works for StatefulSet and Deployment)
               value: {{ .Values.featureServer.headlessServiceName | quote }}
-              {{- else }}
-              value: {{ .Values.featureServer.serviceName | quote }}
-              {{- end }}
             - name: K8S_FEATURE_SERVER_CANARY_ENABLED
               value: {{ .Values.featureServer.canary.enabled | quote }}
             - name: K8S_FEATURE_SERVER_CANARY_PERCENTAGE

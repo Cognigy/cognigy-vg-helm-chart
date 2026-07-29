@@ -96,7 +96,7 @@ data:
 
     # Configuration for sending metrics to InfluxDB
     [[outputs.influxdb]]
-      urls = ["http://influxdb:8086/"] # required
+      urls = ["http://{{ .Values.influxdb.host }}:{{ .Values.influxdb.port }}/"] # required
       database = "telegraf" # required
       retention_policy = "autogen"
       write_consistency = "any"
@@ -104,7 +104,7 @@ data:
       namedrop = ["hep*"]
 
     [[outputs.influxdb]]
-      urls = ["http://influxdb:8086/"] # required
+      urls = ["http://{{ .Values.influxdb.host }}:{{ .Values.influxdb.port }}/"] # required
       database = "homer" # required
       retention_policy = ""
       write_consistency = "any"

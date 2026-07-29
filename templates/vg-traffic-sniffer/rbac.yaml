@@ -1,0 +1,43 @@
+{{- if .Values.vgTrafficSniffer.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vg-traffic-sniffer
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-traffic-sniffer
+    owner-team: echo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vg-traffic-sniffer
+  namespace: {{ $.Release.Namespace | quote }}
+rules:
+  # resolve capture targets to running pods
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  # attach the tcpdump ephemeral container to target pods
+  - apiGroups: [""]
+    resources: ["pods/ephemeralcontainers"]
+    verbs: ["get", "update", "patch"]
+  # stream pcaps out of / signal tcpdump inside the ephemeral container
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vg-traffic-sniffer
+  namespace: {{ $.Release.Namespace | quote }}
+subjects:
+  - kind: ServiceAccount
+    name: vg-traffic-sniffer
+    namespace: {{ $.Release.Namespace | quote }}
+roleRef:
+  kind: Role
+  name: vg-traffic-sniffer
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

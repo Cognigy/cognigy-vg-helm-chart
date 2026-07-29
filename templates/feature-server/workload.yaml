@@ -1,6 +1,12 @@
-{{- if .Values.featureServer.useStatefulSet }}
+{{- /*
+  Unified feature-server workload. Renders a StatefulSet when
+  featureServer.useStatefulSet is true (default), otherwise a Deployment.
+  The pod spec is identical in both modes; only kind + serviceName differ.
+  A Deployment relies on the headless service (see service.yaml) for real
+  per-pod DNS/SIP routing, so it works on AWS and Azure alike.
+*/ -}}
 apiVersion: apps/v1
-kind: StatefulSet
+kind: {{ if .Values.featureServer.useStatefulSet }}StatefulSet{{ else }}Deployment{{ end }}
 metadata:
   name: feature-server
   namespace: {{ $.Release.Namespace | quote }}
@@ -16,10 +22,12 @@ spec:
   selector:
     matchLabels:
       app: feature-server
-  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas)) }}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) ($.Values.hpa.services.featureServer.enabled)) }}
   replicas: {{ .Values.featureServer.replicaCount }}
   {{- end }}
-  serviceName: feature-server-headless
+  {{- if .Values.featureServer.useStatefulSet }}
+  serviceName: {{ .Values.featureServer.headlessServiceName }}
+  {{- end }}
   template:
     metadata:
       labels:
@@ -34,12 +42,12 @@ spec:
       {{- if .Values.featureServer.affinity }}
       affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.affinity "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.featureServer.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector))}}
+      {{- if or (.Values.featureServer.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.featureServer.enabled))}}
       nodeSelector:
         {{- if .Values.featureServer.nodeSelector }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.nodeSelector "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.featureServer.enabled) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
@@ -49,12 +57,12 @@ spec:
       {{- if .Values.featureServer.podSecurityContext }}
       securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.featureServer.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
-      tolerations: 
+      {{- if or (.Values.featureServer.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.featureServer.enabled))}}
+      tolerations:
         {{- if or (.Values.featureServer.tolerations) }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.tolerations "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.featureServer.enabled) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
@@ -124,11 +132,15 @@ spec:
             {{- end }}
           lifecycle:
             preStop:
+              # 200 = feature-server drained, 000 = feature-server gone (fail open),
+              # 503 = calls still active (keep waiting). Anything else (e.g. 404 from a
+              # feature-server image without the route) fails open after 6 consecutive
+              # hits instead of hanging until terminationGracePeriodSeconds.
               exec:
                 command: [
                   "/bin/sh",
                   "-c",
-                  "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
+                  "misses=0; while true; do code=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 4 http://127.0.0.1:${HEALTH_CHECK_PORT:-8001}/health/ready-to-shutdown 2>/dev/null); case \"$code\" in 200|000) exit 0;; 503) misses=0;; *) misses=$((misses+1)); if [ \"$misses\" -ge 6 ]; then exit 0; fi;; esac; sleep 5; done"
                 ]
           {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
           args:
@@ -230,11 +242,7 @@ spec:
           lifecycle:
             preStop:
               exec:
-                command: [
-                  "/bin/sh",
-                  "-c",
-                  "fs_cli -p JambonzR0ck$ -x 'fsctl shutdown elegant restart'"
-                ]
+                command: ["/bin/bash", "/usr/local/freeswitch/cognigy/k8s-pre-stop-hook.sh"]
           volumeMounts:
             - mountPath: /tmp
               name: temp-audio-volume
@@ -269,10 +277,6 @@ spec:
             httpGet:
               path: /health/startup
               port: {{ .Values.health.port }}
-          # lifecycle:
-          #   preStop:
-          #     exec:
-          #       command: ["/bin/sh", "-c", "/opt/app/bin/k8s-pre-stop-hook.js"]
           volumeMounts:
             - mountPath: /tmp 
               name: temp-audio-volume
@@ -486,4 +490,3 @@ spec:
         - name: fs-core-dumps
           emptyDir:
             sizeLimit: "2Gi"
-{{- end }}

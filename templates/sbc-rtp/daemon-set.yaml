@@ -89,10 +89,11 @@ spec:
             - name: rtp-engine
               containerPort: {{ .Values.rtpEngine.port }}
               protocol: TCP            
-          args: 
+          args:
             - rtpengine
             - --listen-udp=22222
             - --listen-http=0.0.0.0:22222
+            - --listen-cli=127.0.0.1:9900
             - --port-min={{ .Values.rtpEngine.startPort }}
             - --port-max={{ .Values.rtpEngine.endPort }}
             - --homer
@@ -101,6 +102,10 @@ spec:
             - udp
             - --homer-id
             - {{ .Values.rtpEngine.homerId | quote }}
+            {{- if .Values.rtpEngine.measureRtp }}
+            - --measure-rtp
+            - --mos={{ .Values.rtpEngine.mos | default "CQ" }}
+            {{- end }}
             - --log-level
             - {{ if .Values.rtpEngine.logLevel }}{{ .Values.rtpEngine.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
           env:

@@ -241,6 +241,12 @@ spec:
               value: "1"
             - name: PRIVATE_IP_ONLY
               value: {{ .Values.drachtio.privateIpOnly | quote }}
+            - name: DRACHTIO_REGISTER_SPAM_THRESHOLD
+              value: {{ .Values.drachtio.registerSpamThreshold | quote }}
+            - name: DRACHTIO_REGISTER_SPAM_WINDOW_SECS
+              value: {{ .Values.drachtio.registerSpamWindowSecs | quote }}
+            - name: DRACHTIO_REGISTER_SPAM_TTL_SECS
+              value: {{ .Values.drachtio.registerSpamTtlSecs | quote }}
             {{- if .Values.drachtio.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.drachtio.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
@@ -361,6 +367,12 @@ spec:
               value: {{ .Values.tracing.environment | quote }}
             - name: COGNIGY_AI_VERSION
               value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
+            - name: VG_REDIS_BAN_THRESHOLD
+              value: {{ .Values.tmpban.register.banThreshold | quote }}
+            - name: VG_REDIS_TRACKING_WINDOW_MINUTES
+              value: {{ .Values.tmpban.register.trackingWindowMinutes | quote }}
+            - name: VG_REDIS_BAN_DURATION_HOURS
+              value: {{ .Values.tmpban.register.banDurationHours | quote }}
             - name: FEAT_COMPATIBILITY_RFC3261
               value: {{ .Values.sbcSipSidecar.registerRfc3261 | quote }}
             {{- if .Values.sbc.sip.registerAllSbcs }}

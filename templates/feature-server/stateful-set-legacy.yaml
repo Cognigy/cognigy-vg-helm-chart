@@ -16,7 +16,7 @@ spec:
   selector:
     matchLabels:
       app: feature-server-legacy
-  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas)) }}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) ($.Values.hpa.services.featureServer.enabled)) }}
   replicas: {{ .Values.featureServerLegacy.replicaCount }}
   {{- end }}
   serviceName: feature-server-headless-legacy
@@ -34,12 +34,12 @@ spec:
       {{- if .Values.featureServerLegacy.affinity }}
       affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerLegacy.affinity "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.featureServerLegacy.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector))}}
+      {{- if or (.Values.featureServerLegacy.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.featureServer.enabled))}}
       nodeSelector:
         {{- if .Values.featureServerLegacy.nodeSelector }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerLegacy.nodeSelector "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.featureServer.enabled) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
@@ -49,12 +49,12 @@ spec:
       {{- if .Values.featureServerLegacy.podSecurityContext }}
       securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerLegacy.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.featureServerLegacy.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
-      tolerations: 
+      {{- if or (.Values.featureServerLegacy.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.featureServer.enabled))}}
+      tolerations:
         {{- if or (.Values.featureServerLegacy.tolerations) }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerLegacy.tolerations "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.featureServer.enabled) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
@@ -124,11 +124,15 @@ spec:
             {{- end }}
           lifecycle:
             preStop:
+              # 200 = feature-server drained, 000 = feature-server gone (fail open),
+              # 503 = calls still active (keep waiting). Anything else (e.g. 404 from a
+              # feature-server image without the route) fails open after 6 consecutive
+              # hits instead of hanging until terminationGracePeriodSeconds.
               exec:
                 command: [
                   "/bin/sh",
                   "-c",
-                  "while $(curl --output /dev/null --silent --head --fail-early http://127.0.0.1:3000); do printf '.'; sleep 10; done"
+                  "misses=0; while true; do code=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 4 http://127.0.0.1:${HEALTH_CHECK_PORT:-8001}/health/ready-to-shutdown 2>/dev/null); case \"$code\" in 200|000) exit 0;; 503) misses=0;; *) misses=$((misses+1)); if [ \"$misses\" -ge 6 ]; then exit 0; fi;; esac; sleep 5; done"
                 ]
           {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
           args:
@@ -233,11 +237,7 @@ spec:
           lifecycle:
             preStop:
               exec:
-                command: [
-                  "/bin/sh",
-                  "-c",
-                  "fs_cli -p JambonzR0ck$ -x 'fsctl shutdown elegant restart'"
-                ]
+                command: ["/bin/bash", "/usr/local/freeswitch/cognigy/k8s-pre-stop-hook.sh"]
           volumeMounts:
             - mountPath: /tmp
               name: temp-audio-volume
