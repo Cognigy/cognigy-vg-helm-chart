@@ -1,0 +1,19 @@
+{{- if and .Values.vgTestHarness.enabled .Values.vgTestHarness.minio.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: minio
+    owner-team: echo
+spec:
+  type: ClusterIP
+  selector:
+    app: minio
+  ports:
+    - name: api
+      port: 9000
+      targetPort: 9000
+      protocol: TCP
+{{- end }}

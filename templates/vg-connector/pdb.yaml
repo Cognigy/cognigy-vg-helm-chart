@@ -1,0 +1,21 @@
+{{- if and .Values.vgConnector.enabled .Values.vgConnector.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: vg-connector
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-connector
+    owner-team: echo
+spec:
+  selector:
+    matchLabels:
+      app: vg-connector
+  {{- if hasKey .Values.vgConnector.pdb "minAvailable" }}
+  minAvailable: {{ .Values.vgConnector.pdb.minAvailable }}
+  {{- else if hasKey .Values.vgConnector.pdb "maxUnavailable" }}
+  maxUnavailable: {{ .Values.vgConnector.pdb.maxUnavailable }}
+  {{- else }}
+  {{- fail "vgConnector.pdb.enabled is true but neither vgConnector.pdb.minAvailable nor vgConnector.pdb.maxUnavailable is set" }}
+  {{- end }}
+{{- end }}

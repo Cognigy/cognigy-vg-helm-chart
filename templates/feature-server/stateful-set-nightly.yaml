@@ -204,6 +204,7 @@ spec:
               value: {{ if .Values.freeswitch.azureSttUseSingleConnection }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: DISABLE_HTTP2_FOR_TTS_STREAMING
               value: {{ if .Values.freeswitch.disableHttp2ForTtsStreaming }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+            {{- include "vg.testHarness.freeswitchEnv" . | nindent 12 }}
             {{- if .Values.freeswitch.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.freeswitch.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
@@ -476,6 +477,13 @@ spec:
               value: {{ .Values.sileroVad.shadowModeEnabled | quote }}
             - name: VG_SILERO_VAD_SHADOW_SAMPLE_RATE
               value: {{ .Values.sileroVad.shadowSampleRate | quote }}
+            ## Per-layer production VAD graduation kill-switches (default off;
+            ## flip per-cluster + per-account to graduate a validated layer).
+            {{- range $key := .Values.sileroVad.prodGraduationEnv | keys | sortAlpha }}
+            {{- $val := index $.Values.sileroVad.prodGraduationEnv $key }}
+            - name: {{ $key }}
+              value: {{ $val | quote }}
+            {{- end }}
             {{- end }}
             {{- if .Values.featureServerNightly.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.extraEnvVars "context" $) | nindent 12 }}

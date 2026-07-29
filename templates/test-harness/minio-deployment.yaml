@@ -1,0 +1,33 @@
+{{- if and .Values.vgTestHarness.enabled .Values.vgTestHarness.minio.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: minio
+    owner-team: echo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      containers:
+        - name: minio
+          image: {{ .Values.vgTestHarness.minio.image }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - server
+            - /data
+          ports:
+            - name: api
+              containerPort: 9000
+              protocol: TCP
+          resources: {{- toYaml .Values.vgTestHarness.minio.resources | nindent 12 }}
+{{- end }}

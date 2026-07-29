@@ -2,3 +2,15 @@ You have deployed the following release: {{ .Release.Name }}.
 To get further information, you can run the commands:
   $ helm status -n {{ .Release.Namespace }} {{ .Release.Name }}
   $ helm get all -n {{ .Release.Namespace }} {{ .Release.Name }}
+{{- if .Values.vgTestHarness.enabled }}
+{{- if not (regexMatch "vg-freeswitch-mrf(asan|debug)" .Values.freeswitch.image) }}
+
+⚠️  vgTestHarness.enabled is true, but freeswitch.image
+    ({{ .Values.freeswitch.image }})
+    is not an asan/debug build. The TESTING_OVERRIDE_TTS_URL /
+    TESTING_OVERRIDE_STT_URL env vars are compiled out of production
+    FreeSWITCH binaries (vg-freeswitch PR #255), so speech traffic will
+    still hit REAL providers. Pin an mrfasan/mrfdebug image to use the
+    test harness.
+{{- end }}
+{{- end }}

@@ -1,0 +1,19 @@
+{{- if .Values.vgTestHarness.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-cognigy
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: mock-cognigy
+    owner-team: echo
+spec:
+  type: ClusterIP
+  selector:
+    app: mock-cognigy
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+{{- end }}
