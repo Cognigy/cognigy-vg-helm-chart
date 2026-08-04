@@ -22,7 +22,7 @@ spec:
   selector:
     matchLabels:
       app: feature-server
-  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) ($.Values.hpa.services.featureServer.enabled)) }}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas)) }}
   replicas: {{ .Values.featureServer.replicaCount }}
   {{- end }}
   {{- if .Values.featureServer.useStatefulSet }}
@@ -42,12 +42,12 @@ spec:
       {{- if .Values.featureServer.affinity }}
       affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.affinity "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.featureServer.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.featureServer.enabled))}}
+      {{- if or (.Values.featureServer.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector))}}
       nodeSelector:
         {{- if .Values.featureServer.nodeSelector }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.nodeSelector "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.featureServer.enabled) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
@@ -57,12 +57,12 @@ spec:
       {{- if .Values.featureServer.podSecurityContext }}
       securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.featureServer.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.featureServer.enabled))}}
-      tolerations:
+      {{- if or (.Values.featureServer.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
+      tolerations: 
         {{- if or (.Values.featureServer.tolerations) }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.tolerations "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.featureServer.enabled) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
@@ -277,6 +277,13 @@ spec:
             httpGet:
               path: /health/startup
               port: {{ .Values.health.port }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.featureServer.ports.tcp }}
+            periodSeconds: {{ .Values.featureServer.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.featureServer.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.featureServer.readinessProbe.failureThreshold }}
           volumeMounts:
             - mountPath: /tmp 
               name: temp-audio-volume

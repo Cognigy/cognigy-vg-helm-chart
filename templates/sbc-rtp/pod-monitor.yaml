@@ -13,8 +13,13 @@ spec:
     matchNames:
       - {{ $.Release.Namespace }}
   podMetricsEndpoints:
+    ## rtp-engine-sidecar: sbc_rtpengine_stats_* (session accounting)
     - path: /metrics
       port: metrics
+    ## rtpengine itself: rtpengine_mos/jitter/packetloss_* — the audio-quality
+    ## counters, which live only here and not on the sidecar
+    - path: /metrics
+      port: rtp-engine
   selector:
     matchLabels:
       app: sbc-rtp

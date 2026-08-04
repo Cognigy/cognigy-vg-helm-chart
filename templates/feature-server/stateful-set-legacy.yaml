@@ -16,7 +16,7 @@ spec:
   selector:
     matchLabels:
       app: feature-server-legacy
-  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) ($.Values.hpa.services.featureServer.enabled)) }}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas)) }}
   replicas: {{ .Values.featureServerLegacy.replicaCount }}
   {{- end }}
   serviceName: feature-server-headless-legacy
@@ -34,12 +34,12 @@ spec:
       {{- if .Values.featureServerLegacy.affinity }}
       affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerLegacy.affinity "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.featureServerLegacy.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.featureServer.enabled))}}
+      {{- if or (.Values.featureServerLegacy.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector))}}
       nodeSelector:
         {{- if .Values.featureServerLegacy.nodeSelector }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerLegacy.nodeSelector "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) ($.Values.hpa.services.featureServer.enabled) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
@@ -49,12 +49,12 @@ spec:
       {{- if .Values.featureServerLegacy.podSecurityContext }}
       securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerLegacy.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
-      {{- if or (.Values.featureServerLegacy.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.featureServer.enabled))}}
-      tolerations:
+      {{- if or (.Values.featureServerLegacy.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
+      tolerations: 
         {{- if or (.Values.featureServerLegacy.tolerations) }}
           {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerLegacy.tolerations "context" $) | nindent 8 }}
         {{- end }}
-        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) ($.Values.hpa.services.featureServer.enabled) }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
           {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
@@ -273,6 +273,13 @@ spec:
             httpGet:
               path: /health/startup
               port: {{ .Values.health.port }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.featureServerLegacy.ports.tcp }}
+            periodSeconds: {{ .Values.featureServer.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.featureServer.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.featureServer.readinessProbe.failureThreshold }}
           {{- end }}
           lifecycle:
             preStop:

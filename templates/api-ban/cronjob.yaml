@@ -37,7 +37,7 @@ spec:
                 - name: API_BAN_URL
                   value: {{ .Values.apiBan.endpoint }}
                 - name: API_BAN_BANNED_RANGES
-                  value: {{ .Values.apiBan.bannedIpsList }}
+                  value: {{ .Values.apiBan.bannedIpsList | quote }}
                 - name: REDIS_HOST
                   value: {{ .Values.redis.host }}
                 - name: REDIS_PORT

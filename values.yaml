@@ -58,6 +58,22 @@ cognigyEnv:
   JAMBONES_REDIS_SENTINELS: "redis-ha-headless:26379"
   ## Enable keep alive for clients created with vg-redis
   REDIS_KEEP_ALIVE_INTERVAL_IN_SECONDS: "10"
+  ## DEEPGRAM_IMPROVEMENT_PROGRAM_OPT_OUT (CGY-34204) — set per cluster, no default here.
+  ##
+  ## Deepgram enrols every account in its Model Improvement Partnership Program by
+  ## default, which lets it retain and train on request payloads. Since CGY-34204 the
+  ## decision lives on the individual speech credential
+  ## (speech_credentials.deepgram_improvement_program_opt_in, chosen in the VG webapp);
+  ## this variable is only the *default* for that choice. Set it truthy
+  ## (true/yes/on/enabled/1) to have new Deepgram credentials default to opted out, and
+  ## to have the api-migrator backfill existing ones on first upgrade.
+  ##
+  ## Consumed by: api-server + webapp (via the cognigy-env ConfigMap they already mount)
+  ## and the api-migrator job (threaded explicitly in templates/api-migrator/job.yaml,
+  ## which is not wired to the ConfigMap). Deliberately left unset here — a default
+  ## would change the cognigy-env ConfigMap on every cluster and roll every workload
+  ## that mounts it, to no effect (unset already means "stay enrolled").
+  ## https://developers.deepgram.com/docs/the-deepgram-model-improvement-partnership-program
 ## Credentials for pulling image from private image registry.
 ## Ref.: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 imageCredentials:
@@ -466,7 +482,7 @@ sbc:
   sipDnsUpdaterAzure:
     ## Only for Azure with private IPs for SIP/RTP Nodes
     enabled: false
-    image: cognigy.azurecr.io/vg-sip-dns-updater-azure:1.2.1
+    image: cognigy.azurecr.io/vg-sip-dns-updater-azure:1.3.0
     ## Service Principal (SP) with the permissions to update private DNS zone
     ## Provide credentials either via existingSecret or clear text.
     servicePrincipal:
@@ -496,7 +512,7 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.15.2
+  image: cognigy.azurecr.io/vg-api-migrator:2026.16.0
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -926,7 +942,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.3
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.15.2
+  image: cognigy.azurecr.io/vg-api-server:2026.16.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1027,7 +1043,7 @@ tmpban:
     ## Ban duration (hours) applied once banThreshold is reached.
     banDurationHours: 1
 drachtio:
-  image: cognigy.azurecr.io/vg-drachtio:1.3.0
+  image: cognigy.azurecr.io/vg-drachtio:1.3.1
   imagePullPolicy: IfNotPresent
   host: 127.0.0.1
   port: 9022
@@ -1065,7 +1081,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.15.4
+  image: cognigy.azurecr.io/vg-feature-server:2026.16.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1146,12 +1162,16 @@ featureServer:
     limits:
       cpu: "1"
       memory: 500Mi
+  readinessProbe:
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 6 # ~30s of retries once startupProbe has passed
 sileroVad:
   ## Enable vg-silero-vad microservice deployment.
   ## When enabled, feature server receives SILERO_VAD_SERVICE_URL env var
   ## pointing to this service for Plan B audio-fork VAD.
   enabled: false
-  image: cognigy.azurecr.io/vg-silero-vad:2026.15.0
+  image: cognigy.azurecr.io/vg-silero-vad:2026.16.0
   ## Default Always because the default tag is :latest (mutable) — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1319,7 +1339,7 @@ vadAutotuner:
   extraEnvVars: []
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.15.4
+  image: cognigy.azurecr.io/vg-feature-server:2026.16.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1394,7 +1414,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.15.0
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.16.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
@@ -1450,7 +1470,7 @@ featureServerLegacy:
       cpu: "1"
       memory: 500Mi
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch:2026.15.4
+  image: cognigy.azurecr.io/vg-freeswitch:2026.16.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1509,12 +1529,12 @@ freeswitchNightly:
   ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
   ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
   ## @see featureServerNightly
-  image: cognigy.azurecr.io/vg-freeswitch:2026.15.4
+  image: cognigy.azurecr.io/vg-freeswitch:2026.16.0
 freeswitchLegacy:
   ## You can specify a custom image for the FreeSWITCH in the legacy FeatureServer here
   ## To enable a "legacy FreeSWITCH", you have to enable a legacy FeatureServer.
   ## @see featureServerLegacy
-  image: cognigy.azurecr.io/vg-freeswitch:2026.15.4
+  image: cognigy.azurecr.io/vg-freeswitch:2026.16.0
 rtpEngine:
   image: cognigy.azurecr.io/vg-rtpengine:0.2.0
   imagePullPolicy: IfNotPresent
@@ -1543,7 +1563,7 @@ rtpEngine:
 mediaProcessor:
   ## Enable Media Processor for decoupled STT/TTS processing
   enabled: false
-  image: cognigy.azurecr.io/vg-media-processor:2026.15.0
+  image: cognigy.azurecr.io/vg-media-processor:2026.16.0
   imagePullPolicy: Always
   replicaCount: 2
   serviceName: media-processor
@@ -1590,7 +1610,7 @@ mediaProcessor:
       cpu: "1"
       memory: 512Mi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.15.0
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.16.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1605,7 +1625,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/vg-sbc-call-router:2026.15.0
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.16.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1636,7 +1656,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/vg-sbc-inbound:2026.15.0
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.16.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1676,7 +1696,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/vg-sbc-outbound:2026.15.0
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.16.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1714,7 +1734,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.15.0
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.16.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1729,7 +1749,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.15.0
+  image: cognigy.azurecr.io/vg-tcm:2026.16.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1775,7 +1795,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: true
-  image: cognigy.azurecr.io/vg-connector:2026.15.0
+  image: cognigy.azurecr.io/vg-connector:2026.16.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1849,7 +1869,7 @@ vgTrafficSniffer:
       cpu: "0.250"
       memory: 256Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.15.0
+  image: cognigy.azurecr.io/vg-webapp:2026.16.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:

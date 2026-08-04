@@ -161,6 +161,18 @@ spec:
               {{- else }}
               value: {{ not .Values.global.enableTtsStreaming | quote }}
               {{- end }}
+            ## CGY-34204: seeds the one-time backfill of
+            ## speech_credentials.deepgram_improvement_program_opt_in in migration 000041,
+            ## so clusters that opted out of Deepgram's Model Improvement Partnership
+            ## Program keep that setting once the decision moves onto the credential.
+            ##
+            ## Threaded from cognigyEnv rather than mounted via `envFrom: cognigy-env`
+            ## (as api-server and webapp do) on purpose: with apiMigrator.hookEnabled this
+            ## Job runs as a pre-upgrade hook at weight -1, while the cognigy-env ConfigMap
+            ## is an ordinary resource — it may not exist yet on a fresh install, and on an
+            ## upgrade it still holds the previous revision's values.
+            - name: DEEPGRAM_IMPROVEMENT_PROGRAM_OPT_OUT
+              value: {{ .Values.cognigyEnv.DEEPGRAM_IMPROVEMENT_PROGRAM_OPT_OUT | default "false" | quote }}
             {{- if .Values.apiMigrator.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.apiMigrator.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
