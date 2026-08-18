@@ -115,13 +115,10 @@ spec:
             - name: K8S_FEATURE_SERVER_SERVICE_NAME
               ## Always the headless service (works for StatefulSet and Deployment)
               value: {{ .Values.featureServer.headlessServiceName | quote }}
-            {{- /* Reloadable configs were introduced in v2026.17.0; once sbc-inbound reads canary settings from the mounted ConfigMap, this fallback can be removed in a future release. */}}
-            {{- if not .Values.global.reloadableConfig.enabled }}
             - name: K8S_FEATURE_SERVER_CANARY_ENABLED
               value: {{ .Values.featureServer.canary.enabled | quote }}
             - name: K8S_FEATURE_SERVER_CANARY_PERCENTAGE
               value: {{ .Values.featureServer.canary.trafficPercentageToNightly | quote }}
-            {{- end }}
             - name: K8S_RTPENGINE_SERVICE_NAME 
               {{- if .Values.sbc.rtp.useStatefulSet }}
               value: {{ printf "%s:%.0f" .Values.sbc.rtp.headlessServiceName .Values.sbc.rtp.port }}
@@ -205,11 +202,8 @@ spec:
               value: {{ .Values.tracing.eventsSampleRate | quote }}
             - name: ENVIRONMENT
               value: {{ .Values.tracing.environment | quote }}
-            {{- /* Reloadable configs were introduced in v2026.17.0; once this service reads COGNIGY_AI_VERSION from the mounted ConfigMap, this fallback can be removed in a future release. */}}
-            {{- if not .Values.global.reloadableConfig.enabled }}
             - name: COGNIGY_AI_VERSION
               value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
-            {{- end }}
             - name: PRIVATE_VOIP_NETWORK_CIDR
               value: {{ .Values.global.privateVoipNetworkCidr | quote }}
             - name: VG_API_BASE_URL
@@ -233,17 +227,6 @@ spec:
             {{- if .Values.sbcInbound.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcInbound.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
-          volumeMounts:
-            - name: cognigy-env-reloadable
-              mountPath: /config/env
-              readOnly: true
           envFrom:
             - configMapRef:
                 name: cognigy-env
-      volumes:
-        - name: cognigy-env-reloadable
-          configMap:
-            name: cognigy-env-reloadable
-            items:
-              - key: cognigy.yaml
-                path: cognigy.yaml

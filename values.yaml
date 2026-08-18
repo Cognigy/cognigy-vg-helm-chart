@@ -39,14 +39,6 @@ global:
   ## flag flipped per environment that the vg-connector reads as
   ## ENABLE_MICROSOFT_TEAMS to mount the Teams module. Default false.
   enableMsTeams: false
-  ## Reloadable config master switch (see docs/plans/012-reloadable-config-api-server-pilot.md
-  ## in vg-resources). Delivers COGNIGY_AI_VERSION, COGNIGY_DISPLAY_VERSION, and
-  ## K8S_FEATURE_SERVER_CANARY_ENABLED/_PERCENTAGE via a mounted ConfigMap
-  ## instead of literal pod-spec env vars, so a chart bump or canary ramp no
-  ## longer restarts every workload. Default false. Enable only once every
-  ## consuming service reads from /config/env/cognigy.yaml.
-  reloadableConfig:
-    enabled: true
 ###############
 # Cognigy ENV #
 ###############
@@ -472,47 +464,6 @@ sbc:
         operator: "Exists"
         effect: "NoSchedule"
     port: 22222
-    ## RTP traffic gate.
-    ##
-    ## A pod serves RTP unless the Elastic IP it holds is listed in
-    ## trafficGate.drainAddresses below. Unset/empty = every pod serves, which is
-    ## the behaviour of every release before this key existed.
-    trafficGate:
-      ## Renders the readinessProbe, the drain-list ConfigMap and its mount.
-      ##
-      ## Kept ALWAYS ON deliberately. Turning it on or off changes the pod
-      ## template and therefore rolls the StatefulSet; a rolling update waits for
-      ## each updated pod to become Ready, and a drained pod never does, so a gate
-      ## that appeared and disappeared could WEDGE the rollout permanently. With it
-      ## always on, every drain is a pure ConfigMap edit that restarts nothing.
-      ##
-      ## REQUIRES a vg-sbc-rtpengine-sidecar image that serves /health/ready. Set
-      ## this to false only for a cluster pinned to an older sidecar image —
-      ## otherwise its readinessProbe 404s and no sbc-rtp pod ever becomes Ready.
-      enabled: false
-      ## Addresses to take OUT of the media rotation (deny-list).
-      ##
-      ## Add an address to drain it: new calls stop, in-flight calls finish, and
-      ## NO pod restarts — the list reaches running pods via the mounted ConfigMap.
-      ## Remove it to restore service. Use for node upgrades, k8s version bumps,
-      ## rtpengine rollouts and isolating a misbehaving engine.
-      ##
-      ## Scaling up needs no entry here: a new pod claims whichever EIP is free and
-      ## serves immediately. Keeping a brand-new address out until a customer has
-      ## whitelisted it is handled by AWS tag gating, not by this list.
-      ##
-      ## Propagation: FLUX reconcile (~2m) + ConfigMap sync (up to ~60s) + probe
-      ## period + sbc-inbound/outbound DNS poll (10s).
-      ##
-      ## AWS only: the gate compares against the EC2 IMDS public-ipv4.
-      drainAddresses: []
-    ## Only rendered while trafficGate.enabled is true.
-    readinessProbe:
-      initialDelaySeconds: 10
-      periodSeconds: 10
-      timeoutSeconds: 5
-      successThreshold: 1
-      failureThreshold: 2
   ## EC2 Static EIP Allocator
   ec2EipAllocator:
     ## Only for AWS
@@ -561,7 +512,7 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.17.0
+  image: cognigy.azurecr.io/vg-api-migrator:2026.16.0
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -991,7 +942,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.3
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.17.0
+  image: cognigy.azurecr.io/vg-api-server:2026.16.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1045,19 +996,6 @@ api:
       ## Secret keys for SMTP credentials
       smtpUsernameKey: "SMTP_USERNAME"
       smtpPasswordKey: "SMTP_PASSWORD"
-  ## TEST-ONLY escape hatch for api-server's SSRF guard (ALLOW_PRIVATE_CUSTOM_URLS,
-  ## Cognigy/vg-api-server#226). When true, rejectPrivateHost lets custom URLs target
-  ## private/internal hosts at ALL guard call sites (application webhooks, custom
-  ## speech URLs, bucket endpoints); empty-hostname, obfuscated-IPv4, DNS-failure,
-  ## link-local (cloud metadata) and IPv6 checks still fail closed, and api-server
-  ## warn-logs every bypass. This MUST NEVER be enabled on production values — it
-  ## exists only for ephemeral single-tenant test clusters where the in-cluster
-  ## vg-test-harness mock-cognigy webhook is a Kubernetes Service and therefore
-  ## always both a ".local" name and a private IP.
-  ## null (default) = automatic: off, except on when vgTestHarness.enabled is true
-  ## (so the harness autoProvision Job can register its webhook). Set explicitly to
-  ## true/false to override the automatic behavior either way.
-  allowPrivateCustomUrls: null
   extraEnvVars: []
   resources:
     requests:
@@ -1105,7 +1043,7 @@ tmpban:
     ## Ban duration (hours) applied once banThreshold is reached.
     banDurationHours: 1
 drachtio:
-  image: cognigy.azurecr.io/vg-drachtio:1.3.2
+  image: cognigy.azurecr.io/vg-drachtio:1.3.1
   imagePullPolicy: IfNotPresent
   host: 127.0.0.1
   port: 9022
@@ -1143,7 +1081,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.17.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.16.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1233,7 +1171,7 @@ sileroVad:
   ## When enabled, feature server receives SILERO_VAD_SERVICE_URL env var
   ## pointing to this service for Plan B audio-fork VAD.
   enabled: false
-  image: cognigy.azurecr.io/vg-silero-vad:2026.17.0
+  image: cognigy.azurecr.io/vg-silero-vad:2026.16.0
   ## Default Always because the default tag is :latest (mutable) — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1401,7 +1339,7 @@ vadAutotuner:
   extraEnvVars: []
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.17.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.16.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1476,7 +1414,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.17.0
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.16.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
@@ -1532,24 +1470,10 @@ featureServerLegacy:
       cpu: "1"
       memory: 500Mi
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch:2026.17.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.16.0
   imagePullPolicy: IfNotPresent
-  ## FreeSWITCH log level. Valid choices (case-insensitive) are the FreeSWITCH log
-  ## levels, from least to most verbose:
-  ##   disable, console, alert, crit, err, warning, notice, info, debug
-  ## The numeric equivalents 0-7 (console=0 … debug=7) are also accepted.
-  ## Note these are the syslog-style FreeSWITCH names, not the names the other VG
-  ## components use: it is "err" and "warning" here, not "error"/"warn".
-  ## The value is passed as "--log-level <level>" to the image entrypoint, which
-  ## substitutes it into the loglevel param of switch.conf.xml (parsed by
-  ## switch_log_str2level in FreeSWITCH's switch_log.c). An unrecognised value is
-  ## silently ignored by FreeSWITCH, leaving the image default of notice in place.
-  ## Rendered by the feature-server templates rather than carried in freeswitch.args,
-  ## so it survives a freeswitch.args override (Helm replaces list values wholesale).
-  ## An explicit --log-level inside freeswitch.args still takes precedence. Defaults
-  ## to info when unset; it deliberately does not inherit global.logLevel, since that
-  ## uses a different set of level names.
-  logLevel: info
+  ## valid choices are debug, info, error, warn
+  logLevel:
   username: Cognigy
   metricsPort: 9090
   ports:
@@ -1560,6 +1484,8 @@ freeswitch:
   ## and until we don't have a solution we will force a specific codec for it. Once we have defintive solution, we uncomment this.
   args:
     - --codec-answer-generous
+    - --log-level
+    - info
     # - --g711-only OR
     # - --g711-only-alaw-preferred (this is recommended for clusters running in EU)
     # - --rtp-range-start the starting UDP port for RTP traffic
@@ -1572,11 +1498,6 @@ freeswitch:
   bufferSecs: 5
   deepgramSttUseSingleConnection: true
   azureSttUseSingleConnection: false
-  # When true (only meaningful alongside vgTestHarness.regionDns.enabled),
-  # the freeswitch pod resolves api.deepgram.com / api.eu.deepgram.com via the
-  # dedicated test-dns CoreDNS instance instead of the cluster's normal DNS —
-  # see docs/superpowers/specs/2026-07-24-deepgram-region-test-design.md.
-  regionDnsEnabled: false
   ## it is recommended to force HTTP/1 for streaming since there might be some issues with HTTP/2
   disableHttp2ForTtsStreaming: true
   extraEnvVars: []
@@ -1608,12 +1529,12 @@ freeswitchNightly:
   ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
   ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
   ## @see featureServerNightly
-  image: cognigy.azurecr.io/vg-freeswitch:2026.17.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.16.0
 freeswitchLegacy:
   ## You can specify a custom image for the FreeSWITCH in the legacy FeatureServer here
   ## To enable a "legacy FreeSWITCH", you have to enable a legacy FeatureServer.
   ## @see featureServerLegacy
-  image: cognigy.azurecr.io/vg-freeswitch:2026.17.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.16.0
 rtpEngine:
   image: cognigy.azurecr.io/vg-rtpengine:0.2.0
   imagePullPolicy: IfNotPresent
@@ -1642,7 +1563,7 @@ rtpEngine:
 mediaProcessor:
   ## Enable Media Processor for decoupled STT/TTS processing
   enabled: false
-  image: cognigy.azurecr.io/vg-media-processor:2026.17.0
+  image: cognigy.azurecr.io/vg-media-processor:2026.16.0
   imagePullPolicy: Always
   replicaCount: 2
   serviceName: media-processor
@@ -1689,17 +1610,13 @@ mediaProcessor:
       cpu: "1"
       memory: 512Mi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.17.0
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.16.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
   extraEnvVars: []
   ports:
     dtmf: 22223
-    ## Port for the RTP traffic gate's readinessProbe. Only used while
-    ## sbc.rtp.liveAddresses is set. Must not be 8001 (health) or 8002 (metrics)
-    ## — both are already bound inside this container.
-    readiness: 8003
   resources:
     requests:
       cpu: "0.100"
@@ -1708,7 +1625,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/vg-sbc-call-router:2026.17.0
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.16.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1739,7 +1656,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/vg-sbc-inbound:2026.17.0
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.16.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1779,7 +1696,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/vg-sbc-outbound:2026.17.0
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.16.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1817,7 +1734,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.17.0
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.16.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1832,7 +1749,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.17.0
+  image: cognigy.azurecr.io/vg-tcm:2026.16.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1878,7 +1795,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: true
-  image: cognigy.azurecr.io/vg-connector:2026.17.0
+  image: cognigy.azurecr.io/vg-connector:2026.16.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1951,64 +1868,10 @@ vgTrafficSniffer:
     limits:
       cpu: "0.250"
       memory: 256Mi
-####################
-# VG Audio Manager #
-####################
-## Opt-in Go service that offloads call-recording audio fork/upload from api-server.
-## When enabled + useForRecording, feature-server routes mod_audio_fork to this service.
-vgAudioManager:
-  enabled: false
-  ## When true (and enabled), feature-server sends audio forks here instead of api-server
-  useForRecording: false
-  serviceName: vg-audio-manager
-  image: cognigy.azurecr.io/vg-audio-manager:2026.16.0-rc1
-  imagePullPolicy: IfNotPresent
-  replicaCount: 2
-  affinity:
-    podAntiAffinity:
-      preferredDuringSchedulingIgnoredDuringExecution:
-        - weight: 100
-          podAffinityTerm:
-            labelSelector:
-              matchExpressions:
-                - key: app
-                  operator: In
-                  values:
-                    - vg-audio-manager
-            topologyKey: kubernetes.io/hostname
-  nodeSelector: {}
-  priorityClassName: ""
-  podSecurityContext: {}
-  containerSecurityContext:
-    allowPrivilegeEscalation: false
-    capabilities:
-      drop:
-        - ALL
-    readOnlyRootFilesystem: false
-    runAsNonRoot: true
-    runAsUser: 1000
-  tolerations: []
-  terminationGracePeriodSeconds: 30
-  port: 3000
-  service:
-    type: ClusterIP
-    port: 3000
-  ## valid choices are debug, info, warn, error
-  logLevel:
-  extraEnvVars: []
-  resources:
-    requests:
-      cpu: "0.250"
-      memory: 256Mi
-    limits:
-      cpu: "0.500"
-      memory: 512Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.17.0
+  image: cognigy.azurecr.io/vg-webapp:2026.16.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
-  ## hot-reload property
-  displayVersionOverride: ""
   affinity:
     podAntiAffinity:
       preferredDuringSchedulingIgnoredDuringExecution:
@@ -2346,55 +2209,6 @@ hpa:
             - type: Pods
               value: 1
               periodSeconds: 120
-    ## Opt-in: enable together with featureServerNightly.enabled. Default false so an
-    ## HPA/ScaledObject is not rendered against a missing workload.
-    featureServerNightly:
-      enabled: false
-      name: feature-server-nightly
-      ## scaleTargetRef.kind is overridden by the template to follow
-      ## featureServerNightly.useStatefulSet — see hpa-template.yaml.
-      scaleTargetRef:
-        apiVersion: apps/v1
-        kind: StatefulSet
-      minReplicas: 2
-      maxReplicas: 10
-      keda:
-        enabled: true
-        triggers:
-          - type: cpu
-            metricType: Utilization
-            metadata:
-              value: "50"
-          - type: prometheus
-            metricType: AverageValue
-            metadata:
-              serverAddress: http://monitoring-stack-kubeproms-prometheus.monitoring.svc.cluster.local:9090
-              query: sum(vg_feature_server_call_session_count{namespace="{{ .Release.Namespace }}",pod=~".*nightly.*"})
-              threshold: "120"
-      ## Native HPA fallback if keda.enabled is set to false for this service.
-      metrics:
-        - type: Resource
-          resource:
-            name: cpu
-            target:
-              type: Utilization
-              averageUtilization: 50
-        - type: Pods
-          pods:
-            metric:
-              name: vg_feature_server_call_session_count
-            target:
-              type: AverageValue
-              averageValue: "120"
-      ## Same drain-aware scale-down as feature-server — nightly pods carry live calls too.
-      behavior:
-        scaleUp: {}
-        scaleDown:
-          stabilizationWindowSeconds: 300
-          policies:
-            - type: Pods
-              value: 1
-              periodSeconds: 120
     api:
       enabled: true
       name: api-server
@@ -2421,42 +2235,6 @@ hpa:
       minReplicas: 2
       maxReplicas: 10
       behavior: {}
-    ## Opt-in: enable together with vgAudioManager.enabled. Default false so a
-    ## ScaledObject is not rendered against a missing Deployment.
-    vgAudioManager:
-      enabled: false
-      name: vg-audio-manager
-      keda:
-        enabled: true
-        triggers:
-          ## CPU-primary (same shape as api-server). Encoding/upload is CPU-bound;
-          ## active WebSocket count is available as vg_audio_manager_active_websocket_connections
-          ## if a prometheus trigger is needed later (see sileroVad).
-          - type: cpu
-            metricType: Utilization
-            metadata:
-              value: "50"
-      ## Native HPA fallback if keda.enabled is set to false for this service.
-      metrics:
-        - type: Resource
-          resource:
-            name: cpu
-            target:
-              type: Utilization
-              averageUtilization: 50
-      scaleTargetRef:
-        apiVersion: apps/v1
-        kind: Deployment
-      minReplicas: 2
-      maxReplicas: 10
-      ## Rate-limit scale-down while recordings are still uploading on draining pods.
-      behavior:
-        scaleDown:
-          stabilizationWindowSeconds: 300
-          policies:
-            - type: Pods
-              value: 1
-              periodSeconds: 60
     sbcInbound:
       enabled: true
       name: sbc-inbound
@@ -2969,39 +2747,6 @@ vgTestHarness:
     resources:
       requests: {cpu: "0.100", memory: 128Mi}
       limits: {cpu: "0.200", memory: 256Mi}
-  mockDeepgramRegion:
-    image: cognigydevelopment.azurecr.io/vg-mock-deepgram-region:main
-    resources:
-      requests: {cpu: "0.100", memory: 64Mi}
-      limits: {cpu: "0.200", memory: 128Mi}
-  # Dedicated CoreDNS instance scoped to exactly two hostnames
-  # (api.deepgram.com, api.eu.deepgram.com), used only by the FreeSWITCH pod
-  # opted in via dnsConfig — see freeswitch.regionDnsEnabled. Everything else
-  # forwards to the cluster's real DNS untouched. This is a narrow, two-
-  # hostname exception to the "no CoreDNS" decision recorded in
-  # docs/superpowers/specs/2026-06-25-vg-test-harness-integration.md — see
-  # docs/superpowers/specs/2026-07-24-deepgram-region-test-design.md for why.
-  regionDns:
-    enabled: false
-    image: coredns/coredns:1.11.3
-    # Static ClusterIP for the test-dns Service. Required (no safe default —
-    # a valid address depends on each cluster's Service CIDR, which varies
-    # across AWS/Azure/GCP/STACKIT) the moment regionDns.enabled is true,
-    # because Kubernetes' PodDNSConfig.nameservers only accepts literal IPs
-    # (they're written verbatim into /etc/resolv.conf), never a hostname —
-    # see freeswitch.regionDnsEnabled. Choose an unused address within this
-    # cluster's Service CIDR.
-    clusterIP: ""
-    # CoreDNS's `forward` plugin only accepts a literal IP address or a
-    # readable file path (see plugin/pkg/parse/host.go, HostPortOrFile) — a
-    # hostname like kube-dns.kube-system.svc.cluster.local is rejected and
-    # the test-dns pod would CrashLoop at startup. The test-dns pod runs
-    # with the default dnsPolicy, so its own /etc/resolv.conf already points
-    # at the real cluster DNS — forwarding there is safe and cluster-portable.
-    upstream: /etc/resolv.conf
-    resources:
-      requests: {cpu: "0.050", memory: 32Mi}
-      limits: {cpu: "0.100", memory: 64Mi}
   sipCaller:
     image: cognigydevelopment.azurecr.io/vg-sip-caller:main
     resources:
@@ -3025,13 +2770,6 @@ vgTestHarness:
     adminPassSecretRef: # alternative to adminPass: read password from an existing K8s secret
       name: "" # secret name (e.g. vg-api-cognigy-ai-creds); leave empty to use adminPass
       key: "password" # key inside the secret
-    # Value stored on the region-test deepgram credentials (gated by
-    # vgTestHarness.regionDns.enabled below, not by this field). Deliberately
-    # NOT a real Deepgram API key and never needs to be one: the region test's
-    # mock pods abort the TLS handshake before Deepgram's WS upgrade (where a
-    # key would be sent as an Authorization header) ever happens. A fixed
-    # placeholder is fine — vg-api-server only requires the field non-empty.
-    deepgramApiKey: "region-test-placeholder-key-not-real"
     phoneNumber: "+15005550001"
     # Pod CIDR of the cluster — allow-listed as the test carrier's SIP gateway
     # source so sbc-inbound accepts INVITEs from sip-caller pods. Set to the

@@ -66,7 +66,6 @@ spec:
             matchLabels:
               app: feature-server-legacy
       restartPolicy: Always
-      {{- include "vg.freeswitch.regionDnsConfig" $ | nindent 6 }}
       initContainers:
         - image: kanisterio/mysql-sidecar:0.40.0
           name: db-create-wait
@@ -194,7 +193,6 @@ spec:
             {{- range .Values.freeswitch.args }}
             - {{ . }}
             {{- end }}
-            {{- with (include "vg.freeswitch.logLevelArgs" $) }}{{- . | nindent 12 }}{{- end }}
           env: 
             - name: MOD_AUDIO_FORK_SUBPROTOCOL_NAME
               value: audio.jambonz.org
@@ -288,11 +286,8 @@ spec:
               exec:
                 command: ["/bin/sh", "-c", "/opt/app/bin/k8s-pre-stop-hook.js"]
           volumeMounts:
-            - mountPath: /tmp
+            - mountPath: /tmp 
               name: temp-audio-volume
-            - name: cognigy-env-reloadable
-              mountPath: /config/env
-              readOnly: true
           env:
             - name: NODE_ENV
               {{- if .Values.featureServerLegacy.forDevelopment }}
@@ -327,11 +322,7 @@ spec:
             - name: JAMBONES_API_BASE_URL
               value: {{ .Values.ingress.api.host }}/v1
             - name: JAMBONZ_RECORD_WS_BASE_URL
-              {{- if and .Values.vgAudioManager.enabled .Values.vgAudioManager.useForRecording }}
-              value: {{ printf "\"ws://%s:%s/v1\"" .Values.vgAudioManager.serviceName (toString (int .Values.vgAudioManager.port)) }}
-              {{- else }}
               value: {{ printf "\"ws://%s:%s/v1\"" .Values.api.serviceName (toString (int .Values.api.port)) }}
-              {{- end }}
             - name: JAMBONZ_RECORD_WS_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -437,11 +428,8 @@ spec:
               value: {{ .Values.tracing.eventsSampleRate | quote }}
             - name: ENVIRONMENT
               value: {{ .Values.tracing.environment | quote }}
-            {{- /* Reloadable configs were introduced in v2026.17.0; once this service reads COGNIGY_AI_VERSION from the mounted ConfigMap, this fallback can be removed in a future release. */}}
-            {{- if not .Values.global.reloadableConfig.enabled }}
             - name: COGNIGY_AI_VERSION
               value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
-            {{- end }}
             - name: SIGTERM_FORCE_CLOSE_TIMEOUT
               value: {{ .Values.featureServerLegacy.sigtermForceCloseTimeoutMs | quote }}
             - name: NODE_OPTIONS
@@ -514,10 +502,4 @@ spec:
         - name: fs-core-dumps
           emptyDir:
             sizeLimit: "2Gi"
-        - name: cognigy-env-reloadable
-          configMap:
-            name: cognigy-env-reloadable
-            items:
-              - key: cognigy.yaml
-                path: cognigy.yaml
 {{- end }}
