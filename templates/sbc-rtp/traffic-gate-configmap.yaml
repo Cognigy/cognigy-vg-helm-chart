@@ -1,0 +1,35 @@
+{{- if .Values.sbc.rtp.trafficGate.enabled }}
+{{- /*
+  RTP traffic gate drain list. Mounted by the rtpengine sidecar at
+  /config/rtp-gate/traffic-gate.yaml and re-read live, so adding or removing an
+  address drains or restores it without restarting any pod.
+
+  Rendered UNCONDITIONALLY (whenever the gate is enabled), with an empty value
+  when nothing is drained. Two reasons this must not become conditional:
+
+    1. An absent key must unambiguously mean "the mounted file is missing or
+       wrong" so the sidecar can fail closed. If the key came and went with the
+       drain list, absence would be ambiguous.
+    2. Making the ConfigMap/mount/probe appear and disappear changes the pod
+       template, which rolls the StatefulSet. A rolling update waits for each
+       updated pod to be Ready — and a drained pod never is — so a gate change
+       that altered the pod template would WEDGE the rollout permanently. Keeping
+       the template constant is what makes drain a pure ConfigMap edit.
+
+  DO NOT add this ConfigMap to a checksum/... pod-template annotation. That would
+  restart every sbc-rtp pod on a drain and kill the in-flight calls this exists
+  to preserve.
+*/}}
+{{- include "vg.sbcRtp.trafficGate.validatePort" $ }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sbc-rtp-traffic-gate
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: sbc-rtp
+    owner-team: echo
+data:
+  traffic-gate.yaml: |
+    SBC_RTP_DRAIN_ADDRESSES: {{ include "vg.sbcRtp.drainAddresses" $ | quote }}
+{{- end }}

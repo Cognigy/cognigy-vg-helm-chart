@@ -365,8 +365,11 @@ spec:
               value: {{ .Values.tracing.eventsSampleRate | quote }}
             - name: ENVIRONMENT
               value: {{ .Values.tracing.environment | quote }}
+            {{- /* Reloadable configs were introduced in v2026.17.0; once this service reads COGNIGY_AI_VERSION from the mounted ConfigMap, this fallback can be removed in a future release. */}}
+            {{- if not .Values.global.reloadableConfig.enabled }}
             - name: COGNIGY_AI_VERSION
               value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
+            {{- end }}
             - name: VG_REDIS_BAN_THRESHOLD
               value: {{ .Values.tmpban.register.banThreshold | quote }}
             - name: VG_REDIS_TRACKING_WINDOW_MINUTES
@@ -384,14 +387,17 @@ spec:
             {{- if .Values.sbcSipSidecar.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcSipSidecar.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
-          {{- if eq .Values.cloud "stackit" }}
           volumeMounts:
+            {{- if eq .Values.cloud "stackit" }}
             - name: sbc-sip-sidecar-patch
               mountPath: /patch
               readOnly: true
             - name: node-ip
               mountPath: /etc/nodeip
-          {{- end }}
+            {{- end }}
+            - name: cognigy-env-reloadable
+              mountPath: /config/env
+              readOnly: true
           envFrom:
             - configMapRef:
                 name: cognigy-env
@@ -421,4 +427,10 @@ spec:
           name: sbc-sip-sidecar-patch
           defaultMode: 0755
       {{- end }}
+      - name: cognigy-env-reloadable
+        configMap:
+          name: cognigy-env-reloadable
+          items:
+            - key: cognigy.yaml
+              path: cognigy.yaml
 {{- end }}

@@ -61,10 +61,13 @@ spec:
               value: {{ .Values.tracing.eventsSampleRate | quote }}
             - name: ENVIRONMENT
               value: {{ .Values.tracing.environment | quote }}
+            {{- /* Reloadable configs were introduced in v2026.17.0; once webapp reads COGNIGY_VG_VERSION and COGNIGY_DISPLAY_VERSION from the mounted ConfigMap, this fallback can be removed in a future release. */}}
+            {{- if not .Values.global.reloadableConfig.enabled }}
             - name: COGNIGY_VG_VERSION
               value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9]+)?" .Chart.Version | quote }}
             - name: COGNIGY_DISPLAY_VERSION
               value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.AppVersion | quote }}
+            {{- end }}
             - name: COGNIGY_URL
               value: {{ .Values.webapp.cognigyUrl | quote }}
             - name: ENABLE_COGNIGY_LOGIN
@@ -131,6 +134,17 @@ spec:
             {{- if .Values.webapp.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.webapp.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
+          volumeMounts:
+            - name: cognigy-env-reloadable
+              mountPath: /config/env
+              readOnly: true
           envFrom:
             - configMapRef:
                 name: cognigy-env
+      volumes:
+        - name: cognigy-env-reloadable
+          configMap:
+            name: cognigy-env-reloadable
+            items:
+              - key: cognigy.yaml
+                path: cognigy.yaml

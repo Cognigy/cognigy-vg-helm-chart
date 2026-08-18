@@ -37,13 +37,21 @@ spec:
             {{- else }}
             - "--admin-pass={{ required "vgTestHarness.autoProvision.adminPass is required when autoProvision is enabled (or set adminPassSecretRef.name)" .Values.vgTestHarness.autoProvision.adminPass }}"
             {{- end }}
-            - --webhook-url=http://mock-cognigy:8080/voiceGateway
+            # FQDN, not the short service name: the api-server's SSRF guard
+            # validates hook hostnames with dns.resolve4/6, which bypasses the
+            # pod's Kubernetes search domains — a short name is NXDOMAIN there
+            # and the provision PUT is answered 400.
+            - --webhook-url=http://mock-cognigy.{{ .Release.Namespace }}.svc.cluster.local:8080/voiceGateway
             - --phone-number={{ .Values.vgTestHarness.autoProvision.phoneNumber | default "+15005550001" }}
             {{- with .Values.vgTestHarness.autoProvision.carrierSourceIPv4 }}
             - "--carrier-source-ipv4={{ . }}"
             {{- end }}
             {{- with .Values.vgTestHarness.autoProvision.carrierSourceNetmask }}
             - "--carrier-source-netmask={{ . }}"
+            {{- end }}
+            {{- if .Values.vgTestHarness.regionDns.enabled }}
+            - --region-test-enabled=true
+            - "--deepgram-api-key={{ .Values.vgTestHarness.autoProvision.deepgramApiKey }}"
             {{- end }}
             {{- if .Values.vgTestHarness.autoProvision.recording.enabled }}
             - --enable-recording
