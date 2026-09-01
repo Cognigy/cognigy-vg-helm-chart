@@ -19,6 +19,9 @@ spec:
     {{- if and (eq $hpa_val.name "feature-server") (not $.Values.featureServer.useStatefulSet) }}
     ## feature-server workload kind follows featureServer.useStatefulSet
     kind: Deployment
+    {{- else if and (eq $hpa_val.name "feature-server-nightly") (not $.Values.featureServerNightly.useStatefulSet) }}
+    ## feature-server-nightly workload kind follows featureServerNightly.useStatefulSet
+    kind: Deployment
     {{- else }}
     kind: {{ $hpa_val.scaleTargetRef.kind }}
     {{- end }}
@@ -50,6 +53,9 @@ spec:
     apiVersion: {{ $hpa_val.scaleTargetRef.apiVersion }}
     {{- if and (eq $hpa_val.name "feature-server") (not $.Values.featureServer.useStatefulSet) }}
     ## feature-server workload kind follows featureServer.useStatefulSet
+    kind: Deployment
+    {{- else if and (eq $hpa_val.name "feature-server-nightly") (not $.Values.featureServerNightly.useStatefulSet) }}
+    ## feature-server-nightly workload kind follows featureServerNightly.useStatefulSet
     kind: Deployment
     {{- else }}
     kind: {{ $hpa_val.scaleTargetRef.kind }}

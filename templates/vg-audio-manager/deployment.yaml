@@ -1,0 +1,171 @@
+{{- if .Values.vgAudioManager.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vg-audio-manager
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-audio-manager
+    owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-audio-manager.git"
+    "cognigy.com/source-code.db-create-wait": "empty"
+spec:
+  {{- /* Intentional: guard includes .vgAudioManager.enabled so spec.replicas is only
+       suppressed when this service's HPA is actually active. The two-condition guard
+       used by always-on services would drop replicas even when the per-service HPA
+       entry is disabled. */ -}}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) ($.Values.hpa.services.vgAudioManager.enabled)) }}
+  replicas: {{ .Values.vgAudioManager.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: vg-audio-manager
+  template:
+    metadata:
+      labels:
+        app: vg-audio-manager
+      annotations:
+        checksum/mysql-password: {{ include (print $.Template.BasePath "/common-secrets/voicegateway-mysql-password.yaml") . | sha256sum }}
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- if .Values.vgAudioManager.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.vgAudioManager.terminationGracePeriodSeconds }}
+      {{- end }}
+      {{- if .Values.vgAudioManager.affinity }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgAudioManager.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if or (.Values.vgAudioManager.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector)) }}
+      nodeSelector:
+        {{- if .Values.vgAudioManager.nodeSelector }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgAudioManager.nodeSelector "context" $) | nindent 8 }}
+        {{- end }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) }}
+          {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.vgAudioManager.priorityClassName }}
+      priorityClassName: {{ .Values.vgAudioManager.priorityClassName }}
+      {{- end }}
+      {{- if .Values.vgAudioManager.podSecurityContext }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgAudioManager.podSecurityContext "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if or (.Values.vgAudioManager.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations)) }}
+      tolerations:
+        {{- if .Values.vgAudioManager.tolerations }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgAudioManager.tolerations "context" $) | nindent 8 }}
+        {{- end }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) }}
+          {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: vg-audio-manager
+      restartPolicy: Always
+      initContainers:
+        - image: kanisterio/mysql-sidecar:0.40.0
+          name: db-create-wait
+          env:
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-mysql-password
+                  key: mysql-password
+          command:
+            - sh
+            - -c
+            - |
+              until mysql -u {{ .Values.mysql.auth.username }} -D {{ .Values.mysql.database.name }} -h {{ .Values.mysql.host }} -p${PASSWORD} --protocol=tcp -e "select count(*) from accounts";
+              do
+                sleep 5
+              done
+      containers:
+        - name: vg-audio-manager
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.vgAudioManager.image) }}
+          imagePullPolicy: {{ .Values.vgAudioManager.imagePullPolicy }}
+          {{- if .Values.vgAudioManager.containerSecurityContext }}
+          securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgAudioManager.containerSecurityContext "context" $) | nindent 12 }}
+          {{- end }}
+          resources: {{- toYaml .Values.vgAudioManager.resources | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.vgAudioManager.port }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: http
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: http
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /health/liveness
+              port: http
+            failureThreshold: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          env:
+            - name: HTTP_PORT
+              value: {{ .Values.vgAudioManager.port | quote }}
+            - name: METRICS_PORT
+              value: {{ .Values.metrics.port | quote }}
+            - name: LOG_LEVEL
+              value: {{ if .Values.vgAudioManager.logLevel }}{{ .Values.vgAudioManager.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+            - name: MYSQL_HOST
+              value: {{ .Values.mysql.host | quote }}
+            - name: MYSQL_PORT
+              value: {{ .Values.mysql.port | quote }}
+            - name: MYSQL_DATABASE
+              value: {{ .Values.mysql.database.name | quote }}
+            - name: MYSQL_USER
+              value: {{ .Values.mysql.auth.username | quote }}
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-mysql-password
+                  key: mysql-password
+            - name: ENCRYPTION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-jwt
+                  key: jwt
+            - name: WS_AUTH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-call-recording-credentials
+                  key: username
+            - name: WS_AUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-call-recording-credentials
+                  key: password
+            - name: K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: K8S_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            {{- if .Values.vgAudioManager.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgAudioManager.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
+{{- end }}

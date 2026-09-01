@@ -1,0 +1,22 @@
+{{- if and .Values.vgTestHarness.enabled .Values.vgTestHarness.regionDns.enabled }}
+{{- range list "eu" "intl" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-deepgram-{{ . }}
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: mock-deepgram-{{ . }}
+    owner-team: echo
+spec:
+  type: ClusterIP
+  selector:
+    app: mock-deepgram-{{ . }}
+  ports:
+    - name: tls
+      port: 443
+      targetPort: 443
+      protocol: TCP
+---
+{{- end }}
+{{- end }}

@@ -118,6 +118,10 @@ spec:
             ## CRUD route mount in lib/routes/api/vendor-integrations.ts.
             - name: ENABLE_GENESYS_AUDIOHOOK
               value: {{ .Values.global.enableGenesysAudioHook | quote }}
+            ## MS Teams master switch — same gate, so the vendor_integrations
+            ## CRUD route also mounts when only MS Teams (not Genesys) is on.
+            - name: ENABLE_MICROSOFT_TEAMS
+              value: {{ .Values.global.enableMsTeams | quote }}
             - name: K8S
               value: {{ .Values.global.k8s | quote }}
             - name: K8S_NAMESPACE
@@ -127,10 +131,13 @@ spec:
             - name: K8S_FEATURE_SERVER_SERVICE_NAME
               ## Always the headless service (works for StatefulSet and Deployment)
               value: {{ .Values.featureServer.headlessServiceName | quote }}
+            {{- /* Reloadable configs were introduced in v2026.17.0; when global.reloadableConfig.enabled=true, api-server should read canary settings from the mounted ConfigMap. Keep these env vars as a backward-compat fallback and remove once older images are no longer supported. */}}
+            {{- if not .Values.global.reloadableConfig.enabled }}
             - name: K8S_FEATURE_SERVER_CANARY_ENABLED
               value: {{ .Values.featureServer.canary.enabled | quote }}
             - name: K8S_FEATURE_SERVER_CANARY_PERCENTAGE
               value: {{ .Values.featureServer.canary.trafficPercentageToNightly | quote }}
+            {{- end }}
             - name: HOMER_BASE_URL
               value: {{ .Values.homer.urlPrefixServiceConnection }}{{ .Values.homer.serviceName }}
             - name: HOMER_USERNAME
@@ -184,8 +191,11 @@ spec:
               value: {{ .Values.tracing.eventsSampleRate | quote }}
             - name: ENVIRONMENT
               value: {{ .Values.tracing.environment | quote }}
+            {{- /* Reloadable configs were introduced in v2026.17.0; once this service reads COGNIGY_AI_VERSION from the mounted ConfigMap, this fallback can be removed in a future release. */}}
+            {{- if not .Values.global.reloadableConfig.enabled }}
             - name: COGNIGY_AI_VERSION
               value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
+            {{- end }}
             - name: ENABLE_DEBOUNCE_MIDDLEWARE
               value: {{ .Values.api.enableDebounceMiddleware | quote }}
             - name: DEBOUNCE_TIME_IN_SECONDS
@@ -225,6 +235,20 @@ spec:
             {{- end }}
             - name: ENABLE_PREPARE_COGNIGY_DATA
               value: {{ .Values.api.enablePrepareCognigyData | quote }}
+            ## TEST-ONLY SSRF-guard escape hatch — see api.allowPrivateCustomUrls in
+            ## values.yaml; must never be enabled on production values. When the key
+            ## is left null (default), it follows vgTestHarness.enabled so the harness
+            ## autoProvision Job can point the test application's webhook at the
+            ## in-cluster mock-cognigy Service. The env var is omitted entirely when
+            ## the resulting value is false (guard fully active).
+            {{- $allowPrivateCustomUrls := .Values.api.allowPrivateCustomUrls }}
+            {{- if kindIs "invalid" $allowPrivateCustomUrls }}
+            {{- $allowPrivateCustomUrls = .Values.vgTestHarness.enabled }}
+            {{- end }}
+            {{- if $allowPrivateCustomUrls }}
+            - name: ALLOW_PRIVATE_CUSTOM_URLS
+              value: "true"
+            {{- end }}
             {{- if .Values.api.vgTeam.enabled }}
             - name: EMAIL_NOTIFICATION_SMTP_HOST
               value: {{ .Values.api.vgTeam.emailNotification.smtpHost | quote }}
@@ -299,6 +323,17 @@ spec:
                   name: {{ $sharedSpeechCredentialsSecret }}
                   key: {{ $.Values.sharedSpeechCredentials.secretKey | quote }}
             {{- end }}
+          volumeMounts:
+            - name: cognigy-env-reloadable
+              mountPath: /config/env
+              readOnly: true
           envFrom:
             - configMapRef:
                 name: cognigy-env
+      volumes:
+        - name: cognigy-env-reloadable
+          configMap:
+            name: cognigy-env-reloadable
+            items:
+              - key: cognigy.yaml
+                path: cognigy.yaml

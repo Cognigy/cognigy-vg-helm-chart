@@ -18,6 +18,15 @@
     "required": []
   },
   "properties": {
+    "api": {
+      "type": "object",
+      "properties": {
+        "allowPrivateCustomUrls": {
+          "description": "TEST-ONLY: renders api-server's ALLOW_PRIVATE_CUSTOM_URLS SSRF escape hatch. Must never be enabled on production values. null (default) follows vgTestHarness.enabled; explicit true/false overrides.",
+          "type": ["boolean", "null"]
+        }
+      }
+    },
     "nice": {
       "type": "object",
       "properties": {
@@ -44,6 +53,23 @@
           "properties": {
             "image": { "type": "string" },
             "defaultTranscript": { "type": "string" },
+            "resources": { "type": "object" }
+          }
+        },
+        "mockDeepgramRegion": {
+          "type": "object",
+          "properties": {
+            "image": { "type": "string" },
+            "resources": { "type": "object" }
+          }
+        },
+        "regionDns": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "image": { "type": "string" },
+            "clusterIP": { "type": "string" },
+            "upstream": { "type": "string" },
             "resources": { "type": "object" }
           }
         },
@@ -75,6 +101,7 @@
                 "key": { "type": "string" }
               }
             },
+            "deepgramApiKey": { "type": "string" },
             "phoneNumber": { "type": "string" },
             "carrierSourceIPv4": { "type": "string" },
             "carrierSourceNetmask": { "type": "integer" },
@@ -92,6 +119,12 @@
           }
         },
         "deepgramBridge": { "type": "object" }
+      }
+    },
+    "freeswitch": {
+      "type": "object",
+      "properties": {
+        "regionDnsEnabled": { "type": "boolean" }
       }
     },
     "sileroVad": {

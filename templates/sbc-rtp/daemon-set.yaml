@@ -143,6 +143,11 @@ spec:
             - name: health
               containerPort: {{ .Values.health.port }}
               protocol: TCP
+            {{- if .Values.sbc.rtp.trafficGate.enabled }}
+            - name: readiness
+              containerPort: {{ .Values.rtpEngineSidecar.ports.readiness }}
+              protocol: TCP
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /health/liveness
@@ -155,6 +160,17 @@ spec:
             httpGet:
               path: /health/startup
               port: {{ .Values.health.port }}
+          {{- if .Values.sbc.rtp.trafficGate.enabled }}
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: {{ .Values.rtpEngineSidecar.ports.readiness }}
+            initialDelaySeconds: {{ .Values.sbc.rtp.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.sbc.rtp.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.sbc.rtp.readinessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.sbc.rtp.readinessProbe.successThreshold }}
+            failureThreshold: {{ .Values.sbc.rtp.readinessProbe.failureThreshold }}
+          {{- end }}
           env:
             - name: K8S 
               value: {{ .Values.global.k8s | quote }}
@@ -198,12 +214,47 @@ spec:
               value: {{ .Values.tracing.eventsSampleRate | quote }}
             - name: ENVIRONMENT
               value: {{ .Values.tracing.environment | quote }}
+            {{- /* Reloadable configs were introduced in v2026.17.0; once this service reads COGNIGY_AI_VERSION from the mounted ConfigMap, this fallback can be removed in a future release. */}}
+            {{- if not .Values.global.reloadableConfig.enabled }}
             - name: COGNIGY_AI_VERSION
               value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
+            {{- end }}
+            {{- if .Values.sbc.rtp.trafficGate.enabled }}
+            - name: SBC_RTP_TRAFFIC_GATE_ENABLED
+              value: "true"
+            - name: READINESS_PORT
+              value: {{ .Values.rtpEngineSidecar.ports.readiness | quote }}
+            - name: IMDSv2
+              value: {{ .Values.aws.useIMDSv2 | quote }}
+            {{- end }}
             {{- if .Values.rtpEngineSidecar.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.rtpEngineSidecar.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
+          volumeMounts:
+            - name: cognigy-env-reloadable
+              mountPath: /config/env
+              readOnly: true
+            {{- if .Values.sbc.rtp.trafficGate.enabled }}
+            - name: sbc-rtp-traffic-gate
+              mountPath: /config/rtp-gate
+              readOnly: true
+            {{- end }}
           envFrom:
             - configMapRef:
-                name: cognigy-env        
+                name: cognigy-env
+      volumes:
+        - name: cognigy-env-reloadable
+          configMap:
+            name: cognigy-env-reloadable
+            items:
+              - key: cognigy.yaml
+                path: cognigy.yaml
+        {{- if .Values.sbc.rtp.trafficGate.enabled }}
+        - name: sbc-rtp-traffic-gate
+          configMap:
+            name: sbc-rtp-traffic-gate
+            items:
+              - key: traffic-gate.yaml
+                path: traffic-gate.yaml
+        {{- end }}
 {{- end }}

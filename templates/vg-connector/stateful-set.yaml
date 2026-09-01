@@ -63,11 +63,14 @@ spec:
               exec:
                 command: ["sleep", "5"]
           livenessProbe:
+            # No initialDelaySeconds: startupProbe below already blocks this
+            # probe from running at all until /health/startup succeeds, so an
+            # extra fixed delay here only adds latency to detecting a genuine
+            # post-boot hang, without protecting anything during startup.
             httpGet:
               path: /health/liveness
               port: {{ .Values.health.port }}
             failureThreshold: 3
-            initialDelaySeconds: 90
             periodSeconds: 60
             timeoutSeconds: 10
           startupProbe:
@@ -77,9 +80,30 @@ spec:
             failureThreshold: 30
             periodSeconds: 10
             timeoutSeconds: 5
+          readinessProbe:
+            # startupProbe succeeding does NOT by itself gate this pod's Ready
+            # condition or its per-ordinal Service membership (traefik-services.yaml):
+            # kubelet only withholds traffic from a pod when a readinessProbe is
+            # present at all (pkg/kubelet/prober/prober_manager.go computes
+            # `ready = !exists` when none is configured), and a container is
+            # marked Running by the container runtime the moment its entrypoint
+            # is exec'd — well before main.ts finishes connecting to Redis/
+            # drachtio and mounting the ACS/Teams routes. Reusing the
+            # startupProbe's endpoint is enough: kubelet won't evaluate this
+            # probe until startupProbe first succeeds anyway, but this probe's
+            # mere existence is what withholds traffic until that happens.
+            httpGet:
+              path: /health/startup
+              port: {{ .Values.health.port }}
+            failureThreshold: 3
+            periodSeconds: 10
+            timeoutSeconds: 5
           env:
+            {{- /* Reloadable configs were introduced in v2026.17.0; once this service reads COGNIGY_AI_VERSION from the mounted ConfigMap, this fallback can be removed in a future release. */}}
+            {{- if not .Values.global.reloadableConfig.enabled }}
             - name: COGNIGY_AI_VERSION
               value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
+            {{- end }}
             - name: ENVIRONMENT
               value: {{ .Values.tracing.environment | quote }}
             - name: JAMBONES_MYSQL_DATABASE
@@ -140,6 +164,10 @@ spec:
             {{- if .Values.vgConnector.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgConnector.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
+          volumeMounts:
+            - name: cognigy-env-reloadable
+              mountPath: /config/env
+              readOnly: true
           envFrom:
             - configMapRef:
                 name: cognigy-env
@@ -170,4 +198,11 @@ spec:
             {{- if .Values.drachtio.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.drachtio.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
+      volumes:
+        - name: cognigy-env-reloadable
+          configMap:
+            name: cognigy-env-reloadable
+            items:
+              - key: cognigy.yaml
+                path: cognigy.yaml
 {{- end }}

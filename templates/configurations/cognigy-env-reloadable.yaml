@@ -1,0 +1,14 @@
+{{- $config := dict }}
+{{- $_ := set $config "COGNIGY_AI_VERSION" (regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version) }}
+{{- $_ := set $config "COGNIGY_VG_VERSION" (regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9]+)?" .Chart.Version) }}
+{{- $_ := set $config "COGNIGY_DISPLAY_VERSION" (.Values.webapp.displayVersionOverride | default (regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.AppVersion)) }}
+{{- $_ := set $config "K8S_FEATURE_SERVER_CANARY_ENABLED" (.Values.featureServer.canary.enabled | toString) }}
+{{- $_ := set $config "K8S_FEATURE_SERVER_CANARY_PERCENTAGE" (.Values.featureServer.canary.trafficPercentageToNightly | toString) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cognigy-env-reloadable
+  namespace: {{ $.Release.Namespace | quote }}
+data:
+  cognigy.yaml: |
+    {{- toYaml $config | nindent 4 }}

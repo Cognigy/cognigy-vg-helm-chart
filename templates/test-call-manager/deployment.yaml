@@ -116,12 +116,26 @@ spec:
               value: {{ .Values.tracing.eventsSampleRate | quote }}
             - name: ENVIRONMENT
               value: {{ .Values.tracing.environment | quote }}
+            {{- /* Reloadable configs were introduced in v2026.17.0; once this service reads COGNIGY_AI_VERSION from the mounted ConfigMap, this fallback can be removed in a future release. */}}
+            {{- if not .Values.global.reloadableConfig.enabled }}
             - name: COGNIGY_AI_VERSION
               value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
+            {{- end }}
             {{- if .Values.testCallManager.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.testCallManager.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
+          volumeMounts:
+            - name: cognigy-env-reloadable
+              mountPath: /config/env
+              readOnly: true
           envFrom:
             - configMapRef:
                 name: cognigy-env
+      volumes:
+        - name: cognigy-env-reloadable
+          configMap:
+            name: cognigy-env-reloadable
+            items:
+              - key: cognigy.yaml
+                path: cognigy.yaml
 {{- end }}

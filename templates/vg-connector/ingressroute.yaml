@@ -1,4 +1,4 @@
-{{- if and .Values.vgConnector.enabled .Values.ingress.enabled .Values.traefik.enabled }}
+{{- if and .Values.vgConnector.enabled .Values.ingress.enabled }}
 {{- $host := .Values.ingress.vgConnector.host }}
 {{- $entry := ternary "websecure" "web" .Values.tls.enabled }}
 {{- $whitelist := .Values.ingress.vgConnector.ipWhiteListMiddleware.enabled }}
