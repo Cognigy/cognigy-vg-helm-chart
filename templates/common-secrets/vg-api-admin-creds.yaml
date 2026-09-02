@@ -1,0 +1,47 @@
+{{/*
+Bootstrap credentials for the `admin` API user.
+
+Without this the chart cannot bootstrap onto an empty database. The migrator
+(upgrade-jambonz-db.ts -> reset_admin_password.js -> createAdminUser) sets the
+admin password from JAMBONES_ADMIN_INITIAL_PASSWORD, or generates a random
+20-character one and discards it. api-server's prepareCognigyData then refuses
+to write this secret, by design, because the user already exists and the
+plaintext cannot be recovered from the argon2 hash:
+
+  [CRITICAL] User 'admin' already exists but K8s secret 'vg-api-admin-creds'
+  is missing. Its original password cannot be recovered from the stored hash -
+  skipping secret creation. Manual recovery required.
+
+The result on a fresh install is an unknowable admin password and no secret at
+all, so sbc-inbound — which reads username/password from here — is stuck in
+CreateContainerConfigError forever.
+
+Creating the secret here makes it the single source of truth: the api-migrator
+Job reads JAMBONES_ADMIN_INITIAL_PASSWORD from this same secret, so the stored
+password and the database always agree. The lookup guard plus
+resource-policy: keep mean it is created once and never rotated underneath a
+running cluster.
+
+Set api.adminInitialPassword to pin a specific password; leave it empty to have
+one generated on first install — a 40-character hex string (randAlphaNum 20,
+hex-encoded), unrelated to the migrator's own 20-character fallback above.
+*/}}
+{{- if not (lookup "v1" "Secret" $.Release.Namespace "vg-api-admin-creds") }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vg-api-admin-creds
+  namespace: {{ $.Release.Namespace | quote }}
+  annotations:
+    "helm.sh/resource-policy": "keep"
+    {{- if .Values.apiMigrator.hookEnabled }}
+    # Must exist before the api-migrator Job consumes it.
+    "helm.sh/hook": "pre-install,pre-upgrade"
+    "helm.sh/hook-weight": "-2"
+    {{- end }}
+type: Opaque
+stringData:
+  username: "admin"
+  password: {{ .Values.api.adminInitialPassword | default (printf "%x" (randAlphaNum 20)) | quote }}
+{{- end }}

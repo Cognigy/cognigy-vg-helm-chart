@@ -561,7 +561,7 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.18.0
+  image: cognigy.azurecr.io/vg-api-migrator:2026.17.0
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -991,7 +991,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.3
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.18.0
+  image: cognigy.azurecr.io/vg-api-server:2026.17.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1024,6 +1024,14 @@ api:
   rateLimitMinutes: 4
   rateLimit: 1000
   enablePrepareCognigyData: true
+  ## Initial password for the `admin` API user, stored in the vg-api-admin-creds
+  ## secret and handed to the migrator as JAMBONES_ADMIN_INITIAL_PASSWORD so the
+  ## database and the secret always agree.
+  ## Leave empty to generate one on first install. The secret is created once
+  ## (helm.sh/resource-policy: keep) and never rotated by an upgrade, so setting
+  ## this later has no effect on an existing cluster — change the password
+  ## through the API instead.
+  adminInitialPassword: ""
   protocol: https
   ## VG Team configuration
   ## This section configures team member emails and email notification settings
@@ -1143,7 +1151,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.18.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.17.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1233,7 +1241,7 @@ sileroVad:
   ## When enabled, feature server receives SILERO_VAD_SERVICE_URL env var
   ## pointing to this service for Plan B audio-fork VAD.
   enabled: false
-  image: cognigy.azurecr.io/vg-silero-vad:2026.18.0
+  image: cognigy.azurecr.io/vg-silero-vad:2026.17.0
   ## Default Always because the default tag is :latest (mutable) — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1356,7 +1364,7 @@ sileroVad:
 ## jambones MySQL DB. Disabled by default — opt in per cluster.
 vadAutotuner:
   enabled: false
-  image: cognigy.azurecr.io/vg-vad-autotuner:2026.18.0-10
+  image: cognigy.azurecr.io/vg-vad-autotuner:2026.14.0-24
   ## Default Always because the default tag may be mutable — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1401,7 +1409,7 @@ vadAutotuner:
   extraEnvVars: []
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.18.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.17.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1476,7 +1484,7 @@ featureServerNightly:
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
 featureServerLegacy:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.18.0
+  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.17.0
   imagePullPolicy: Always
   replicaCount: 2
   logLevel:
@@ -1532,7 +1540,7 @@ featureServerLegacy:
       cpu: "1"
       memory: 500Mi
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch:2026.18.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.17.0
   imagePullPolicy: IfNotPresent
   ## FreeSWITCH log level. Valid choices (case-insensitive) are the FreeSWITCH log
   ## levels, from least to most verbose:
@@ -1608,12 +1616,12 @@ freeswitchNightly:
   ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
   ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
   ## @see featureServerNightly
-  image: cognigy.azurecr.io/vg-freeswitch:2026.18.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.17.0
 freeswitchLegacy:
   ## You can specify a custom image for the FreeSWITCH in the legacy FeatureServer here
   ## To enable a "legacy FreeSWITCH", you have to enable a legacy FeatureServer.
   ## @see featureServerLegacy
-  image: cognigy.azurecr.io/vg-freeswitch:2026.18.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.17.0
 rtpEngine:
   image: cognigy.azurecr.io/vg-rtpengine:0.2.0
   imagePullPolicy: IfNotPresent
@@ -1642,7 +1650,7 @@ rtpEngine:
 mediaProcessor:
   ## Enable Media Processor for decoupled STT/TTS processing
   enabled: false
-  image: cognigy.azurecr.io/vg-media-processor:2026.18.0
+  image: cognigy.azurecr.io/vg-media-processor:2026.17.0
   imagePullPolicy: Always
   replicaCount: 2
   serviceName: media-processor
@@ -1689,7 +1697,7 @@ mediaProcessor:
       cpu: "1"
       memory: 512Mi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.18.0
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.17.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1708,7 +1716,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/vg-sbc-call-router:2026.18.0
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.17.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1739,7 +1747,7 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
 sbcInbound:
-  image: cognigy.azurecr.io/vg-sbc-inbound:2026.18.0
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.17.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1779,7 +1787,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/vg-sbc-outbound:2026.18.0
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.17.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1817,7 +1825,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.18.0
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.17.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1832,7 +1840,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.18.0
+  image: cognigy.azurecr.io/vg-tcm:2026.17.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1878,7 +1886,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: true
-  image: cognigy.azurecr.io/vg-connector:2026.18.0
+  image: cognigy.azurecr.io/vg-connector:2026.17.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -2004,7 +2012,7 @@ vgAudioManager:
       cpu: "0.500"
       memory: 512Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.18.0
+  image: cognigy.azurecr.io/vg-webapp:2026.17.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## hot-reload property

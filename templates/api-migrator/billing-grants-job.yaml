@@ -1,0 +1,89 @@
+{{/*
+Table-level grants for the billing user on the jambones schema.
+
+These deliberately do NOT live in the api-migrator Job's create-billing-db init
+container. MySQL rejects a table-level GRANT on a table that does not exist
+(ERROR 1146 42S02), and on a fresh database jambones.organisations does not
+exist until the schema migration has run — which happens in the MAIN container
+of that same Job, after every init container has exited 0. Attempting the
+grants first therefore deadlocked the install on an empty database, while
+existing clusters were unaffected because their tables were already there.
+
+Running as a post-install/post-upgrade hook puts this after the release's
+resources exist, and the explicit wait below removes any dependence on hook
+ordering relative to the migrator Job: it simply blocks until the schema shows
+up, then applies the grants. Idempotent, so re-running is harmless.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: billing-grants
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-api-server.git"
+    # Weight is higher than the api-migrator hook weight ("-1") so that, when
+    # apiMigrator.hookEnabled is true, this runs after it. When the migrator is
+    # an ordinary release resource instead, the wait loop below is what
+    # guarantees correctness.
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      name: billing-grants
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      restartPolicy: OnFailure
+      containers:
+        - name: billing-grants
+          image: "{{ include "vg.common.image.render" (dict "global" $.Values.global "image" (printf "%s/%s:%s" .Values.mysql.image.registry .Values.mysql.image.repository .Values.mysql.image.tag)) }}"
+          imagePullPolicy: {{ .Values.apiMigrator.imagePullPolicy | default "IfNotPresent" }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+
+              echo "Waiting for the jambones schema to be migrated..."
+              i=0
+              until [ "$(MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h "$MYSQL_HOST" -u root -N -B -e \
+                          "SELECT COUNT(*) FROM information_schema.tables \
+                           WHERE table_schema='$JAMBONES_DATABASE' AND table_name='organisations';" \
+                        2>/dev/null || echo 0)" = "1" ]; do
+                i=$((i + 1))
+                if [ "$i" -gt 60 ]; then
+                  echo "ERROR: ${JAMBONES_DATABASE}.organisations did not appear after 5 minutes." >&2
+                  echo "       The api-migrator Job has not completed its schema migration." >&2
+                  exit 1
+                fi
+                sleep 5
+              done
+              echo "  schema present after $((i * 5))s"
+
+              echo "Granting billing user access to jambones tables used by the organisations lazy-resolution fallback..."
+              MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h "$MYSQL_HOST" -u root -e "
+                GRANT SELECT, INSERT, UPDATE ON \`$JAMBONES_DATABASE\`.organisations TO '$BILLING_USER'@'%';
+                GRANT SELECT ON \`$JAMBONES_DATABASE\`.applications TO '$BILLING_USER'@'%';
+                GRANT SELECT ON \`$JAMBONES_DATABASE\`.webhooks TO '$BILLING_USER'@'%';
+                FLUSH PRIVILEGES;
+              "
+              echo "Done."
+          env:
+            - name: MYSQL_HOST
+              value: {{ .Values.mysql.host | quote }}
+            - name: JAMBONES_DATABASE
+              value: {{ .Values.mysql.database.name | quote }}
+            - name: BILLING_USER
+              value: {{ .Values.billing.mysql.username | quote }}
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-mysql-password
+                  key: mysql-root-password

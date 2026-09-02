@@ -57,13 +57,14 @@ spec:
                 FLUSH PRIVILEGES;
               "
 
-              echo "Granting billing user access to jambones tables used by the organisations lazy-resolution fallback..."
-              MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h "$MYSQL_HOST" -u root -e "
-                GRANT SELECT, INSERT, UPDATE ON \`$JAMBONES_DATABASE\`.organisations TO '$BILLING_USER'@'%';
-                GRANT SELECT ON \`$JAMBONES_DATABASE\`.applications TO '$BILLING_USER'@'%';
-                GRANT SELECT ON \`$JAMBONES_DATABASE\`.webhooks TO '$BILLING_USER'@'%';
-                FLUSH PRIVILEGES;
-              "
+              # NOTE: the TABLE-level grants on the jambones schema used to live
+              # here. They cannot: MySQL rejects a table-level grant on a table
+              # that does not exist (ERROR 1146), and on a fresh database those
+              # tables do not exist yet — they are created by the migration in
+              # this Job's MAIN container, which cannot start until this init
+              # container exits 0. With `set -eu` that deadlocked the install.
+              # They now live in billing-grants-job.yaml, which runs after the
+              # migration and waits for the schema to appear.
 
               echo "Verifying database exists..."
               MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h "$MYSQL_HOST" -u root -e "USE vg_speech_billing" || {
@@ -129,6 +130,16 @@ spec:
                 secretKeyRef:
                   name: voicegateway-mysql-password
                   key: mysql-password
+            # Read from the same secret sbc-inbound and the operator use, so the
+            # password in the database and the one in vg-api-admin-creds cannot
+            # diverge. Without this the migrator's createAdminUser() falls back
+            # to generatePassword(20) and throws the value away, leaving an
+            # admin account nobody can authenticate as.
+            - name: JAMBONES_ADMIN_INITIAL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vg-api-admin-creds
+                  key: password
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:

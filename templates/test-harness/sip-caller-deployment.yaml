@@ -28,13 +28,6 @@ spec:
             - --addr=:8090
             - --sbc-host={{ .Values.sbc.sip.headlessServiceName | default "sbc-sip-headless" }}
             - --sbc-port=5060
-            # Mock-SRS SIPREC activation behavior (CGY-35021): answer the
-            # initial INVITE with a=inactive/c=0.0.0.0, then fire a delayed
-            # a=recvonly re-INVITE — reproducing the recorder-not-ready-yet
-            # pattern the re-offer media-activation fix targets. Always on to
-            # ensure test-harness environments exercise this behavior.
-            - --mock-srs-initial-inactive
-            - --mock-srs-auto-activate
           ports:
             - name: http
               containerPort: 8090

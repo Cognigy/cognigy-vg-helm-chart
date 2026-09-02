@@ -174,15 +174,28 @@ under the host defined before: i.e.: `vg.yourdomain.<tld>`
 
 ### Save the Credentials
 
-Save the following values from the log of the `api-server` pod:
+The `admin` API user's credentials are stored in the `vg-api-admin-creds`
+Secret (keys `username`, `password`) instead of only being logged once. The
+username is always `admin`; retrieve the password at any time with:
 
-- `admin-password`
+```bash
+kubectl get secret -n voicegateway vg-api-admin-creds \
+-o jsonpath="{.data.password}" | base64 -d && echo ""
+```
+
+To pin a known password instead of the generated one, set
+`api.adminInitialPassword` in `YOUR_VALUES_FILE.yaml` before the first install.
+The Secret is created once and kept across upgrades, so this only has an
+effect on a fresh install.
+
+Also save the following values from the log of the `api-server` pod:
+
 - `cognigy-ai password`
 - `[DEFAULT ACCOUNT] account sid`
 - `[IP TEST CALL MANAGER] API key created`
 - `[IP TEST CALL MANAGER] Service Provider created`
 
-If you could not save the generated user credentials, SP ID, and token due
+If you could not save these generated credentials, SP ID, and token due
 to a pod restart or another issue, follow the steps mentioned
 in the [Reset the Initial User Credentials for Voice Gateway](#reset-the-initial-user-credentials-for-voice-gateway)
 section.
@@ -224,13 +237,17 @@ apiMigrator:
 hookEnabled: true
 ```
 
+The `vg-api-admin-creds` Secret from the previous step is unaffected by this
+change — it is created once and kept (`helm.sh/resource-policy: keep`)
+regardless of `apiMigrator.hookEnabled`.
+
 ### Cognigy VoiceGateway WebApp Login
 
 To log in for the first time, use the following credentials:
 
 - username: `admin`
-- password:  Value of the `admin-password` from
-the [Save the Credentials](#save-the-credentials) step.
+- password: value of the `password` key in the `vg-api-admin-creds` Secret
+(see [Save the Credentials](#save-the-credentials)).
 
 ### Enable Interaction Panel Calls
 

@@ -83,11 +83,6 @@ spec:
             ## (entrypoint.sh threads this into the runtime config script).
             - name: ENABLE_GENESYS_AUDIOHOOK
               value: {{ .Values.global.enableGenesysAudioHook | quote }}
-            ## MS Teams master switch — mirrors enableGenesysAudioHook, surfaced
-            ## via window.VG.ENABLE_MICROSOFT_TEAMS. Distinct from
-            ## ENABLE_MSTEAMS_ROUTING above, which gates a separate feature.
-            - name: ENABLE_MICROSOFT_TEAMS
-              value: {{ .Values.global.enableMsTeams | quote }}
             - name: DISABLE_CUSTOM_SPEECH
               value: {{ .Values.webapp.disableCustomSpeech | quote }}
             - name: ENABLE_ALL_SPEECH_PROVIDERS

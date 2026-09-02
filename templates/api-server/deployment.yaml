@@ -118,10 +118,6 @@ spec:
             ## CRUD route mount in lib/routes/api/vendor-integrations.ts.
             - name: ENABLE_GENESYS_AUDIOHOOK
               value: {{ .Values.global.enableGenesysAudioHook | quote }}
-            ## MS Teams master switch — same gate, so the vendor_integrations
-            ## CRUD route also mounts when only MS Teams (not Genesys) is on.
-            - name: ENABLE_MICROSOFT_TEAMS
-              value: {{ .Values.global.enableMsTeams | quote }}
             - name: K8S
               value: {{ .Values.global.k8s | quote }}
             - name: K8S_NAMESPACE
@@ -131,22 +127,30 @@ spec:
             - name: K8S_FEATURE_SERVER_SERVICE_NAME
               ## Always the headless service (works for StatefulSet and Deployment)
               value: {{ .Values.featureServer.headlessServiceName | quote }}
-            {{- /* Reloadable configs were introduced in v2026.17.0; when global.reloadableConfig.enabled=true, api-server should read canary settings from the mounted ConfigMap. Keep these env vars as a backward-compat fallback and remove once older images are no longer supported. */}}
-            {{- if not .Values.global.reloadableConfig.enabled }}
             - name: K8S_FEATURE_SERVER_CANARY_ENABLED
               value: {{ .Values.featureServer.canary.enabled | quote }}
             - name: K8S_FEATURE_SERVER_CANARY_PERCENTAGE
               value: {{ .Values.featureServer.canary.trafficPercentageToNightly | quote }}
-            {{- end }}
             - name: HOMER_BASE_URL
               value: {{ .Values.homer.urlPrefixServiceConnection }}{{ .Values.homer.serviceName }}
             - name: HOMER_USERNAME
               value: {{ .Values.homer.auth.username | quote }}
+            {{- if .Values.homer.enabled }}
+            {{- /*
+              Guarded on homer.enabled. The vg-homer-password secret is only
+              created when homer is enabled (see
+              templates/common-secrets/vg-homer-password.yaml), but this
+              reference was unconditional, so with homer.enabled=false the
+              api-server pod sat in CreateContainerConfigError with
+              `secret "vg-homer-password" not found` and never started — which
+              in turn starved everything that depends on api-server.
+            */}}
             - name: HOMER_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: vg-homer-password
                   key: homer-password
+            {{- end }}
             - name: JAEGER_BASE_URL
               value: {{ .Values.jaeger.urlPrefixServiceConnection }}{{ .Values.jaeger.serviceName }}:{{ .Values.jaeger.ports.tcp }}
             - name: JAMBONES_AUTH_USE_JWT
