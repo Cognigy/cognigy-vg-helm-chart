@@ -63,11 +63,14 @@ spec:
               exec:
                 command: ["sleep", "5"]
           livenessProbe:
+            # No initialDelaySeconds: startupProbe below already blocks this
+            # probe from running at all until /health/startup succeeds, so an
+            # extra fixed delay here only adds latency to detecting a genuine
+            # post-boot hang, without protecting anything during startup.
             httpGet:
               path: /health/liveness
               port: {{ .Values.health.port }}
             failureThreshold: 3
-            initialDelaySeconds: 90
             periodSeconds: 60
             timeoutSeconds: 10
           startupProbe:
@@ -75,6 +78,24 @@ spec:
               path: /health/startup
               port: {{ .Values.health.port }}
             failureThreshold: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            # startupProbe succeeding does NOT by itself gate this pod's Ready
+            # condition or its per-ordinal Service membership (traefik-services.yaml):
+            # kubelet only withholds traffic from a pod when a readinessProbe is
+            # present at all (pkg/kubelet/prober/prober_manager.go computes
+            # `ready = !exists` when none is configured), and a container is
+            # marked Running by the container runtime the moment its entrypoint
+            # is exec'd — well before main.ts finishes connecting to Redis/
+            # drachtio and mounting the ACS/Teams routes. Reusing the
+            # startupProbe's endpoint is enough: kubelet won't evaluate this
+            # probe until startupProbe first succeeds anyway, but this probe's
+            # mere existence is what withholds traffic until that happens.
+            httpGet:
+              path: /health/startup
+              port: {{ .Values.health.port }}
+            failureThreshold: 3
             periodSeconds: 10
             timeoutSeconds: 5
           env:

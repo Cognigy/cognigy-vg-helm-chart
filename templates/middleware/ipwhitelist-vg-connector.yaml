@@ -1,4 +1,4 @@
-{{- if and (.Values.ingress.enabled) (.Values.traefik.enabled) (.Values.ingress.vgConnector.ipWhiteListMiddleware.enabled) }}
+{{- if and (.Values.ingress.enabled) (.Values.ingress.vgConnector.ipWhiteListMiddleware.enabled) }}
 {{- with .Values.ingress.vgConnector.ipWhiteListMiddleware }}
 ---
 # Whitelisting Based on `X-Forwarded-For` with `depth=0`
