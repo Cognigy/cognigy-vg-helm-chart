@@ -1113,7 +1113,7 @@ tmpban:
     ## Ban duration (hours) applied once banThreshold is reached.
     banDurationHours: 1
 drachtio:
-  image: cognigy.azurecr.io/vg-drachtio:1.3.2
+  image: cognigy.azurecr.io/vg-drachtio:1.3.5
   imagePullPolicy: IfNotPresent
   host: 127.0.0.1
   port: 9022
