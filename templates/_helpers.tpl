@@ -253,10 +253,11 @@ which is called unconditionally from every STT vendor's glue code — including
 classic Deepgram's dg_transcribe_glue.cpp — AFTER it already resolves the
 region-specific DEEPGRAM_URI host, and clobbers that resolved host with
 mock-speech regardless of what it was. If both were set at once, the
-region-routing regression test (mock-deepgram-eu/intl + the dedicated
-test-dns CoreDNS instance) would never see any traffic: FreeSWITCH would
-always connect to mock-speech instead of attempting real DNS resolution for
-api.deepgram.com / api.eu.deepgram.com, regardless of the configured region.
+region-routing regression test (which asserts on the SNI mock-speech was
+dialled at, reached through the dedicated test-dns CoreDNS instance) could
+not tell the regions apart: FreeSWITCH would connect straight to mock-speech
+without ever resolving api.deepgram.com / api.eu.deepgram.com, so every call
+would record the same hostname regardless of the configured region.
 Enabling freeswitch.regionDnsEnabled therefore means this pod's OTHER
 mocked-speech scenarios are not mocked for the duration — toggle it only for
 the two region-test scenario runs, not as a permanently-on flag alongside
@@ -269,6 +270,21 @@ routine quality-gate scenarios.
 - name: TESTING_OVERRIDE_STT_URL
   value: "ws://mock-speech.{{ .Release.Namespace }}.svc.cluster.local:8080"
 {{- end }}
+{{- end -}}
+
+{{- /*
+The mock-cognigy call-hook URL, shared by the provision Job (which writes it
+onto every application it creates) and the number manifest's defaults, so the
+two cannot disagree about where calls are sent.
+
+FQDN, not the bare service name: api-server validates hook URLs with
+dns.resolve4, which does not consult the search domains in resolv.conf.
+ws://, not http://: the scheme is what selects the feature-server's requestor,
+and production uses the WebSocket one. Both are explained at length in
+templates/test-harness/provision-job.yaml.
+*/}}
+{{- define "vg.testHarness.webhookUrl" -}}
+{{- .Values.vgTestHarness.autoProvision.webhookUrl | default (printf "ws://mock-cognigy.%s.svc.cluster.local:8080/voiceGateway" .Release.Namespace) -}}
 {{- end -}}
 
 {{/*
@@ -329,4 +345,78 @@ roll back out of; it wedges the StatefulSet rollout permanently.
 {{- if eq $readiness (toString .Values.metrics.port) -}}
 {{- fail (printf "rtpEngineSidecar.ports.readiness (%s) must not equal metrics.port (%v)" $readiness .Values.metrics.port) -}}
 {{- end -}}
+{{- end -}}
+
+{{/*
+Whether drachtio gets --cloud-deployment. Non-empty means yes.
+
+Shared by sbc-sip's stateful-set.yaml and daemon-set.yaml so the two cannot
+drift; both render drachtio and both need the same answer.
+
+An ALLOW-LIST of the clouds that actually answer on the metadata service at
+169.254.169.254, not a deny-list. The flag makes drachtio resolve its advertised
+address from that service; where nothing answers, the host comes back empty and
+drachtio dies at startup with
+
+  SipTransport::init - contact: sip::5060;transport=udp,tcp
+  Uncaught exception: SipTransport::init - invalid contact
+
+taking sbc-sip-sidecar with it (ECONNREFUSED 127.0.0.1:9022). The previous
+condition — anything non-empty except "stackit" — turned every unrecognised
+value into that crash: "openstack", "onprem", or a mere typo like "AWS". Nothing
+else in the chart validates .Values.cloud, so a typo has no other backstop.
+
+Comparison is case-sensitive on purpose, matching how the rest of the chart
+reads this key (see vg.sbcRtp.drainAddresses, which tests `eq .Values.cloud
+"aws"`). "AWS" therefore omits the flag rather than enabling it — the
+recoverable direction, since drachtio then derives its own contact and
+sbc.sip.contact can pin one explicitly.
+*/}}
+{{- define "vg.sbc.sip.useCloudDeployment" -}}
+{{- if has .Values.cloud (list "aws" "azure" "gcp") }}true{{ end }}
+{{- end -}}
+
+{{/*
+Whether the sbc-rtp RTP traffic gate is actually wired. Non-empty means yes.
+
+Shared by stateful-set.yaml, daemon-set.yaml and traffic-gate-configmap.yaml so
+the probe, the ConfigMap and the mount cannot disagree — a probe without its
+ConfigMap is exactly the fail-closed-forever state the gate must never enter.
+
+The gate is AWS-ONLY BY CONSTRUCTION: it decides whether a pod serves by
+comparing that pod's address against the drain list, and it reads the address
+from the EC2 instance metadata service at 169.254.169.254. Nothing answers there
+off AWS, so off AWS the gate can never pass.
+
+The chart already enforced that for the drain LIST — vg.sbcRtp.drainAddresses
+hard-fails unless cloud is "aws" — but not for the PROBE, which rendered for
+every cloud including unset, while enabled defaulted to true. So EVERY install
+mounted a gate, and off AWS it could never pass: sbc-rtp stayed at 1/2
+containers forever with
+
+  Readiness probe failed: Get "http://<ip>:8003/health/ready":
+  dial tcp <ip>:8003: connect: connection refused
+
+The condition is now simply "explicitly enabled", which works because
+trafficGate.enabled DEFAULTS TO FALSE. Helm cannot distinguish a value the
+operator set from the chart's own default — both read as true — so an opt-out
+default of true left no way to say "on here, off there". Flipping the default is
+what makes `enabled: true` mean something.
+
+Why not also test cloud=aws here: the gate is AWS-only in PRODUCTION because of
+IMDS, but whether /health/ready actually REQUIRES IMDS when nothing is drained
+is unverified — a pod that serves unless its address is listed may not need to
+know its address at all while the list is empty. ci/kind/values-kind.yaml turns
+the gate on off-AWS with a sidecar build that serves the endpoint precisely to
+answer that empirically. If the probe cannot pass without IMDS, add the cloud
+test back here; if it can, this feature is testable outside AWS and that is
+worth knowing. drainAddresses keeps its own hard cloud=aws guard either way, so
+nobody can DRAIN off AWS regardless of what this predicate allows.
+
+Serving /health/ready is vg-sbc-rtpengine-sidecar#23, still open, so no RELEASED
+sidecar image answers on the readiness port. Turning this on requires an image
+that does — see rtpEngineSidecar.image.
+*/}}
+{{- define "vg.sbcRtp.trafficGate.wired" -}}
+{{- if .Values.sbc.rtp.trafficGate.enabled }}true{{ end }}
 {{- end -}}

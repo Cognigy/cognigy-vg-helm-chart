@@ -444,6 +444,13 @@ sbc:
       wss: 8443
     ## sip-vg-dev.cognigy.ai
     uri: ""
+    ## Explicit SIP contact for drachtio (e.g. "sip:$(POD_IP):5060;transport=udp,tcp").
+    ## Empty means let drachtio derive one. Set this on clusters without a cloud
+    ## metadata service, where the derived value is the "*" wildcard and
+    ## sofia-sip's IPv6-then-IPv4 double bind fails with "Address already in use".
+    ## $(POD_IP) is interpolated by Kubernetes and is the node address under
+    ## hostNetwork.
+    contact: ""
   rtp:
     ## The number of replicas for the RTP pods needs to be the same as the number of static IPs provisioned for the media traffic.
     replicaCount: 2
@@ -480,15 +487,38 @@ sbc:
     trafficGate:
       ## Renders the readinessProbe, the drain-list ConfigMap and its mount.
       ##
-      ## Kept ALWAYS ON deliberately. Turning it on or off changes the pod
-      ## template and therefore rolls the StatefulSet; a rolling update waits for
-      ## each updated pod to become Ready, and a drained pod never does, so a gate
-      ## that appeared and disappeared could WEDGE the rollout permanently. With it
-      ## always on, every drain is a pure ConfigMap edit that restarts nothing.
+      ## OPT-IN, default false. This was default TRUE and unconditional, which
+      ## meant every install mounted a gate whose readiness endpoint no released
+      ## sidecar image serves, so no sbc-rtp pod ever became Ready:
+      ##   Readiness probe failed: Get "http://<ip>:8003/health/ready":
+      ##   dial tcp <ip>:8003: connect: connection refused
+      ## (ECONNREFUSED, not a 404 — readiness is a separate listener, not a route
+      ## on the health server.) The default had to flip for a second reason too:
+      ## Helm cannot tell a value the operator set from the chart's own default,
+      ## so while the default was true there was no way to express "on here, off
+      ## there". Now `enabled: true` means something.
       ##
-      ## REQUIRES a vg-sbc-rtpengine-sidecar image that serves /health/ready. Set
-      ## this to false only for a cluster pinned to an older sidecar image —
-      ## otherwise its readinessProbe 404s and no sbc-rtp pod ever becomes Ready.
+      ## TURNING THIS ON REQUIRES a vg-sbc-rtpengine-sidecar image that serves
+      ## /health/ready on rtpEngineSidecar.ports.readiness. That is
+      ## vg-sbc-rtpengine-sidecar#23, STILL OPEN, and the image pinned in
+      ## rtpEngineSidecar.image below is NOT one. Enabling this without such an
+      ## image wedges sbc-rtp permanently.
+      ##
+      ## AWS ONLY IN PRODUCTION: the gate decides whether a pod serves by
+      ## comparing its own address against the drain list, read from the EC2
+      ## instance metadata service (169.254.169.254). drainAddresses enforces that
+      ## with a hard failure, so nothing can be drained off AWS whatever this is
+      ## set to. Whether the PROBE can pass off AWS while the list is empty is
+      ## being tested on kind (ci/kind/values-kind.yaml) — a pod that serves unless
+      ## listed may not need its own address at all while nothing is listed.
+      ##
+      ## ONCE ON, LEAVE IT ON. Toggling changes the pod template and rolls the
+      ## StatefulSet; a rolling update waits for each updated pod to become Ready
+      ## and a drained pod never does, so a gate that appears and disappears can
+      ## WEDGE the rollout. With it steady, every drain is a pure ConfigMap edit
+      ## that restarts nothing. Note that turning it OFF cannot wedge anything —
+      ## removing a probe makes pods Ready immediately — so recovery is always
+      ## available.
       enabled: false
       ## Addresses to take OUT of the media rotation (deny-list).
       ##
@@ -561,7 +591,7 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.18.0
+  image: cognigy.azurecr.io/vg-api-migrator:2026.19.0
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -710,6 +740,12 @@ redis:
   replicaCount: 1
   host: redis
   port: 6379
+  ## Extra environment variables for the redis container. Empty by default, so
+  ## the rendered manifest is unchanged unless a deployment opts in.
+  ## Needed when the resolved image is a Bitnami redis build: its entrypoint
+  ## refuses to start unless REDIS_PASSWORD or ALLOW_EMPTY_PASSWORD is set, and
+  ## this chart configures no redis auth. See ci/kind/values-kind.yaml.
+  extraEnvVars: []
   affinity: {}
   nodeSelector: {}
   priorityClassName: ""
@@ -991,7 +1027,7 @@ cognigyLogin:
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.3
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.18.0
+  image: cognigy.azurecr.io/vg-api-server:2026.19.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1151,7 +1187,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.18.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.19.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1185,13 +1221,13 @@ featureServer:
   tolerations: []
   sigtermForceCloseTimeoutMs: ""
   terminationGracePeriodSeconds: 300
-  ## Set to false to run feature-server as a Deployment instead of a StatefulSet
-  ## (faster, non-sequential rolling upgrades). The service is always headless,
-  ## so SIP/in-dialog routing resolves to real pod IPs in both modes. The old
-  ## "does not work on Azure" caveat came from the Deployment falling back to a
-  ## non-headless ClusterIP VIP, which is now fixed. Verified on AWS; expected to
-  ## work on Azure (AKS) too — confirm on an AKS cluster before enabling in prod.
-  useStatefulSet: true
+  ## Set to true to run feature-server as a StatefulSet instead of a Deployment
+  ## (ordered, one-pod-at-a-time rolling upgrades). The service is always
+  ## headless, so SIP/in-dialog routing resolves to real pod IPs in both modes.
+  ## The old "does not work on Azure" caveat came from the Deployment falling
+  ## back to a non-headless ClusterIP VIP, which is now fixed. Verified
+  ## working as a Deployment on both AWS and Azure (AKS).
+  useStatefulSet: false
   headlessServiceName: feature-server-headless
   freeswitchConnection: "127.0.0.1:8021:JambonzR0ck$"
   # Sets the max memory size of V8's old memory section - size in Megabytes
@@ -1241,7 +1277,7 @@ sileroVad:
   ## When enabled, feature server receives SILERO_VAD_SERVICE_URL env var
   ## pointing to this service for Plan B audio-fork VAD.
   enabled: false
-  image: cognigy.azurecr.io/vg-silero-vad:2026.18.0
+  image: cognigy.azurecr.io/vg-silero-vad:2026.19.0
   ## Default Always because the default tag is :latest (mutable) — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1364,7 +1400,7 @@ sileroVad:
 ## jambones MySQL DB. Disabled by default — opt in per cluster.
 vadAutotuner:
   enabled: false
-  image: cognigy.azurecr.io/vg-vad-autotuner:2026.18.0-10
+  image: cognigy.azurecr.io/vg-vad-autotuner:2026.19.0-17
   ## Default Always because the default tag may be mutable — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1409,7 +1445,7 @@ vadAutotuner:
   extraEnvVars: []
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.18.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.19.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1443,11 +1479,12 @@ featureServerNightly:
   tolerations: []
   sigtermForceCloseTimeoutMs: ""
   terminationGracePeriodSeconds: 300
-  ## Set to false to run feature-server-nightly as a Deployment instead of a
-  ## StatefulSet (faster, non-sequential rolling upgrades). The service is always
-  ## headless, so SIP/in-dialog routing resolves to real pod IPs in both modes.
-  ## Verified on AWS; expected to work on Azure (AKS) too — confirm before prod.
-  useStatefulSet: true
+  ## Set to true to run feature-server-nightly as a StatefulSet instead of a
+  ## Deployment (ordered, one-pod-at-a-time rolling upgrades). The service is
+  ## always headless, so SIP/in-dialog routing resolves to real pod IPs in
+  ## both modes. Verified on AWS; expected to work on Azure (AKS) too —
+  ## confirm before prod.
+  useStatefulSet: false
   headlessServiceName: feature-server-headless-nightly
   freeswitchConnection: "127.0.0.1:8021:JambonzR0ck$"
   # Sets the max memory size of V8's old memory section - size in Megabytes
@@ -1540,7 +1577,7 @@ featureServerLegacy:
       cpu: "1"
       memory: 500Mi
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch:2026.18.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.19.0
   imagePullPolicy: IfNotPresent
   ## FreeSWITCH log level. Valid choices (case-insensitive) are the FreeSWITCH log
   ## levels, from least to most verbose:
@@ -1616,18 +1653,19 @@ freeswitchNightly:
   ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
   ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
   ## @see featureServerNightly
-  image: cognigy.azurecr.io/vg-freeswitch:2026.18.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.19.0
 freeswitchLegacy:
   ## You can specify a custom image for the FreeSWITCH in the legacy FeatureServer here
   ## To enable a "legacy FreeSWITCH", you have to enable a legacy FeatureServer.
   ## @see featureServerLegacy
-  image: cognigy.azurecr.io/vg-freeswitch:2026.18.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.19.0
 rtpEngine:
   image: cognigy.azurecr.io/vg-rtpengine:0.2.0
   imagePullPolicy: IfNotPresent
   # During runtime, the log level can be decreased by sending the signal SIGURS1 to the daemon and can be increased with the signal SIGUSR2
   logLevel: 3
   port: 22222
+  ## Firewall-opened UDP range for RTP. Also used by vg-connector and vg-traffic-sniffer.
   startPort: 40000
   endPort: 60000
   homerId: 11
@@ -1650,7 +1688,7 @@ rtpEngine:
 mediaProcessor:
   ## Enable Media Processor for decoupled STT/TTS processing
   enabled: false
-  image: cognigy.azurecr.io/vg-media-processor:2026.18.0
+  image: cognigy.azurecr.io/vg-media-processor:2026.19.0
   imagePullPolicy: Always
   replicaCount: 2
   serviceName: media-processor
@@ -1697,7 +1735,7 @@ mediaProcessor:
       cpu: "1"
       memory: 512Mi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.18.0
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.19.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1716,7 +1754,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/vg-sbc-call-router:2026.18.0
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.19.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1746,8 +1784,61 @@ sbcCallRouter:
     limits:
       cpu: "0.100"
       memory: 150Mi
+## MySQL-backed resource resolution gateway, and the acting decision path in
+## production: every vg-* service on the call-setup path resolves its tenant data
+## here, vg-sbc-inbound's resolveCallAdmission included. It is a critical
+## component — while it is unavailable, call admission stops namespace-wide — so
+## treat its replica count, resources and rollout the way you would sbc-inbound's.
+## Background: vg-resources/docs/tdd/06-vg-in-ai/002-runtime-gateway-migration-plan.md.
+resourceResolver:
+  enabled: true
+  image: cognigy.azurecr.io/vg-resource-resolver:2026.19.0-73
+  imagePullPolicy: IfNotPresent
+  ## Two replicas for availability, matching sbcInbound/sbcOutbound. Capacity is
+  ## not the reason: a single replica served 600 concurrent calls at 21% of a 250m
+  ## limit, p50 7.6ms / p95 10.0ms, with a 98.3% cache hit rate (CGY-36159), and
+  ## growth beyond that is handled by the autoscaler, which scales on request rate
+  ## at roughly 1200 concurrent. The second replica is redundancy: with one
+  ## replica a crash, node failure or eviction stops call admission for every
+  ## caller above until the pod reschedules. That window is not acceptable on a
+  ## critical-path dependency, and an idle 100m/128Mi pod is cheap next to
+  ## rejected INVITEs.
+  replicaCount: 2
+  ## Anti-affinity, matching sbcInbound. Without it both replicas can land on the
+  ## same node, re-introducing exactly the single point of failure the replica
+  ## count above exists to remove. Preferred rather than required, so a
+  ## single-node cluster still schedules.
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                    - vg-resource-resolver
+            topologyKey: kubernetes.io/hostname
+  port: 4000
+  ## valid choices are debug, info, error, warn
+  logLevel:
+  cacheEnabled: true
+  cacheTtlSeconds: 60
+  extraEnvVars: []
+  resources:
+    requests:
+      cpu: "0.100"
+      memory: 128Mi
+    limits:
+      cpu: "0.250"
+      memory: 256Mi
+  nodeSelector: {}
+  tolerations: []
+  priorityClassName: ""
+  podSecurityContext: {}
 sbcInbound:
-  image: cognigy.azurecr.io/vg-sbc-inbound:2026.18.0
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.19.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1787,7 +1878,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/vg-sbc-outbound:2026.18.0
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.19.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1825,7 +1916,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.18.0
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.19.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1840,7 +1931,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.18.0
+  image: cognigy.azurecr.io/vg-tcm:2026.19.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1886,7 +1977,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: true
-  image: cognigy.azurecr.io/vg-connector:2026.18.0
+  image: cognigy.azurecr.io/vg-connector:2026.19.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -2012,7 +2103,7 @@ vgAudioManager:
       cpu: "0.500"
       memory: 512Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.18.0
+  image: cognigy.azurecr.io/vg-webapp:2026.19.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## hot-reload property
@@ -2588,6 +2679,70 @@ hpa:
             - type: Pods
               value: 1
               periodSeconds: 60
+    ## vg-resource-resolver — every vg-* service on the call-setup path resolves
+    ## its tenant data here, so it is on the critical path for INVITE handling.
+    ##
+    ## minReplicas 2, matching the other services here, but for availability
+    ## rather than capacity.
+    ##
+    ## Capacity does not require it: a single replica served 600 concurrent calls
+    ## at 21% CPU, and the primary trigger below scales out at roughly 1200. The
+    ## second replica buys redundancy — with one replica an unplanned pod loss
+    ## (crash, node failure, eviction) stops call admission for every vg-* service
+    ## until the pod reschedules, and on a critical-path dependency that window is
+    ## not acceptable. Two replicas keep INVITE handling alive through the loss of
+    ## either one.
+    ##
+    ## The cost of that redundancy is one extra 100m/128Mi pod per cluster that
+    ## enables autoscaling, which is cheap next to rejected INVITEs.
+    resourceResolver:
+      enabled: true
+      name: vg-resource-resolver
+      scaleTargetRef:
+        apiVersion: apps/v1
+        kind: Deployment
+      minReplicas: 2
+      maxReplicas: 10
+      keda:
+        enabled: true
+        triggers:
+          ## PRIMARY: request rate per pod.
+          ##
+          ## CPU alone does not work for this service, and that is measured rather
+          ## than assumed (CGY-36159, benchmarks/vg-resource-resolver/psouza):
+          ## at 200/400/600 concurrent calls it drew 10%/17%/21% of a 250m limit,
+          ## so a 50% CPU trigger would not fire until roughly 1500 concurrent —
+          ## while the pod was ALREADY throttling on bursts at every one of those
+          ## levels. Utilisation understates pressure here. The feature-server
+          ## benchmark reached the same conclusion independently and moved to a
+          ## calls-per-pod trigger; this mirrors that.
+          ##
+          ## Threshold 15 req/s per pod. Measured peak was 7.8 req/s at 600
+          ## concurrent on one replica, so this scales out at roughly 1200
+          ## concurrent — well before the ~2500-3000 the CPU trend extrapolates to.
+          ## Deliberately early: an extra replica costs 100m/128Mi, a rejected
+          ## INVITE costs a call.
+          - type: prometheus
+            metricType: AverageValue
+            metadata:
+              serverAddress: http://monitoring-stack-kubeproms-prometheus.monitoring.svc.cluster.local:9090
+              query: sum(rate(vg_resource_resolver_http_requests_total{namespace="{{ .Release.Namespace }}"}[2m]))
+              threshold: "15"
+          ## BACKSTOP: CPU. Kept so a workload shape we have not measured — heavier
+          ## per-request work, a cache-hostile traffic pattern — still scales even
+          ## if request rate stays low. Not expected to be the binding trigger.
+          - type: cpu
+            metricType: Utilization
+            metadata:
+              value: "70"
+      ## Native HPA fallback if keda.enabled is false for this service.
+      metrics:
+        - type: Resource
+          resource:
+            name: cpu
+            target:
+              type: Utilization
+              averageUtilization: 70
 #######################
 # VG Console #
 #######################
@@ -2964,8 +3119,53 @@ vgTestHarness:
   # speech vendors hit mock-speech over plain HTTP/WS. Requires an
   # asan/debug freeswitch image (the override is compiled out of prod).
   enabled: false
+  # The number manifest: which numbers exist, which fixture answers each, and
+  # which TO_NUMBER_* variable the Playwright suite reads it from. Empty (the
+  # default) keeps the previous single-number behaviour — autoProvision creates
+  # one application for autoProvision.phoneNumber, and mock-cognigy serves
+  # whatever is POSTed to /scenario.
+  #
+  # Non-empty renders the vg-test-harness-numbers ConfigMap and switches both
+  # the provision Job and mock-cognigy onto it, so what is provisioned and what
+  # answers come from one file rather than from two that can disagree.
+  #
+  #   numbers:
+  #     - name: menu                     # names the application: test-app-menu
+  #       number: "+15005550001"
+  #       env: TO_NUMBER                 # the variable the specs read it from
+  #       fixture: two-level-menu.json   # a key in fixturesConfigMap
+  #       default: true                  # carrier fallback app; at most one
+  #     - name: dtmf
+  #       number: "+15005550002"
+  #       env: TO_NUMBER_DTMF
+  #       fixture: collect-dtmf-echo.json
+  #
+  # An entry may also set webhookUrl to override the shared call hook. An entry
+  # with no fixture is still provisioned — useful for a transfer target some
+  # other fixture dials.
+  numbers: []
+  # Name of an EXISTING ConfigMap whose keys are the fixture JSON files the
+  # manifest names, e.g. created by CI with
+  #   kubectl create configmap vg-gate-fixtures --from-file=ci/kind/scenarios/
+  # It is projected into the same directory as the manifest, so an entry can
+  # name its fixture by filename alone. Fixtures are deliberately not chart
+  # values: they are large, generated, and owned by the suite that generates
+  # them.
+  fixturesConfigMap: ""
   mockCognigy:
     image: cognigydevelopment.azurecr.io/vg-mock-cognigy:main
+    # 0 keeps the Deployment but runs no pod. For a namespace that enables the
+    # harness for the SPEECH mocks only: its applications call the real AI
+    # backend, so mock-cognigy is never dialled, and with autoProvision off
+    # nothing runs the provisioner that ships in this image either.
+    #
+    # Note the coupling this image carries: the provision Job's binary comes from
+    # here, not from mockSpeech.image. Whenever autoProvision is enabled, this
+    # image and mockSpeech.image must come from the SAME build -- an older
+    # provisioner crashloops on flags a newer chart passes, and because nothing
+    # else restarts, the namespace reads as healthy while nothing was
+    # provisioned.
+    replicaCount: 1
     logLevel: info
     resources:
       requests: {cpu: "0.100", memory: 128Mi}
@@ -2974,9 +3174,106 @@ vgTestHarness:
     image: cognigydevelopment.azurecr.io/vg-mock-speech:main
     # Default STT transcript returned for every recognized utterance.
     defaultTranscript: "mock transcript"
+    # How TTS answers. Empty (the default) leaves the binary's own default: a
+    # 440 Hz tone, which is what every load test and bug reproduction wants —
+    # cheap and byte-identical every run.
+    #
+    # "piper" synthesizes the actual prompt offline instead. Needed only by
+    # tests that LISTEN to the bot: the voice regression suite transcribes the
+    # call and asserts on the words, and a tone transcribes to nothing. The
+    # image must carry the piper binary and a voice model, or mock-speech
+    # refuses to start rather than quietly falling back to tones.
+    #
+    # RAISE resources BELOW when setting this. The defaults are sized for the
+    # tone generator; piper is a neural TTS that loads a ~63 MB ONNX model, and
+    # at the default 200m CPU it spent 4.6s just loading the voice and then blew
+    # its 15s synthesis deadline. mock-speech answers a failed synthesis with a
+    # tone and logs tts_fallbacks, so the call still completes and the only
+    # symptom is that the bot sounds wrong — or, if the vendor SDK gives up
+    # first, silent. Around 500m requested / 2 CPU limit and 1Gi is enough.
+    ttsEngine: ""
+    # How STT answers. Empty (the default) leaves the binary's own default: the
+    # canned defaultTranscript above, which is what every deterministic
+    # assertion wants.
+    #
+    # "whisper" recognises the caller's actual audio with whisper.cpp, bundled in
+    # the image alongside piper — the mirror of ttsEngine: piper, and the only
+    # way to prove a caller's words survived the call path. "vosk" uses an
+    # external Vosk websocket server instead (set voskUrl).
+    #
+    # An explicitly set transcript still beats the recogniser, so a test that
+    # pinned the words keeps asserting on them.
+    #
+    # RAISE resources when setting this: whisper is a neural model, and the
+    # numbers below are sized for returning a fixed string. A recognition that
+    # overruns its per-turn timeout falls back to the canned transcript and logs
+    # it, so a starved recogniser degrades quietly rather than failing the call.
+    sttEngine: ""
+    # Which whisper model to run. The image carries two:
+    #
+    #   /opt/whisper/base.en.bin   ~57 MB, fast, the binary's default
+    #   /opt/whisper/small.en.bin  ~180 MB, markedly better on the narrowband
+    #                              speech a real call carries, ~3x the compute
+    #
+    # Every whisper model is trained on 16 kHz wideband audio while a call is
+    # 8 kHz, so upsampling leaves the top half of the spectrum empty and short
+    # number words are where that shows first. A bigger model mitigates that; it
+    # does not remove it.
+    #
+    # Empty uses the binary's default, /opt/whisper/model.bin (a copy of base.en).
+    whisperModel: ""
+    # Threads whisper.cpp may use, e.g. 4. Worth raising with small.en, but only
+    # as far as the pod's CPU limit — threads contending for one core are slower
+    # than one thread. Latency is the thing that matters here: a transcript that
+    # is correct but arrives after VG's gather has given up is worth nothing.
+    whisperThreads: ""
+    # Per-turn recognition timeout, e.g. 45s. Raise it alongside a bigger model.
+    # An overrun emits NO transcript rather than a placeholder, so a too-short
+    # timeout shows up as a bot that never hears anything.
+    whisperTimeout: ""
+    # Vosk websocket server for sttEngine: vosk, e.g. ws://vosk-stt:2700.
+    voskUrl: ""
+    # RMS floor, in PCM16 units, below which an audio window produces no
+    # transcript at all. Empty leaves the binary's own behaviour: OFF for canned
+    # transcripts, and ON at a calibrated default whenever a recogniser is
+    # active.
+    #
+    # Set this only to tune. Recognising the silence at the start of a call
+    # returns nothing, the store falls back to the canned transcript, and the
+    # flow then has its answer before the caller has spoken -- which reads as
+    # recognition being broken when it is working correctly on the wrong audio.
+    # 0 forces the gate off.
+    sttSilenceRmsThreshold: ""
+    # Optional. Omitted from the args unless set, so the binary's own default
+    # applies. debug|info|warn|error.
+    logLevel: ""
+    ## Second listener on :8443, serving the same routes over TLS. Needed only by
+    ## the vendor-hostname route, where FreeSWITCH dials a real vendor hostname
+    ## (api.eu.deepgram.com) that a DNS rewrite points here — see
+    ## vgTestHarness.regionDns.rewrites and ci/kind/values-kind-region.yaml.
+    ##
+    ## The chart does NOT create secretName: the cert has to cover whichever
+    ## hostnames that run intercepts, so it is minted per run and applied
+    ## alongside the release (ci/kind/action.yml's vendor_speech_sans, or the
+    ## `gen-certs` step of docs/quality-gate/deploy-vendor-speech-adapter-to-a-
+    ## dev-namespace.md in vg-test-harness). Enabling this without the secret
+    ## leaves the pod waiting on a missing volume.
+    tls:
+      enabled: false
+      secretName: mock-speech-tls
     resources:
       requests: {cpu: "0.100", memory: 128Mi}
       limits: {cpu: "0.200", memory: 256Mi}
+  # DEPRECATED, superseded by the speech adapter. The region-routing test now
+  # asserts on the SNI mock-speech was dialled at (regionDns.rewrites pointing
+  # at mock-speech, plus mockSpeech.tls) rather than on which sniffer pod logged
+  # a rejected ClientHello — see ci/kind/values-kind-region.yaml.
+  #
+  # Retained, scaled to zero by that overlay, only for a namespace that still
+  # points its own rewrites at these Services. The pin below can never move
+  # again: vg-test-harness dc660e2 deleted cmd/mock-deepgram-region and its
+  # Dockerfile, so :main is frozen at the last image that was pushed. Prefer the
+  # adapter for anything new; nothing in the suites reads these any more.
   mockDeepgramRegion:
     image: cognigydevelopment.azurecr.io/vg-mock-deepgram-region:main
     resources:
@@ -3010,8 +3307,47 @@ vgTestHarness:
     resources:
       requests: {cpu: "0.050", memory: 32Mi}
       limits: {cpu: "0.100", memory: 64Mi}
+    # Hostname -> in-cluster Service rewrites. Each entry takes `name`, `target`,
+    # and an optional `type` of "exact" (default) or "regex".
+    #
+    # regex exists because some vendors' hostname is derived from a CREDENTIAL
+    # rather than fixed: the Azure JS Speech SDK builds
+    # <region>.tts.speech.microsoft.com from the credential's region, so an exact
+    # list silently misses any region nobody thought to add — and a miss is not a
+    # failure, it is a call that quietly reaches the real paid vendor. One
+    # `(.*)\.tts\.speech\.microsoft\.com` entry covers every region instead.
+    #
+    # Empty by default, and deliberately so. This is the chart's default values
+    # file, which every deployment — production included — layers its own
+    # values on top of, so no third-party hostname belongs in it: a default
+    # that silently redirects api.deepgram.com is the wrong thing to inherit,
+    # however well gated. A run that wants to intercept vendor traffic names
+    # the hostnames itself, in its own values file (see
+    # ci/kind/values-kind-vendor-speech.yaml).
+    #
+    # Nothing here renders unless BOTH vgTestHarness.enabled and
+    # regionDns.enabled are true, and an empty list simply yields a CoreDNS
+    # config that forwards everything upstream unchanged.
+    rewrites: []
+    # Whether the provision Job also creates the labelled eu/us deepgram
+    # credentials the region-routing regression test resolves. Set false when
+    # this CoreDNS instance is being used only to rewrite vendor hostnames for
+    # the speech adapter: the rewrites are wanted, the extra credentials (which
+    # name real vendor hostnames) are not.
+    provisionRegionCredentials: true
   sipCaller:
     image: cognigydevelopment.azurecr.io/vg-sip-caller:main
+    ## Scheduling for the caller pod. Both empty by default.
+    ## Set affinity to co-locate sip-caller with sbc-sip when the carrier
+    ## allow-list is a pod CIDR: sbc-sip runs with hostNetwork, so an INVITE
+    ## from another node is SNAT'd to the node address and no longer matches.
+    affinity: {}
+    nodeSelector: {}
+    ## Extra CLI flags appended after --addr/--sbc-host/--sbc-port. Used by
+    ## kindsmoke for SIPREC re-offer media activation (--mock-srs-initial-inactive
+    ## --mock-srs-auto-activate). Empty by default so shared/manual installs keep
+    ## the mock-SRS live sendrecv answer.
+    extraArgs: []
     resources:
       requests: {cpu: "0.100", memory: 128Mi}
       limits: {cpu: "0.200", memory: 256Mi}
@@ -3028,6 +3364,11 @@ vgTestHarness:
     # application (webhook -> mock-cognigy) and phone number in the local
     # api-server.
     enabled: false
+    # Overrides the provisioned call-hook URL. Empty uses
+    # ws://mock-cognigy.<namespace>.svc.cluster.local:8080/voiceGateway.
+    # The SCHEME selects the feature-server's requestor — ws:// gives the
+    # WsRequestor that production uses, http:// gives HttpRequestor.
+    webhookUrl: ""
     adminUser: "admin" # users.name column, NOT an email
     adminPass: "" # plain password — use adminPassSecretRef instead to avoid committing credentials
     adminPassSecretRef: # alternative to adminPass: read password from an existing K8s secret
@@ -3047,6 +3388,29 @@ vgTestHarness:
     # 10.104.0.0/16 pod CIDR). Defaults to 127.0.0.1/32 which fails closed.
     carrierSourceIPv4: ""
     carrierSourceNetmask: 16
+    # CGY-34769: provision the labelled mip-in / mip-out deepgram credentials the
+    # Deepgram Model Improvement Program tests need. They are identical except for
+    # deepgram_improvement_program_opt_in (true / false), and both carry
+    # deepgram_stt_uri: mock-speech:8080 with deepgram_stt_use_tls: false so
+    # mod_deepgram_transcribe reaches mock-speech over the vendor-native protocol.
+    #
+    # No infrastructure counterpart, unlike regionDns.enabled: the redirection is
+    # on the credential, so this needs no DNS interception, no debug/asan
+    # FreeSWITCH build, and mutates nothing namespace-wide. That is why the `mip`
+    # suite can share a cluster with any other suite while `region` cannot.
+    #
+    # REQUIRES `deepgram` to be absent from mediaProcessor.sttVendors. That vendor
+    # name routes STT through the gRPC media-processor instead of out of
+    # FreeSWITCH, and the media-processor does not carry this decision at all
+    # (CGY-34207) — so with it listed the tests would assert on a path the feature
+    # under test does not use. Nothing here can enforce that; the suite's tests
+    # fail (they observe no vendor-native connection) rather than pass wrongly.
+    #
+    # Existing credentials are reconciled, not just skipped: the opt-in value is
+    # the field under test, so a stale row would make the tests pass or fail for
+    # the wrong reason.
+    mipTest:
+      enabled: false
     recording:
       # When enabled, the provision Job also creates the MinIO bucket, sets
       # record_all_calls + record_format on the account, and adds an

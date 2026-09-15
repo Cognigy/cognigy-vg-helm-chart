@@ -159,6 +159,11 @@ spec:
               value: {{ .Values.global.nodeEnv | quote }}
             - name: PORT
               value: {{ .Values.vgConnector.port | quote }}
+            ## Same firewall-opened UDP range as rtpEngine.startPort/endPort.
+            - name: RTP_MIN_PORT
+              value: {{ .Values.rtpEngine.startPort | quote }}
+            - name: RTP_MAX_PORT
+              value: {{ .Values.rtpEngine.endPort | quote }}
             - name: SIGTERM_FORCE_CLOSE_TIMEOUT_MS
               value: {{ .Values.vgConnector.sigtermForceCloseTimeoutMs | quote }}
             {{- if .Values.vgConnector.extraEnvVars }}

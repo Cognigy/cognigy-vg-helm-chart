@@ -230,6 +230,10 @@ spec:
               value: {{ .Values.tmpban.invite.trackingWindowMinutes | quote }}
             - name: VG_REDIS_BAN_DURATION_HOURS
               value: {{ .Values.tmpban.invite.banDurationHours | quote }}
+            {{- if .Values.resourceResolver.enabled }}
+            - name: RESOURCE_RESOLVER_URL
+              value: "http://vg-resource-resolver:{{ .Values.resourceResolver.port | default 4000 }}"
+            {{- end }}
             {{- if .Values.sbcInbound.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcInbound.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

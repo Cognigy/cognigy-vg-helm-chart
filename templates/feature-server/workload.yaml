@@ -1,6 +1,6 @@
 {{- /*
-  Unified feature-server workload. Renders a StatefulSet when
-  featureServer.useStatefulSet is true (default), otherwise a Deployment.
+  Unified feature-server workload. Renders a Deployment by default, or a
+  StatefulSet when featureServer.useStatefulSet is true.
   The pod spec is identical in both modes; only kind + serviceName differ.
   A Deployment relies on the headless service (see service.yaml) for real
   per-pod DNS/SIP routing, so it works on AWS and Azure alike.
@@ -496,6 +496,10 @@ spec:
             - name: {{ $key }}
               value: {{ $val | quote }}
             {{- end }}
+            {{- end }}
+            {{- if .Values.resourceResolver.enabled }}
+            - name: RESOURCE_RESOLVER_URL
+              value: "http://vg-resource-resolver:{{ .Values.resourceResolver.port | default 4000 }}"
             {{- end }}
             {{- if .Values.featureServer.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.extraEnvVars "context" $) | nindent 12 }}

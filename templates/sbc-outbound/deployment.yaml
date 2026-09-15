@@ -199,6 +199,10 @@ spec:
               value: {{ .Values.global.privateVoipNetworkCidr | quote }}
             - name: FEAT_COMPATIBILITY_RFC3261
               value: {{ .Values.sbcOutbound.registerRfc3261 | quote }}
+            {{- if .Values.resourceResolver.enabled }}
+            - name: RESOURCE_RESOLVER_URL
+              value: "http://vg-resource-resolver:{{ .Values.resourceResolver.port | default 4000 }}"
+            {{- end }}
             {{- if .Values.sbcOutbound.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcOutbound.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

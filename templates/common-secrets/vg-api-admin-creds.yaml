@@ -23,8 +23,7 @@ resource-policy: keep mean it is created once and never rotated underneath a
 running cluster.
 
 Set api.adminInitialPassword to pin a specific password; leave it empty to have
-one generated on first install — a 40-character hex string (randAlphaNum 20,
-hex-encoded), unrelated to the migrator's own 20-character fallback above.
+one generated on first install.
 */}}
 {{- if not (lookup "v1" "Secret" $.Release.Namespace "vg-api-admin-creds") }}
 ---

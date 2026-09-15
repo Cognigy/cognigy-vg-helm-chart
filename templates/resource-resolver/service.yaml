@@ -1,0 +1,19 @@
+{{- if .Values.resourceResolver.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vg-resource-resolver
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-resource-resolver
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.resourceResolver.port | default 4000 }}
+      targetPort: {{ .Values.resourceResolver.port | default 4000 }}
+      protocol: TCP
+      name: http
+  selector:
+    app: vg-resource-resolver
+{{- end }}

@@ -1,4 +1,5 @@
 {{- if .Values.vgTestHarness.enabled }}
+{{- $tlsEnabled := dig "tls" "enabled" false .Values.vgTestHarness.mockSpeech }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -16,4 +17,10 @@ spec:
       port: 8080
       targetPort: 8080
       protocol: TCP
+    {{- if $tlsEnabled }}
+    - name: https
+      port: 443
+      targetPort: 8443
+      protocol: TCP
+    {{- end }}
 {{- end }}

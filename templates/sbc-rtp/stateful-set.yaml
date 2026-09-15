@@ -184,7 +184,7 @@ spec:
             - name: health
               containerPort: {{ .Values.health.port }}
               protocol: TCP
-            {{- if .Values.sbc.rtp.trafficGate.enabled }}
+            {{- if include "vg.sbcRtp.trafficGate.wired" $ }}
             - name: readiness
               containerPort: {{ .Values.rtpEngineSidecar.ports.readiness }}
               protocol: TCP
@@ -201,7 +201,7 @@ spec:
             httpGet:
               path: /health/startup
               port: {{ .Values.health.port }}
-          {{- if .Values.sbc.rtp.trafficGate.enabled }}
+          {{- if include "vg.sbcRtp.trafficGate.wired" $ }}
           readinessProbe:
             httpGet:
               path: /health/ready
@@ -262,7 +262,7 @@ spec:
             - name: COGNIGY_AI_VERSION
               value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
             {{- end }}
-            {{- if .Values.sbc.rtp.trafficGate.enabled }}
+            {{- if include "vg.sbcRtp.trafficGate.wired" $ }}
             - name: SBC_RTP_TRAFFIC_GATE_ENABLED
               value: "true"
             - name: READINESS_PORT
@@ -277,7 +277,7 @@ spec:
             - name: cognigy-env-reloadable
               mountPath: /config/env
               readOnly: true
-            {{- if .Values.sbc.rtp.trafficGate.enabled }}
+            {{- if include "vg.sbcRtp.trafficGate.wired" $ }}
             - name: sbc-rtp-traffic-gate
               mountPath: /config/rtp-gate
               readOnly: true
@@ -292,7 +292,7 @@ spec:
             items:
               - key: cognigy.yaml
                 path: cognigy.yaml
-        {{- if .Values.sbc.rtp.trafficGate.enabled }}
+        {{- if include "vg.sbcRtp.trafficGate.wired" $ }}
         - name: sbc-rtp-traffic-gate
           configMap:
             name: sbc-rtp-traffic-gate

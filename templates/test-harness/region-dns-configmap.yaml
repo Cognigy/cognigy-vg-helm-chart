@@ -11,8 +11,18 @@ metadata:
 data:
   Corefile: |
     . {
-        rewrite name exact api.deepgram.com.    mock-deepgram-intl.{{ .Release.Namespace }}.svc.cluster.local.
-        rewrite name exact api.eu.deepgram.com. mock-deepgram-eu.{{ .Release.Namespace }}.svc.cluster.local.
+        {{- range .Values.vgTestHarness.regionDns.rewrites }}
+        {{- if eq (.type | default "exact") "regex" }}
+        {{- /*
+          answer auto is required here and NOT on the exact form: a regex rewrite
+          can produce an answer whose owner name does not match the question a
+          strict resolver asked, and Node's TLS/SNI path is strict enough to care.
+        */}}
+        rewrite name regex {{ .name }} {{ .target }}.{{ $.Release.Namespace }}.svc.cluster.local. answer auto
+        {{- else }}
+        rewrite name exact {{ .name }}. {{ .target }}.{{ $.Release.Namespace }}.svc.cluster.local.
+        {{- end }}
+        {{- end }}
         forward . {{ .Values.vgTestHarness.regionDns.upstream }}
         log
         errors

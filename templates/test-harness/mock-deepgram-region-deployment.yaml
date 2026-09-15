@@ -1,4 +1,13 @@
 {{- if and .Values.vgTestHarness.enabled .Values.vgTestHarness.regionDns.enabled }}
+{{- /*
+  DEPRECATED, superseded by the speech adapter. Region routing is now asserted
+  on the SNI mock-speech was dialled at (regionDns.rewrites -> mock-speech plus
+  mockSpeech.tls). Retained, scaled to zero by the region overlay, only for a
+  namespace that still points its own rewrites at these Services. The image pin
+  can never move again: vg-test-harness dc660e2 deleted cmd/mock-deepgram-region
+  and its Dockerfile.
+*/}}
+{{- $replicas := dig "mockDeepgramRegion" "replicaCount" 1 .Values.vgTestHarness }}
 {{- range list "eu" "intl" }}
 apiVersion: apps/v1
 kind: Deployment
@@ -11,7 +20,7 @@ metadata:
     app: mock-deepgram-{{ . }}
     owner-team: echo
 spec:
-  replicas: 1
+  replicas: {{ $replicas }}
   selector:
     matchLabels:
       app: mock-deepgram-{{ . }}

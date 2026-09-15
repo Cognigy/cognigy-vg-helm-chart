@@ -1,0 +1,41 @@
+{{- if and .Values.vgTestHarness.enabled .Values.vgTestHarness.numbers }}
+{{- /*
+  The number manifest: one file naming every number the harness serves, the
+  fixture that answers it, and the TO_NUMBER_* variable the Playwright suite
+  reads it from. Two pods consume it — the provision Job creates one
+  application + number per entry, and mock-cognigy loads each entry's fixture
+  scoped to that entry's number — so the mapping cannot drift between what was
+  provisioned and what answers.
+
+  Values are camelCase by chart convention; the manifest's own keys are
+  snake_case, so each field is mapped explicitly rather than dumped.
+
+  Fixture files are NOT in here. They come from
+  vgTestHarness.fixturesConfigMap, projected into the same directory so a
+  manifest entry's relative "fixture" path resolves beside it — see
+  the projected volume in mock-cognigy-deployment.yaml.
+*/}}
+{{- $entries := list }}
+{{- range .Values.vgTestHarness.numbers }}
+  {{- $entry := dict "name" (required "every vgTestHarness.numbers entry needs a name" .name) "number" (required "every vgTestHarness.numbers entry needs a number" .number) }}
+  {{- with .env }}{{- $_ := set $entry "env" . }}{{- end }}
+  {{- with .fixture }}{{- $_ := set $entry "fixture" . }}{{- end }}
+  {{- with .webhookUrl }}{{- $_ := set $entry "webhook_url" . }}{{- end }}
+  {{- if .default }}{{- $_ := set $entry "default" true }}{{- end }}
+  {{- $entries = append $entries $entry }}
+{{- end }}
+{{- $manifest := dict "version" 1 "defaults" (dict "webhook_url" (include "vg.testHarness.webhookUrl" $)) "numbers" $entries }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vg-test-harness-numbers
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: mock-cognigy
+    owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-test-harness.git"
+data:
+  numbers.json: |
+    {{- toPrettyJson $manifest | nindent 4 }}
+{{- end }}

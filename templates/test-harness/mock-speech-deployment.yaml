@@ -1,4 +1,6 @@
 {{- if .Values.vgTestHarness.enabled }}
+{{- $tlsEnabled := dig "tls" "enabled" false .Values.vgTestHarness.mockSpeech }}
+{{- $tlsSecretName := dig "tls" "secretName" "mock-speech-tls" .Values.vgTestHarness.mockSpeech }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -27,10 +29,76 @@ spec:
           args:
             - --http-addr=:8080
             - "--transcript={{ .Values.vgTestHarness.mockSpeech.defaultTranscript | default "mock transcript" }}"
+            {{- with .Values.vgTestHarness.mockSpeech.ttsEngine }}
+            # piper makes TTS say the actual prompt instead of a 440 Hz tone.
+            # Only tests that LISTEN to the bot need it — the voice suite
+            # transcribes the call and asserts on the words, and a tone
+            # transcribes to nothing. Everything else is better off with the
+            # tone, which costs nothing and is identical every run.
+            - "--tts-engine={{ . }}"
+            {{- end }}
+            {{- with dig "sttEngine" "" .Values.vgTestHarness.mockSpeech }}
+            # whisper makes STT return what the CALLER actually said instead of
+            # a fixed string — the mirror of what piper does for TTS, and the
+            # only way to prove a caller's words survived the call path. Canned
+            # stays the default because determinism is what most assertions
+            # want. An explicitly set transcript still wins over the recogniser.
+            - "--stt-engine={{ . }}"
+            {{- end }}
+            {{- with dig "whisperModel" "" .Values.vgTestHarness.mockSpeech }}
+            # The image carries base.en.bin and small.en.bin. small.en is
+            # markedly better on the narrowband speech a call actually carries,
+            # at roughly three times the compute.
+            - "--whisper-model={{ . }}"
+            {{- end }}
+            {{- with dig "whisperThreads" "" .Values.vgTestHarness.mockSpeech }}
+            # Raise with a bigger model IF the pod has the cores. Latency, not
+            # accuracy, is what decides whether a transcript beats VG's gather
+            # timeout — a correct transcript that arrives late is worth nothing.
+            - "--whisper-threads={{ . }}"
+            {{- end }}
+            {{- with dig "whisperTimeout" "" .Values.vgTestHarness.mockSpeech }}
+            # Raise alongside a bigger model. A recognition that overruns emits
+            # NO transcript rather than a placeholder, so the symptom of a
+            # too-short timeout is a bot that never hears anything.
+            - "--whisper-timeout={{ . }}"
+            {{- end }}
+            {{- with dig "voskUrl" "" .Values.vgTestHarness.mockSpeech }}
+            - "--vosk-url={{ . }}"
+            {{- end }}
+            {{- with dig "sttSilenceRmsThreshold" "" .Values.vgTestHarness.mockSpeech }}
+            # Only for tuning. mock-speech already defaults the gate ON whenever
+            # a recogniser is active, because the first window of a call is the
+            # silence before the caller speaks and recognising it yields nothing.
+            - "--stt-silence-rms-threshold={{ . }}"
+            {{- end }}
+            {{- with .Values.vgTestHarness.mockSpeech.logLevel }}
+            # Omitted unless set, so the binary's own default applies. At debug
+            # mock-speech logs each STT connection and every transcript it
+            # emits, which is the only direct evidence of whether a missing
+            # gather result was never sent or was sent and dropped downstream.
+            - "--log-level={{ . }}"
+            {{- end }}
+            {{- if $tlsEnabled }}
+            - --tls-addr=:8443
+            - --tls-cert=/etc/mock-speech-tls/tls.crt
+            - --tls-key=/etc/mock-speech-tls/tls.key
+            {{- end }}
           ports:
             - name: http
               containerPort: 8080
               protocol: TCP
+            {{- if $tlsEnabled }}
+            - name: https
+              containerPort: 8443
+              protocol: TCP
+            {{- end }}
+          {{- if $tlsEnabled }}
+          volumeMounts:
+            - name: mock-speech-tls
+              mountPath: /etc/mock-speech-tls
+              readOnly: true
+          {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -38,4 +106,10 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
           resources: {{- toYaml .Values.vgTestHarness.mockSpeech.resources | nindent 12 }}
+      {{- if $tlsEnabled }}
+      volumes:
+        - name: mock-speech-tls
+          secret:
+            secretName: {{ $tlsSecretName }}
+      {{- end }}
 {{- end }}

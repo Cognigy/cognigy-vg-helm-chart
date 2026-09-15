@@ -165,15 +165,67 @@ spec:
             - name: sip-drachtio
               containerPort: {{ .Values.drachtio.metricsPort }}
               protocol: TCP
-          args: 
+          args:
             - drachtio
             {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
             - --contact
             - "sip:*:5062;transport=tcp"
             {{- end }}
+            {{- /*
+              Optional explicit SIP contact. Left unset, drachtio derives one
+              itself; with no --cloud-deployment that becomes the wildcard
+              "sip:*;transport=udp,tcp", and sofia-sip then binds the IPv6
+              wildcard first. Because that also covers IPv4, the following IPv4
+              bind fails and drachtio exits:
+
+                nta_agent_add_tport() nta: bind(*:5060;transport=*): Address already in use
+                DrachtioController::run: Error calling nta_agent_create
+
+              Pinning a single address avoids the double bind. $(POD_IP) is
+              interpolated by Kubernetes from the env var above.
+            */}}
+            {{- with .Values.sbc.sip.contact }}
+            - --contact
+            - {{ . | quote }}
+            {{- end }}
+            {{- /*
+              Only needed alongside an explicit sbc.sip.contact. Setting any
+              contact suppresses drachtio's auto-derived listeners, so kind — which
+              pins an explicit udp,tcp contact to avoid the IPv6 double-bind above —
+              loses TLS and its outbound tls/srtp dials fail with
+              "requested protocol/transport not available". This contact restores it.
+
+              It must NOT be rendered when sbc.sip.contact is empty. There drachtio
+              auto-derives every listener on the external address, and pinning only
+              the TLS one to $(POD_IP) makes it the sole listener with a private
+              in-cluster address. SipTransport::findAppropriateTransport ranks
+              candidates by octet match against the target and never filters by
+              protocol when the request-uri carries no transport param, so TLS then
+              wins for any in-cluster target: sbc-inbound's B-leg INVITE to
+              sip:<user>@feature-server-headless goes out as tls/<fs-pod-ip>:5061,
+              the feature server listens on udp:5060 only, and sofia turns the
+              refused connection into a bare 503 the caller sees.
+
+              The scheme MUST be sips:, not sip:. sofia binds TLS only for a
+              sips: URI; sip:...;transport=tls is rejected fatally with
+                nta_agent_add_tport() nta: bind(...:5061;transport=tls): Protocol not supported
+                DrachtioController::run: Error adding additional transport
+              and drachtio exits (drachtio-server#109). The auto-derived
+              production listener uses sips: too.
+            */}}
+            {{- if and .Values.drachtio.tls.enabled .Values.sbc.sip.contact }}
+            - --contact
+            - "sips:$(POD_IP):{{ .Values.sbc.sip.ports.tls }};transport=tls"
+            {{- end }}
             - --loglevel
             - {{ if .Values.sbc.sip.logLevel }}{{ .Values.sbc.sip.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
-            {{- if ne .Values.cloud "stackit" }}
+            {{- /*
+              Only a real cloud deployment gets --cloud-deployment. The allow-list
+              of clouds that answer on the metadata service, and the crash that
+              follows when one does not, live in the shared helper — daemon-set.yaml
+              renders the same drachtio and must agree.
+            */}}
+            {{- if include "vg.sbc.sip.useCloudDeployment" . }}
             - --cloud-deployment
             {{- end }}
             - --sofia-loglevel
@@ -235,6 +287,13 @@ spec:
             - name: DRACHTIO_SUPPORT_BEST_EFFORT_TLS
               value: {{ if .Values.drachtio.supportBestEffortTls }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             {{- end }}
+            {{- /* Exposed so sbc.sip.contact can reference it as $(POD_IP).
+              Under hostNetwork this is the node address, which is what drachtio
+              must advertise and bind. */}}
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             - name: SOFIA_SEARCH_DOMAINS
               value: "1"
             - name: SOFIA_SRES_NO_CACHE

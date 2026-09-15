@@ -16,6 +16,19 @@ spec:
       port: 8090
       targetPort: 8090
       protocol: TCP
+    # mock-agent TLS listener (--mock-agent-tls-port). Required by the
+    # avaya-srtp-mock outbound carrier: the trunk dials sip-caller:5071 over
+    # tls/srtp, and the provisioner's avayaSrtpMockTLSPort must match. Service
+    # DNS, not a pod IP — a reschedule must not stale it.
+    #
+    # Without this the dial has nowhere to land: the mock-agent is listening
+    # inside the pod (it ships in the sip-caller binary, on by default) but
+    # unreachable, so TestAvayaSRTPCryptoReInvite and friends time out with
+    # CallsTotal: 0 and nothing naming the cause.
+    - name: sip-agent-tls
+      port: 5071
+      targetPort: 5071
+      protocol: TCP
     - name: sip-srs
       port: 5072
       targetPort: 5072

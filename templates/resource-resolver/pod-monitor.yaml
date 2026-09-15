@@ -1,0 +1,35 @@
+{{- if (.Values.resourceResolver.enabled) }}
+{{- if (.Values.podMonitors.enabled) }}
+{{- with .Values.podMonitors }}
+---
+# Without this, the resolver's /metrics is served and never collected.
+#
+# The component shipped a Deployment and a Service but no PodMonitor, unlike
+# every sibling here (sbc-inbound, api-server, sbc-call-router, silero-vad …).
+# That is load-bearing rather than cosmetic: the per-route latency and cache
+# hit/miss counters exist to answer CGY-36159's capacity question and to back
+# CGY-36161's call-impacting alert, and an alert cannot fire on a series
+# Prometheus never scraped.
+#
+# Gated on resourceResolver.enabled as well as podMonitors.enabled, so a cluster
+# running without the resolver does not get a monitor selecting nothing.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: prom-cognigy-monitor-cognigy-vg-resource-resolver
+  namespace: {{ .namespace }}
+  labels:
+    owner-team: echo
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ $.Release.Namespace }}
+  podMetricsEndpoints:
+    - path: /metrics
+      port: metrics
+  selector:
+    matchLabels:
+      app: vg-resource-resolver
+{{- end }}
+{{- end }}
+{{- end }}

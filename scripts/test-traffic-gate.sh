@@ -25,6 +25,18 @@ imageCredentials:
 sbc:
   sip:
     uri: "sip.example.com"
+  rtp:
+    # Explicit, because trafficGate.enabled now DEFAULTS TO FALSE. It used to
+    # default to true and these assertions relied on that; every "the gate renders
+    # X" check below silently became "the gate renders nothing" when the default
+    # flipped. The default moved because an always-on gate mounted a readiness
+    # probe that no released sidecar image can answer, wedging sbc-rtp at 1/2
+    # containers on every install — and because Helm cannot tell an operator's
+    # value from the chart default, so a true default left no way to say "off
+    # here". These tests exercise the gate WHEN ENABLED, so they must ask for it.
+    # The default-off behaviour has its own assertion further down.
+    trafficGate:
+      enabled: true
 EOF
 
 PASS=0
@@ -182,6 +194,45 @@ for c in azure stackit; do
   out="$(helm template voicegateway . --kube-version "$KUBE_VERSION" -f "$FIXTURE" --set "cloud=$c" 2>&1)"
   check $? "cloud=$c renders with an empty drain list"
 done
+
+echo "== REGRESSION GUARD: chart defaults must mount no gate at all =="
+# The defect this guards: the gate was default-on and unconditional, so a plain
+# `helm install` mounted a readinessProbe on a port no released sidecar image
+# listens on. Every sbc-rtp pod then stayed at 1/2 containers forever with
+# ECONNREFUSED on /health/ready — an install that can never converge. Nothing in
+# this suite could catch it, because template assertions cannot see that a
+# container declares a port and does not bind it; the kind gate found it by
+# actually running the chart.
+#
+# So: with NO trafficGate override, none of the three pieces may appear. Asserted
+# on aws specifically — the cloud where the gate is meant to work — so this cannot
+# pass merely because some cloud test filtered it out.
+DEFAULTS="$(mktemp -t rtpgate-defaults)"
+trap 'rm -f "$FIXTURE" "$DEFAULTS"' EXIT
+cat > "$DEFAULTS" <<'EOF'
+cloud: aws
+tls:
+  existingSecret: dummy-tls
+imageCredentials:
+  registry: example.azurecr.io
+  username: dummy
+  password: dummy
+sbc:
+  sip:
+    uri: "sip.example.com"
+EOF
+out="$(helm template voicegateway . --kube-version "$KUBE_VERSION" -f "$DEFAULTS" 2>&1)"
+rc=$?
+{ [[ $rc -eq 0 ]] && ! grep -qF 'sbc-rtp-traffic-gate' <<<"$out"; }
+check $? "default install renders no traffic-gate ConfigMap or mount"
+# Asserted on the named container PORT, not on "/health/ready": feature-server
+# serves a /health/ready of its own, so a whole-render grep for the path would
+# never go quiet and the assertion would be vacuous. `name: readiness` is emitted
+# only inside the gate's conditional — verified 0 with the gate off, 1 with it on
+# — so it is an exact marker. rtp_docs is not usable here: it re-renders with
+# $FIXTURE (gate ON) rather than reading stdin.
+{ [[ $rc -eq 0 ]] && ! grep -qF 'name: readiness' <<<"$out"; }
+check $? "default install renders no sbc-rtp readiness port or probe"
 
 echo "== helm lint =="
 helm lint . --kube-version "$KUBE_VERSION" -f "$FIXTURE" "${DRAIN[@]}" >/dev/null 2>&1

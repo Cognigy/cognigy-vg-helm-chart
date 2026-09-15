@@ -3,14 +3,31 @@ To get further information, you can run the commands:
   $ helm status -n {{ .Release.Namespace }} {{ .Release.Name }}
   $ helm get all -n {{ .Release.Namespace }} {{ .Release.Name }}
 {{- if .Values.vgTestHarness.enabled }}
-{{- if not (regexMatch "vg-freeswitch-mrf(asan|debug)" .Values.freeswitch.image) }}
+{{- /*
+     vg-freeswitch renamed its final image from vg-freeswitch-mrf to
+     vg-freeswitch (Cognigy/vg-freeswitch#244), and build-freeswitch.yml appends
+     the asan/debug suffix with NO separator — so current builds are
+     vg-freeswitchasan / vg-freeswitchdebug. Before this was widened the regex
+     matched only the pre-rename name, so a correctly-pinned current asan image
+     still triggered the warning. The old form is kept so a pin on a pre-rename
+     image does not start warning spuriously.
+
+     `-mrf-` (with the trailing hyphen) is deliberately NOT matched: those are
+     intermediate build stages — vg-freeswitch-mrf-builder, -installation,
+     -libfvad and the ASR gRPC APIs — and none of them is runnable here.
+*/}}
+{{- if not (regexMatch "vg-freeswitch(-mrf)?(asan|debug)" .Values.freeswitch.image) }}
 
 ⚠️  vgTestHarness.enabled is true, but freeswitch.image
     ({{ .Values.freeswitch.image }})
     is not an asan/debug build. The TESTING_OVERRIDE_TTS_URL /
     TESTING_OVERRIDE_STT_URL env vars are compiled out of production
     FreeSWITCH binaries (vg-freeswitch PR #255), so speech traffic will
-    still hit REAL providers. Pin an mrfasan/mrfdebug image to use the
-    test harness.
+    still hit REAL providers — and any `gather` will then hang until it
+    times out rather than failing outright.
+    Pin a vg-freeswitchasan / vg-freeswitchdebug image to use the harness.
+    Preview releases build the PRODUCTION variant only, so asan tags come
+    from vg-freeswitch's build-freeswitch workflow and are pushed to the
+    DEV registry only.
 {{- end }}
 {{- end }}

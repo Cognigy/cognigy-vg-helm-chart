@@ -1,0 +1,171 @@
+{{- if .Values.resourceResolver.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vg-resource-resolver
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-resource-resolver
+    owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-resource-resolver.git"
+spec:
+  selector:
+    matchLabels:
+      app: vg-resource-resolver
+  {{- /* Drop the static replica count ONLY when this service is actually
+         autoscaled. Gating on hpa.enabled alone would omit spec.replicas
+         while nothing manages the workload, silently collapsing it to the
+         Kubernetes default of 1 and ignoring resourceResolver.replicaCount. */}}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) (dig "resourceResolver" "enabled" false $.Values.hpa.services)) }}
+  replicas: {{ .Values.resourceResolver.replicaCount | default 1 }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        app: vg-resource-resolver
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- if .Values.resourceResolver.affinity }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.resourceResolver.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if or (.Values.resourceResolver.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) (dig "resourceResolver" "enabled" false $.Values.hpa.services)) }}
+      nodeSelector:
+        {{- if .Values.resourceResolver.nodeSelector }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.resourceResolver.nodeSelector "context" $) | nindent 8 }}
+        {{- end }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) (dig "resourceResolver" "enabled" false $.Values.hpa.services) }}
+          {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- if or (.Values.resourceResolver.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) (dig "resourceResolver" "enabled" false $.Values.hpa.services)) }}
+      tolerations:
+        {{- if .Values.resourceResolver.tolerations }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.resourceResolver.tolerations "context" $) | nindent 8 }}
+        {{- end }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) (dig "resourceResolver" "enabled" false $.Values.hpa.services) }}
+          {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.resourceResolver.priorityClassName }}
+      priorityClassName: {{ .Values.resourceResolver.priorityClassName }}
+      {{- end }}
+      {{- if .Values.resourceResolver.podSecurityContext }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.resourceResolver.podSecurityContext "context" $) | nindent 8 }}
+      {{- end }}
+      restartPolicy: Always
+      containers:
+        - name: vg-resource-resolver
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.resourceResolver.image) }}
+          imagePullPolicy: {{ .Values.resourceResolver.imagePullPolicy | default "IfNotPresent" }}
+          resources: {{- toYaml .Values.resourceResolver.resources | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.resourceResolver.port | default 4000 }}
+              protocol: TCP
+            - name: health
+              containerPort: {{ .Values.health.port }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+          # Health checks live on their own listener (@cognigy-internal/health), not
+          # on the app port — matches the rest of the vg-* fleet (see feature-server's
+          # workload.yaml). /health/startup gates on setStartupFinished();
+          # /health/liveness only proves the process is up. /health/readiness is a
+          # custom route (vg-resource-resolver's lib/common/health/readiness.ts)
+          # backed by a real MySQL + Redis ping — previously pointed at
+          # /health/liveness too, which meant a pod with an unreachable dependency
+          # kept getting traffic (see that repo's docs/follow-up.md).
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: {{ .Values.health.port }}
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: {{ .Values.health.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: {{ .Values.health.port }}
+            failureThreshold: 30
+            periodSeconds: 10
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv | quote }}
+            - name: HTTP_PORT
+              value: {{ .Values.resourceResolver.port | default 4000 | quote }}
+            - name: HEALTH_CHECK_PORT
+              value: {{ .Values.health.port | quote }}
+            - name: METRICS_PORT
+              value: {{ .Values.metrics.port | quote }}
+            - name: LOGLEVEL
+              value: {{ if .Values.resourceResolver.logLevel }}{{ .Values.resourceResolver.logLevel }}{{ else }}{{ .Values.global.logLevel }}{{ end }}
+            - name: JAMBONES_MYSQL_HOST
+              value: {{ .Values.mysql.host }}
+            - name: JAMBONES_MYSQL_DATABASE
+              value: {{ .Values.mysql.database.name | quote }}
+            - name: JAMBONES_MYSQL_USER
+              value: {{ .Values.mysql.auth.username | quote }}
+            - name: JAMBONES_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: voicegateway-mysql-password
+                  key: mysql-password
+            - name: JAMBONES_REDIS_HOST
+              value: {{ .Values.redis.host }}
+            - name: JAMBONES_REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: CACHE_ENABLED
+              value: {{ .Values.resourceResolver.cacheEnabled | quote }}
+            - name: CACHE_TTL_SECONDS
+              value: {{ .Values.resourceResolver.cacheTtlSeconds | quote }}
+            {{- if .Values.billing.enabled }}
+            # Speech-usage (billing) storage. vg-feature-server used to hold this
+            # pool itself and now POSTs batches to this service's
+            # /v1/events/speechUsage instead, so the connection lives here.
+            #
+            # The user and password MUST be set explicitly: `vg_speech_billing` is
+            # reached with the DEDICATED billing user (created by the init
+            # container), not the tenant MySQL user. Without this block the
+            # resolver would fall back to the tenant credentials and every write
+            # would fail with access-denied. Host, port and database are passed for
+            # the same reason the billing cronjob passes them — so the value, not a
+            # default, decides.
+            - name: VG_SPEECH_BILLING_MYSQL_HOST
+              value: {{ .Values.mysql.host | quote }}
+            - name: VG_SPEECH_BILLING_MYSQL_PORT
+              value: {{ .Values.mysql.port | default "3306" | quote }}
+            - name: VG_SPEECH_BILLING_MYSQL_DATABASE
+              value: {{ .Values.billing.mysql.database | quote }}
+            - name: VG_SPEECH_BILLING_MYSQL_USER
+              value: {{ .Values.billing.mysql.username | quote }}
+            - name: VG_SPEECH_BILLING_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.billing.mysql.existingSecret | quote }}
+                  key: {{ .Values.billing.mysql.secretKey | quote }}
+            {{- else }}
+            # Billing off for this cluster: tell the resolver not to open the pool
+            # at all, rather than letting it try and log a connection failure every
+            # time a batch arrives.
+            - name: VG_SPEECH_BILLING_MYSQL_ENABLED
+              value: "false"
+            {{- end }}
+            {{- if .Values.resourceResolver.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.resourceResolver.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
+{{- end }}

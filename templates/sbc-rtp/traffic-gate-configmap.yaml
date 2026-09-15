@@ -1,4 +1,18 @@
-{{- if .Values.sbc.rtp.trafficGate.enabled }}
+{{- /*
+  Validation runs on EVERY cloud, before and outside the wired test below.
+  vg.sbcRtp.drainAddresses carries the guards — list-not-string, valid IPv4,
+  cloud=aws, no cognigyEnv copy — and the gate now only RENDERS on AWS. Calling
+  it solely inside that condition would mean an operator who sets a drain list on
+  azure gets silence instead of
+    "only supported on cloud=aws, because the gate compares against the EC2 IMDS"
+  which is strictly worse than the loud failure they got before. Discarding the
+  output here keeps every guard armed everywhere while emitting nothing.
+
+  An EMPTY drain list is the steady state and passes on every cloud, so non-AWS
+  installs that never touch this key are unaffected.
+*/}}
+{{- $_ := include "vg.sbcRtp.drainAddresses" $ -}}
+{{- if include "vg.sbcRtp.trafficGate.wired" $ }}
 {{- /*
   RTP traffic gate drain list. Mounted by the rtpengine sidecar at
   /config/rtp-gate/traffic-gate.yaml and re-read live, so adding or removing an

@@ -1,4 +1,9 @@
 {{- if and .Values.vgTestHarness.enabled .Values.vgTestHarness.regionDns.enabled }}
+{{- /*
+  DEPRECATED, superseded by the speech adapter. Retained, scaled to zero by the
+  region overlay, only for a namespace that still points its own rewrites at
+  these Services. See the matching deployment template for context.
+*/}}
 {{- range list "eu" "intl" }}
 apiVersion: v1
 kind: Service

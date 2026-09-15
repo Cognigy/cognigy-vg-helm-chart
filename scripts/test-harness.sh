@@ -6,7 +6,12 @@ set -euo pipefail
 
 RELEASE="voicegateway"
 # Default testing freeswitch image (asan build carrying vg-freeswitch PR #255).
-DEFAULT_FS_IMAGE="cognigydevelopment.azurecr.io/vg-freeswitch-mrfasan:2026.06.08-27120683836"
+# vg-freeswitch renamed its final image from vg-freeswitch-mrf to vg-freeswitch
+# (Cognigy/vg-freeswitch#244) and appends the buildType with no separator, so the
+# asan variant is `vg-freeswitchasan`. This default was left on the pre-rename
+# name. Preview releases build production only; asan comes from the main
+# build-freeswitch workflow, dev registry only.
+DEFAULT_FS_IMAGE="cognigydevelopment.azurecr.io/vg-freeswitchasan:2026.07.31-30614981012"
 
 usage() {
   cat <<EOF
@@ -48,10 +53,14 @@ helm status "$RELEASE" -n "$NS" >/dev/null 2>&1 \
 
 case "$ACTION" in
   enable)
+    # Matches both the current vg-freeswitchasan/debug names and the pre-rename
+    # vg-freeswitch-mrfasan/debug ones (Cognigy/vg-freeswitch#244). The earlier
+    # 'mrf' filter missed every current build, so `enable` would silently
+    # re-pin the default over a perfectly good asan image the user had set.
     CUR_FS="$(helm get values "$RELEASE" -n "$NS" -o json 2>/dev/null \
-              | grep -o '"image"[^,}]*mrf[a-z]*[^,}]*' || true)"
+              | grep -o '"image"[^,}]*vg-freeswitch[a-z-]*[^,}]*' || true)"
     EXTRA=()
-    if ! printf '%s' "$CUR_FS" | grep -q 'mrfasan\|mrfdebug'; then
+    if ! printf '%s' "$CUR_FS" | grep -qE 'vg-freeswitch(-mrf)?(asan|debug)'; then
       echo "WARNING: current freeswitch image is not an asan/debug build."
       echo "         Setting freeswitch.image=$FS_IMAGE so overrides take effect."
       EXTRA=(--set "freeswitch.image=$FS_IMAGE")

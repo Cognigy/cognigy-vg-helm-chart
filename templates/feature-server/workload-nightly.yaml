@@ -1,7 +1,7 @@
 {{- if .Values.featureServerNightly.enabled }}
 {{- /*
-  Unified feature-server-nightly workload. StatefulSet when
-  featureServerNightly.useStatefulSet is true (default), otherwise a Deployment.
+  Unified feature-server-nightly workload. Deployment by default, or a
+  StatefulSet when featureServerNightly.useStatefulSet is true.
   Pod spec is identical in both modes; only kind + serviceName differ.
   Relies on the always-headless nightly service for SIP/in-dialog routing.
 */ -}}
@@ -511,6 +511,10 @@ spec:
             - name: {{ $key }}
               value: {{ $val | quote }}
             {{- end }}
+            {{- end }}
+            {{- if .Values.resourceResolver.enabled }}
+            - name: RESOURCE_RESOLVER_URL
+              value: "http://vg-resource-resolver:{{ .Values.resourceResolver.port | default 4000 }}"
             {{- end }}
             {{- if .Values.featureServerNightly.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.extraEnvVars "context" $) | nindent 12 }}

@@ -1,0 +1,38 @@
+{{- if and .Values.vgTestHarness.enabled .Values.vgTestHarness.numbers }}
+{{- /*
+  The same manifest, in the shape the Playwright suite reads (QA-2).
+
+  The suite takes each number from a TO_NUMBER_* environment variable, and the
+  manifest already says which variable belongs to which number. Rendering that
+  here means the test environment is DERIVED from the provisioning source of
+  truth rather than maintained beside it — the failure this avoids is a spec
+  dialling a number nobody provisioned, which surfaces as a SIP 404 and reads
+  like a platform fault.
+
+  Entries without an `env` are omitted rather than given a generated name: a
+  number can exist purely to be dialled by a fixture (a transfer target), and
+  inventing a variable for it would suggest a spec should use it.
+*/}}
+{{- $entries := list }}
+{{- range .Values.vgTestHarness.numbers }}
+  {{- if .env }}
+    {{- $entries = append $entries . }}
+  {{- end }}
+{{- end }}
+{{- if $entries }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vg-test-harness-numbers-env
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: vg-gate-runner
+    owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-test-harness.git"
+data:
+  {{- range $entries }}
+  {{ .env }}: {{ .number | quote }}
+  {{- end }}
+{{- end }}
+{{- end }}

@@ -20,6 +20,20 @@ spec:
         app: sip-caller
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- /*
+        Optional scheduling controls. Needed because sbc-sip runs with
+        hostNetwork: when sip-caller sits on a different node, its INVITE is
+        SNAT'd and arrives with the node address as its source instead of the
+        pod IP. The carrier allow-list then has to cover two unrelated ranges,
+        and which one applies varies run to run. Co-locating sip-caller with
+        sbc-sip keeps the source address deterministically a pod IP.
+      */}}
+      {{- if .Values.vgTestHarness.sipCaller.affinity }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgTestHarness.sipCaller.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.vgTestHarness.sipCaller.nodeSelector }}
+      nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgTestHarness.sipCaller.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
       containers:
         - name: sip-caller
           image: {{ .Values.vgTestHarness.sipCaller.image }}
@@ -35,6 +49,9 @@ spec:
             # ensure test-harness environments exercise this behavior.
             - --mock-srs-initial-inactive
             - --mock-srs-auto-activate
+            {{- range .Values.vgTestHarness.sipCaller.extraArgs }}
+            - {{ . | quote }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 8090

@@ -3,6 +3,9 @@
 {{- end }}
 {{- if and .Values.vgTestHarness.enabled .Values.vgTestHarness.autoProvision.enabled }}
 {{- $useSecretRef := .Values.vgTestHarness.autoProvision.adminPassSecretRef.name }}
+{{- $vendorTlsEnabled := dig "tls" "enabled" false .Values.vgTestHarness.mockSpeech }}
+{{- $placeholderVendors := dig "placeholderSpeechVendors" (list) .Values.vgTestHarness }}
+{{- $vendorTlsSpeechVendor := dig "tls" "speechVendor" "deepgram" .Values.vgTestHarness.mockSpeech }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -37,21 +40,143 @@ spec:
             {{- else }}
             - "--admin-pass={{ required "vgTestHarness.autoProvision.adminPass is required when autoProvision is enabled (or set adminPassSecretRef.name)" .Values.vgTestHarness.autoProvision.adminPass }}"
             {{- end }}
-            # FQDN, not the short service name: the api-server's SSRF guard
-            # validates hook hostnames with dns.resolve4/6, which bypasses the
-            # pod's Kubernetes search domains — a short name is NXDOMAIN there
-            # and the provision PUT is answered 400.
-            - --webhook-url=http://mock-cognigy.{{ .Release.Namespace }}.svc.cluster.local:8080/voiceGateway
+            {{- /*
+              FQDN, not the bare service name. api-server validates hook URLs in
+              guardHookUrl (lib/routes/api/applications.js) with an A-record
+              lookup, and Node's dns.resolve4 does NOT consult the search domains
+              in /etc/resolv.conf the way dns.lookup does. A bare "mock-cognigy"
+              therefore fails validation and POST /v1/Applications returns 400:
+                custom URL hostname could not be resolved
+                (IPv4 DNS lookup failed: ESERVFAIL: queryA ESERVFAIL mock-cognigy)
+              The fully-qualified name resolves under dns.resolve4 and is equally
+              valid in every namespace.
+            */}}
+            {{- /*
+              ws://, not http://. The feature-server chooses its requestor from
+              the hook URL scheme: an http:// hook drives the call with
+              HttpRequestor, ws:// with WsRequestor. Production always uses the
+              WS requestor, and vg-test-harness's own README documents the path
+              as "[feature-server] --WS--> [mock-cognigy]" — mock-cognigy's
+              /voiceGateway serves both, so this only picks which one.
+
+              It matters, not just for fidelity: under HttpRequestor a `gather`
+              never finishes. Trace logging showed the task reach EXECUTING,
+              GatherManager resolve on the first final transcript
+              ("resolving immediately", then "already resolved, returning" 109
+              times), and then the task simply never complete and never POST.
+              Adding an explicit actionHook did not help.
+
+              The webhooks table's method column is ENUM('GET','POST'), so the
+              method stays POST; the scheme is what selects the requestor.
+
+              An earlier attempt at ws:// 500'd every INVITE with
+                Error looking up application for +15005550001
+                Cannot set properties of undefined (setting 'method')
+              That was NOT the scheme. The WS requestor was selected fine;
+              middleware.ts:329 then does
+                app.call_status_hook!.method = "WS";
+              with a non-null assertion, and the provisioner was not creating
+              a call_status_hook. It now creates one sharing this URL
+              (vg-test-harness ensureApplication).
+
+              Override with vgTestHarness.autoProvision.webhookUrl if needed.
+            */}}
+            - --webhook-url={{ include "vg.testHarness.webhookUrl" $ }}
+            {{- if .Values.vgTestHarness.numbers }}
+            {{- /*
+              One application + one phone number per manifest entry, instead of
+              the single --phone-number below. The same file is mounted into
+              mock-cognigy, which loads each entry's fixture scoped to that
+              entry's number — so what is provisioned and what answers cannot
+              drift apart. --phone-number is deliberately not passed: the
+              provisioner ignores it in this mode and warns if it is set.
+            */}}
+            - --numbers-manifest=/etc/vg-test-harness/numbers.json
+            {{- else }}
             - --phone-number={{ .Values.vgTestHarness.autoProvision.phoneNumber | default "+15005550001" }}
+            {{- end }}
             {{- with .Values.vgTestHarness.autoProvision.carrierSourceIPv4 }}
             - "--carrier-source-ipv4={{ . }}"
             {{- end }}
             {{- with .Values.vgTestHarness.autoProvision.carrierSourceNetmask }}
             - "--carrier-source-netmask={{ . }}"
             {{- end }}
-            {{- if .Values.vgTestHarness.regionDns.enabled }}
+            {{/*
+              The labelled eu/us deepgram credentials the region-routing test
+              needs. Gated on regionDns.enabled AND its own opt-out, because
+              regionDns is also how the vendor-speech adapter rewrites vendor
+              hostnames — a namespace can want the rewrites without wanting a
+              pair of deepgram credentials pointed at real vendor hostnames.
+              Defaults true, so the region suite is unaffected.
+            */}}
+            {{- if and .Values.vgTestHarness.regionDns.enabled (dig "provisionRegionCredentials" true .Values.vgTestHarness.regionDns) }}
             - --region-test-enabled=true
             - "--deepgram-api-key={{ .Values.vgTestHarness.autoProvision.deepgramApiKey }}"
+            {{- end }}
+            {{/*
+              Provisions the UNLABELLED plain "deepgram" credential a scenario
+              needs to reach the gRPC media-processor.
+
+              Keyed off BOTH media-processor switches, matching how the
+              feature-server derives MEDIA_PROCESSOR_ENABLED. A top-level-only
+              install has the service running with nothing routed to it and needs
+              no credential; a featureServer-only one names vendors for a service
+              that does not exist.
+
+              --deepgram-api-key is repeated because the region block above may
+              not have run. The provisioner's own default is a non-empty
+              placeholder either way, and vg-api-server never validates the value
+              — it only requires the field to be non-empty.
+            */}}
+            {{- if and .Values.mediaProcessor.enabled .Values.featureServer.mediaProcessor.enabled }}
+            - --media-processor-test-enabled=true
+            - "--deepgram-api-key={{ .Values.vgTestHarness.autoProvision.deepgramApiKey }}"
+            {{- end }}
+            {{- if .Values.vgTestHarness.autoProvision.mipTest.enabled }}
+            # CGY-34769: labelled mip-in / mip-out deepgram credentials, which
+            # differ only in deepgram_improvement_program_opt_in, both pointed at
+            # mock-speech via deepgram_stt_uri. No infrastructure flag alongside
+            # it (unlike regionDns) because there is none to enable: the
+            # redirection lives entirely on the credential, so this works on a
+            # production FreeSWITCH image and mutates nothing namespace-wide.
+            - --mip-test-enabled=true
+            # Repeated rather than folded in with the regionDns block above: the
+            # two suites are independent, and the flag is a no-op duplicate when
+            # both are on (cobra takes the last value, which is identical).
+            - "--deepgram-api-key={{ .Values.vgTestHarness.autoProvision.deepgramApiKey }}"
+            {{- end }}
+            {{/*
+              Provisions the UNLABELLED plain "deepgram" credential a scenario
+              needs to reach the gRPC media-processor.
+
+              Keyed off BOTH media-processor switches, matching how the
+              feature-server derives MEDIA_PROCESSOR_ENABLED. A top-level-only
+              install has the service running with nothing routed to it and needs
+              no credential; a featureServer-only one names vendors for a service
+              that does not exist.
+
+              --deepgram-api-key is repeated because the region block above may
+              not have run. The provisioner's own default is a non-empty
+              placeholder either way, and vg-api-server never validates the value
+              — it only requires the field to be non-empty.
+            */}}
+            {{- if and .Values.mediaProcessor.enabled .Values.featureServer.mediaProcessor.enabled }}
+            - --media-processor-test-enabled=true
+            - "--deepgram-api-key={{ .Values.vgTestHarness.autoProvision.deepgramApiKey }}"
+            {{- end }}
+            {{- if $vendorTlsEnabled }}
+            - --vendor-tls-test-enabled=true
+            - "--deepgram-api-key={{ .Values.vgTestHarness.autoProvision.deepgramApiKey }}"
+            # Points every provisioned application at the vendor-tls
+            # credential instead of custom:deepgram — otherwise nothing
+            # provisioned actually dials through the new TLS route.
+            # vgTestHarness.mockSpeech.tls.speechVendor selects which one
+            # (deepgram/elevenlabs/speechmatics/deepgramflux/google/aws);
+            # defaults to deepgram, matching every install before this existed.
+            - "--speech-vendor={{ $vendorTlsSpeechVendor }}"
+            {{- end }}
+            {{- if $placeholderVendors }}
+            - "--placeholder-speech-vendors={{ join "," $placeholderVendors }}"
             {{- end }}
             {{- if .Values.vgTestHarness.autoProvision.recording.enabled }}
             - --enable-recording
@@ -61,6 +186,12 @@ spec:
             - "--minio-secret-key={{ .Values.vgTestHarness.autoProvision.recording.secretKey | default "minioadmin" }}"
             - "--record-format={{ .Values.vgTestHarness.autoProvision.recording.format | default "wav" }}"
             {{- end }}
+          {{- if .Values.vgTestHarness.numbers }}
+          volumeMounts:
+            - name: numbers
+              mountPath: /etc/vg-test-harness
+              readOnly: true
+          {{- end }}
           {{- if $useSecretRef }}
           env:
             - name: ADMIN_PASS
@@ -69,4 +200,13 @@ spec:
                   name: {{ .Values.vgTestHarness.autoProvision.adminPassSecretRef.name }}
                   key: {{ .Values.vgTestHarness.autoProvision.adminPassSecretRef.key | default "password" }}
           {{- end }}
+      {{- if .Values.vgTestHarness.numbers }}
+      volumes:
+        # Only the manifest: the Job creates applications and numbers, and never
+        # reads a fixture. Mounting the fixtures here too would make a missing
+        # fixture ConfigMap block provisioning as well as serving.
+        - name: numbers
+          configMap:
+            name: vg-test-harness-numbers
+      {{- end }}
 {{- end }}

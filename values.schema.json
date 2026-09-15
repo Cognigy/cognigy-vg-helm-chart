@@ -53,13 +53,22 @@
           "properties": {
             "image": { "type": "string" },
             "defaultTranscript": { "type": "string" },
-            "resources": { "type": "object" }
+            "resources": { "type": "object" },
+            "tls": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "secretName": { "type": "string" }
+              }
+            }
           }
         },
         "mockDeepgramRegion": {
           "type": "object",
+          "description": "DEPRECATED: superseded by the speech adapter (regionDns.rewrites -> mock-speech plus mockSpeech.tls). Kept so a namespace with its own rewrites still validates; the image pin is frozen because vg-test-harness deleted the binary.",
           "properties": {
             "image": { "type": "string" },
+            "replicaCount": { "type": "integer", "minimum": 0 },
             "resources": { "type": "object" }
           }
         },
@@ -67,6 +76,19 @@
           "type": "object",
           "properties": {
             "enabled": { "type": "boolean" },
+            "rewrites": {
+              "type": "array",
+              "description": "Hostnames test-dns answers for, and the in-namespace Service each resolves to. Point these at mock-speech for the speech adapter.",
+              "items": {
+                "type": "object",
+                "required": ["name", "target"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "target": { "type": "string" },
+                  "type": { "type": "string", "enum": ["exact", "regex"] }
+                }
+              }
+            },
             "image": { "type": "string" },
             "clusterIP": { "type": "string" },
             "upstream": { "type": "string" },
@@ -105,6 +127,12 @@
             "phoneNumber": { "type": "string" },
             "carrierSourceIPv4": { "type": "string" },
             "carrierSourceNetmask": { "type": "integer" },
+            "mipTest": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" }
+              }
+            },
             "recording": {
               "type": "object",
               "properties": {

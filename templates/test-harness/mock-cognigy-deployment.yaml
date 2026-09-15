@@ -1,4 +1,12 @@
 {{- if .Values.vgTestHarness.enabled }}
+{{- /*
+  replicaCount 0 keeps the Deployment but runs no pod. Useful when the harness
+  is enabled for the speech mocks alone: a namespace whose applications point
+  at the real AI backend never calls mock-cognigy, and with autoProvision off
+  nothing runs the provisioner that ships in its image either -- so the pod
+  sits idle and only confuses whoever reads the namespace next.
+*/}}
+{{- $replicas := dig "mockCognigy" "replicaCount" 1 .Values.vgTestHarness }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -10,7 +18,7 @@ metadata:
     app: mock-cognigy
     owner-team: echo
 spec:
-  replicas: 1
+  replicas: {{ $replicas }}
   selector:
     matchLabels:
       app: mock-cognigy
@@ -18,6 +26,13 @@ spec:
     metadata:
       labels:
         app: mock-cognigy
+      {{- if .Values.vgTestHarness.numbers }}
+      annotations:
+        # Fixtures are read once, at startup. Without this the pod keeps serving
+        # the previous trigger set after a helm upgrade changes the manifest,
+        # and the gate exercises a mapping that no longer exists.
+        checksum/numbers: {{ include (print $.Template.BasePath "/test-harness/numbers-configmap.yaml") . | sha256sum }}
+      {{- end }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       containers:
@@ -27,6 +42,15 @@ spec:
           args:
             - --addr=:8080
             - --log-level={{ .Values.vgTestHarness.mockCognigy.logLevel | default "info" }}
+            {{- if .Values.vgTestHarness.numbers }}
+            - --numbers-manifest=/etc/vg-test-harness/numbers.json
+            {{- end }}
+          {{- if .Values.vgTestHarness.numbers }}
+          volumeMounts:
+            - name: numbers
+              mountPath: /etc/vg-test-harness
+              readOnly: true
+          {{- end }}
           ports:
             - name: http
               containerPort: 8080
@@ -38,4 +62,26 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
           resources: {{- toYaml .Values.vgTestHarness.mockCognigy.resources | nindent 12 }}
+      {{- if .Values.vgTestHarness.numbers }}
+      volumes:
+        # Projected, so the generated manifest and the operator's fixture files
+        # land in ONE directory: a manifest entry's "fixture" is resolved
+        # relative to the manifest itself, which is what lets an entry say
+        # "simple-question.json" instead of carrying an absolute path.
+        #
+        # The fixtures source is optional. A missing ConfigMap therefore fails
+        # at mock-cognigy startup, naming the entry and the fixture it could not
+        # read, rather than wedging the pod in ContainerCreating with an event
+        # nobody reads.
+        - name: numbers
+          projected:
+            sources:
+              - configMap:
+                  name: vg-test-harness-numbers
+              {{- with .Values.vgTestHarness.fixturesConfigMap }}
+              - configMap:
+                  name: {{ . }}
+                  optional: true
+              {{- end }}
+      {{- end }}
 {{- end }}

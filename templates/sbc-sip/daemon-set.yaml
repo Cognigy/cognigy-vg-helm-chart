@@ -143,9 +143,37 @@ spec:
             - --contact
             - "sip:*:5062;transport=tcp"
             {{- end }}
+            {{- /*
+              Optional explicit SIP contact, kept in step with stateful-set.yaml so
+              the workaround works whichever workload type is selected. See the long
+              note there for the sofia-sip IPv6/IPv4 double bind this avoids.
+              $(POD_IP) is interpolated by Kubernetes from the env var below.
+            */}}
+            {{- with .Values.sbc.sip.contact }}
+            - --contact
+            - {{ . | quote }}
+            {{- end }}
+            {{- /*
+              Rendered only alongside an explicit sbc.sip.contact, which is what
+              suppresses drachtio's auto-derived TLS listener. With no explicit
+              contact this must stay off: pinning only TLS to $(POD_IP) makes it the
+              sole listener with a private address and outbound in-cluster requests
+              are then sent over TLS.
+
+              sips:, not sip: — sofia binds TLS only for a sips: URI and rejects
+              sip:...;transport=tls fatally ("Protocol not supported",
+              drachtio-server#109). See the long note in stateful-set.yaml.
+            */}}
+            {{- if and .Values.drachtio.tls.enabled .Values.sbc.sip.contact }}
+            - --contact
+            - "sips:$(POD_IP):{{ .Values.sbc.sip.ports.tls }};transport=tls"
+            {{- end }}
             - --loglevel
             - {{ .Values.sbc.sip.logLevel }}
-            {{- if ne .Values.cloud "stackit" }}
+            {{- /* See the note in the shared helper: --cloud-deployment needs a
+              cloud metadata service, and without one drachtio computes an empty
+              contact ("sip::5060") and exits. */}}
+            {{- if include "vg.sbc.sip.useCloudDeployment" . }}
             - --cloud-deployment
             {{- end }}
             - --sofia-loglevel
@@ -178,7 +206,15 @@ spec:
           env:
             - name: NODE_ENV
               value: {{ .Values.global.nodeEnv | quote }}
-            - name: CLOUD 
+            {{- /* Exposed so sbc.sip.contact can reference it as $(POD_IP), same
+              as stateful-set.yaml. Under hostNetwork this is the node address,
+              which is what drachtio must advertise and bind. Without this env var
+              Kubernetes leaves "$(POD_IP)" in the arg as a literal string. */}}
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: CLOUD
               value: {{ .Values.cloud | quote }}
             {{- if eq .Values.cloud "aws" }}
             - name: IMDSv2

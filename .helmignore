@@ -28,3 +28,15 @@
 
 # Documentation
 docs/
+
+# CI-only assets (ephemeral kind quality gate). Never part of the published
+# chart: the public GitHub sync already allowlists only charts/docs/scripts/
+# templates, but `helm package .` would otherwise pack these into the OCI
+# tarball shipped to customers.
+ci/
+
+# W7 checks vg-test-harness out to ./harness so Phase 2 can run kindsmoke.
+# Without this, `helm dependency update` / packaging walks that tree and dies on
+# binaries over Helm's 5 MiB file limit ("chart file mock-cognigy is larger
+# than the maximum file size 5242880" — run 30987180481).
+harness/
