@@ -1,5 +1,5 @@
 {{- if .Values.vgTestHarness.enabled }}
-{{- $tlsEnabled := dig "tls" "enabled" false .Values.vgTestHarness.mockSpeech }}
+{{- $tlsEnabled := include "vg.testHarness.mockSpeechTls" . }}
 apiVersion: v1
 kind: Service
 metadata:

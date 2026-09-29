@@ -8,9 +8,11 @@ commit (bypasses Flux; reverts on next reconcile).
 ./scripts/test-harness.sh disable --namespace <your-ns>
 ```
 
-`enable` also forces an asan/debug freeswitch image, because the
-`TESTING_OVERRIDE_*` env vars are compiled out of production FreeSWITCH builds
-(vg-freeswitch PR #255). Pass `--freeswitch-image` to override the default.
+`enable` leaves the freeswitch image alone. It used to force an asan/debug build
+for `TESTING_OVERRIDE_*`, which the chart no longer sets — a `custom:<name>`
+speech credential carries its own URL, and `vgTestHarness.speechInterception:
+vendor` redirects by DNS, both of which work on the production image. Pass
+`--freeswitch-image` if you want a specific one anyway.
 
 After enabling, port-forward `sip-caller` and POST a scenario from
 `vg-test-harness/scenarios/`. Use Deepgram/ElevenLabs scenarios only — Azure

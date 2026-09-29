@@ -25,6 +25,30 @@ spec:
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       restartPolicy: OnFailure
+      {{- with .Values.apiMigrator.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.apiMigrator.affinity }}
+      ## Both default to {} and are omitted entirely when unset, so this Job
+      ## schedules exactly as it did before for every existing install.
+      ##
+      ## They exist for one specific reason. The create-billing-db init container
+      ## below runs out of the MySQL image purely to get the `mysql` client, so a
+      ## Job that lands anywhere other than the MySQL node makes the cluster pull
+      ## that whole image a second time. ci/kind's overlay uses a podAffinity here
+      ## to keep the two together.
+      ##
+      ## That pull is on the critical path of `helm install` either way, but by
+      ## two different routes, and it is worth being exact about which:
+      ##   apiMigrator.hookEnabled true  — this Job IS a hook, and Helm blocks on
+      ##     its hooks, so helm waits on it directly.
+      ##   apiMigrator.hookEnabled false — the default. This is then an ordinary
+      ##     release resource that Helm creates and walks away from; nothing waits
+      ##     on it here. What waits is billing-grants, a post-install hook that
+      ##     polls for the schema THIS Job migrates, so helm blocks for just as
+      ##     long by way of that hook instead.
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
       initContainers:
         # Create billing database, dedicated billing user, and grant privileges using root credentials
         # Tables are created by setup-billing-schema.js in the main container

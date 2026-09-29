@@ -1,0 +1,23 @@
+{{- if and .Values.resourceResolver.enabled .Values.resourceResolver.runtimeApiTargets }}
+# Linked Cognigy.AI clusters vg-resource-resolver may resolve runtime resources
+# against, mounted as a file rather than passed as an env var.
+#
+# Neither existing ConfigMap can carry this. `cognigy-env` renders every value
+# through `{{ `{{ $value | quote }}` }}`, so a nested list would come out as a
+# Go-stringified `map[...]`; `cognigy-env-reloadable` has no values passthrough
+# at all, its keys being a fixed dict of chart-derived scalars.
+#
+# Read once at process start. The Deployment carries a checksum annotation over
+# this template, so editing the list rolls the pod.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vg-runtime-api-targets
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-resource-resolver
+    owner-team: echo
+data:
+  targets.yaml: |
+    {{- toYaml .Values.resourceResolver.runtimeApiTargets | nindent 4 }}
+{{- end }}

@@ -1,3 +1,18 @@
+{{- $vgClusterSigningKeySecret := include "vg.clusterSigningKey.secretName" $ }}
+{{- $runtimeApiTargets := $.Values.resourceResolver.runtimeApiTargets }}
+## The three guards below sit OUTSIDE the `resourceResolver.enabled` gate on
+## purpose. Gated on it, a config with the resolver switched off and
+## runtimeApiTargets still populated -- a plausible mid-migration state, and the
+## exact one an operator would reach for to disable a misbehaving link -- would
+## silently render nothing at all instead of saying what was wrong. A misconfigured
+## cluster should fail at reconcile, whether or not the consumer is switched on.
+{{- if and $runtimeApiTargets (not $vgClusterSigningKeySecret) }}
+{{- fail "resourceResolver.runtimeApiTargets is set but this cluster has no signing key -- the resolver signs a per-cluster JWT to authenticate against vg-runtime-api, so with no key every configured AI cluster would reject it and the runtime-resources path would fail closed on every call. Either leave vgCluster.signingKey.autoGenerate at its default of true so the chart provisions one, or point vgCluster.signingKey.existingSecret at a Secret you manage (see docs/008-vg-cluster-signing-key.md). Or leave runtimeApiTargets empty." }}
+{{- end }}
+{{- if $runtimeApiTargets }}
+{{- include "vg.runtimeApiTargets.validate" $ }}
+{{- include "vg.clusterName.validate" $ }}
+{{- end }}
 {{- if .Values.resourceResolver.enabled }}
 ---
 apiVersion: apps/v1
@@ -27,6 +42,27 @@ spec:
         app: vg-resource-resolver
       annotations:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
+        {{- if $runtimeApiTargets }}
+        ## The target list is read once at process start, so an edit only takes
+        ## effect on a roll. Rendered-template hash rather than the `lookup`
+        ## idiom used for Secrets: a ConfigMap this chart renders itself can be
+        ## hashed offline, with no live-cluster read.
+        checksum/vg-runtime-api-targets: {{ include (print $.Template.BasePath "/resource-resolver/runtime-api-targets-configmap.yaml") $ | sha256sum }}
+        {{- end }}
+        {{- if and $runtimeApiTargets $vgClusterSigningKeySecret }}
+        ## Rolls the pod when the signing keypair is rotated -- the private key is
+        ## likewise read once at boot.
+        ##
+        ## Gated on runtimeApiTargets, NOT merely on the Secret existing, because
+        ## that is exactly when the volume below mounts it. The keypair is
+        ## generated on every cluster by default, so annotating on the Secret alone
+        ## would put a rotation trigger on a pod that reads no key -- and would roll
+        ## vg-resource-resolver fleet-wide on the upgrade that first creates the
+        ## Secret, for a feature nothing has turned on yet. api-server's copy of
+        ## this annotation is correctly gated on the Secret instead: it publishes
+        ## the public half whenever there is one.
+        checksum/vg-cluster-signing-key: {{ if not (lookup "v1" "Secret" $.Release.Namespace $vgClusterSigningKeySecret) }}{{ $vgClusterSigningKeySecret | sha256sum }}{{ else }}{{ toYaml (lookup "v1" "Secret" $.Release.Namespace $vgClusterSigningKeySecret).data | sha256sum }}{{ end }}
+        {{- end }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.resourceResolver.affinity }}
@@ -162,10 +198,64 @@ spec:
             - name: VG_SPEECH_BILLING_MYSQL_ENABLED
               value: "false"
             {{- end }}
+            {{- if $runtimeApiTargets }}
+            ## Cross-cluster identity. VG_CLUSTER_NAME is this cluster's `iss`;
+            ## the AI side's trust list is keyed by it, so it must match the key
+            ## this cluster is filed under there. See vg-resources
+            ## docs/tdd/06-vg-in-ai/019.
+            ## Emptiness and shape are both checked by vg.clusterName.validate at
+            ## the top of this file, so this is just the resolved value.
+            - name: VG_CLUSTER_NAME
+              value: {{ include "vg.clusterName" $ | quote }}
+            - name: RUNTIME_API_TARGETS_PATH
+              value: "/config/vg-runtime-api/targets.yaml"
+            - name: VG_CLUSTER_SIGNING_KEY_PATH
+              value: "/var/run/secrets/vg-cluster/{{ $.Values.vgCluster.signingKey.privateKeyFile }}"
+            {{- end }}
             {{- if .Values.resourceResolver.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.resourceResolver.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
+          {{- if $runtimeApiTargets }}
+          volumeMounts:
+            - name: vg-runtime-api-targets
+              mountPath: /config/vg-runtime-api
+              readOnly: true
+            - name: vg-cluster-signing-key
+              mountPath: /var/run/secrets/vg-cluster
+              readOnly: true
+          {{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env
+      {{- if $runtimeApiTargets }}
+      volumes:
+        - name: vg-runtime-api-targets
+          configMap:
+            name: vg-runtime-api-targets
+            items:
+              - key: targets.yaml
+                path: targets.yaml
+        - name: vg-cluster-signing-key
+          secret:
+            secretName: {{ $vgClusterSigningKeySecret | quote }}
+            ## Private half only. The same Secret holds the public key that
+            ## api-server publishes; mounting the whole Secret would hand this pod
+            ## a key it has no use for.
+            items:
+              - key: {{ $.Values.vgCluster.signingKey.privateKeyFile | quote }}
+                path: {{ $.Values.vgCluster.signingKey.privateKeyFile | quote }}
+            ## 0400, deliberately tighter than the 0644 (decimal 420) this chart
+            ## uses for the drachtio TLS key and for api-server's PUBLIC half. A
+            ## private signing key should not be world-readable inside the pod --
+            ## an ephemeral debug container, an injected sidecar or a second user
+            ## in a future image would all be able to read it at 0644.
+            ##
+            ## Owner-read works because the resolver image declares no USER and
+            ## resourceResolver.podSecurityContext is empty, so the process is uid
+            ## 0 and owns the mount. IF YOU SET resourceResolver.podSecurityContext
+            ## .runAsUser, SET fsGroup TO MATCH -- kubelet owns Secret volumes
+            ## root:fsGroup, and without one a non-root process cannot read this
+            ## file at any mode tighter than 0644.
+            defaultMode: 256
+      {{- end }}
 {{- end }}

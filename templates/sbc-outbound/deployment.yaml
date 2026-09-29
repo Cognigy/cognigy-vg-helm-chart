@@ -14,7 +14,7 @@ spec:
   selector:
     matchLabels:
       app: sbc-outbound
-  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas)) }}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) (dig "sbcOutbound" "enabled" false $.Values.hpa.services)) }}
   replicas: {{ .Values.sbcOutbound.replicaCount }}
   {{- end }}
   template:

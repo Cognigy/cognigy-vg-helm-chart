@@ -588,10 +588,15 @@ sbc:
 # Databases #
 #############
 apiMigrator:
+  ## Scheduling for the migration Job. Empty means "no constraint", which is what
+  ## every existing install gets — see the note in templates/api-migrator/job.yaml
+  ## for why they are here at all.
+  affinity: {}
+  nodeSelector: {}
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.19.0
+  image: cognigy.azurecr.io/vg-api-migrator:2026.20.0
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -1021,13 +1026,33 @@ cognigyLogin:
   clientId: "voicegateway"
   secret: "vg-cognigy-login"
   secretKey: "clientSecret"
+####################
+# Agentic Endpoint #
+####################
+## FALLBACK for feature-server's dial-time agent routing only. vg-api-server
+## now derives and stores a per-application agentic_endpoint_hook from each
+## application's own call_hook at save time, so it no longer reads
+## AGENTIC_ENDPOINT_BASE_URL at all. This block still matters for an
+## agent-targeted application that predates that column (has not been
+## re-saved since) — feature-server derives AGENTIC_ENDPOINT_BASE_URL from it
+## via the vg.agenticEndpoint.baseUrl helper.
+agenticEndpoint:
+  ## Appended to the derived host. Must match vg-agentic-endpoint's ingress
+  ## routePrefix + wsPath, or the adapter parses no token and refuses the call.
+  pathPrefix: /vg/agentic-endpoint/v1
+  ## Host override for when the adapter isn't on the API host. Same syntax as
+  ## cognigyLogin.baseUrl below — an http(s) URL, not a websocket one, and no
+  ## path — e.g. "https://api-dev.cognigy.ai". The scheme is normalized to
+  ## ws(s):// and pathPrefix is appended automatically. Empty (the default)
+  ## derives the host from cognigyLogin.baseUrl.
+  baseUrl: ""
 ###########################
 # VoiceGateway Components #
 ###########################
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.3
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.19.0
+  image: cognigy.azurecr.io/vg-api-server:2026.20.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1060,6 +1085,13 @@ api:
   rateLimitMinutes: 4
   rateLimit: 1000
   enablePrepareCognigyData: true
+  ## AI Agent v2 save-time handshake. When an application's calling webhook is a
+  ## Cognigy VG2 endpoint, api-server handshakes it and, when it targets an AI
+  ## Agent v2, writes the applications.agent_reference_id column and derives
+  ## and stores a per-application agentic_endpoint_hook webhook (from the
+  ## application's own call_hook — same cluster/host, fixed path; no config
+  ## needed here). feature-server opens the call against that hook; api-server
+  ## never rewrites the stored call_hook itself.
   ## Initial password for the `admin` API user, stored in the vg-api-admin-creds
   ## secret and handed to the migrator as JAMBONES_ADMIN_INITIAL_PASSWORD so the
   ## database and the secret always agree.
@@ -1149,7 +1181,7 @@ tmpban:
     ## Ban duration (hours) applied once banThreshold is reached.
     banDurationHours: 1
 drachtio:
-  image: cognigy.azurecr.io/vg-drachtio:1.3.5
+  image: cognigy.azurecr.io/vg-drachtio:1.3.7
   imagePullPolicy: IfNotPresent
   host: 127.0.0.1
   port: 9022
@@ -1187,7 +1219,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.19.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.20.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1203,6 +1235,14 @@ featureServer:
   ## Microsoft only - Trims trailing silence (zero-amplitude samples) from the end of an audio file
   trimTts: true
   serviceName: feature-server
+  ## AI Agent v2 call routing. When an application's Cognigy endpoint targets an
+  ## AI Agent v2 — the applications.agent_reference_id column, written by
+  ## vg-api-server's save-time VG2 handshake — feature-server opens the call
+  ## against the application's own agentic_endpoint_hook (also written by that
+  ## handshake) instead of the Cognigy endpoint. Decided per call; the stored
+  ## call_hook is never rewritten. The top-level agenticEndpoint block only
+  ## still matters as a fallback for an agent-targeted application that
+  ## predates agentic_endpoint_hook.
   affinity:
     podAntiAffinity:
       preferredDuringSchedulingIgnoredDuringExecution:
@@ -1221,13 +1261,13 @@ featureServer:
   tolerations: []
   sigtermForceCloseTimeoutMs: ""
   terminationGracePeriodSeconds: 300
-  ## Set to true to run feature-server as a StatefulSet instead of a Deployment
-  ## (ordered, one-pod-at-a-time rolling upgrades). The service is always
-  ## headless, so SIP/in-dialog routing resolves to real pod IPs in both modes.
-  ## The old "does not work on Azure" caveat came from the Deployment falling
-  ## back to a non-headless ClusterIP VIP, which is now fixed. Verified
-  ## working as a Deployment on both AWS and Azure (AKS).
-  useStatefulSet: false
+  ## Set to false to run feature-server as a Deployment instead of a StatefulSet
+  ## (faster, non-sequential rolling upgrades). The service is always headless,
+  ## so SIP/in-dialog routing resolves to real pod IPs in both modes. The old
+  ## "does not work on Azure" caveat came from the Deployment falling back to a
+  ## non-headless ClusterIP VIP, which is now fixed. Verified on AWS; expected to
+  ## work on Azure (AKS) too — confirm on an AKS cluster before enabling in prod.
+  useStatefulSet: true
   headlessServiceName: feature-server-headless
   freeswitchConnection: "127.0.0.1:8021:JambonzR0ck$"
   # Sets the max memory size of V8's old memory section - size in Megabytes
@@ -1277,7 +1317,7 @@ sileroVad:
   ## When enabled, feature server receives SILERO_VAD_SERVICE_URL env var
   ## pointing to this service for Plan B audio-fork VAD.
   enabled: false
-  image: cognigy.azurecr.io/vg-silero-vad:2026.19.0
+  image: cognigy.azurecr.io/vg-silero-vad:2026.20.0
   ## Default Always because the default tag is :latest (mutable) — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1400,7 +1440,7 @@ sileroVad:
 ## jambones MySQL DB. Disabled by default — opt in per cluster.
 vadAutotuner:
   enabled: false
-  image: cognigy.azurecr.io/vg-vad-autotuner:2026.19.0-17
+  image: cognigy.azurecr.io/vg-vad-autotuner:2026.20.0-89
   ## Default Always because the default tag may be mutable — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1445,7 +1485,7 @@ vadAutotuner:
   extraEnvVars: []
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.19.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.20.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1479,12 +1519,11 @@ featureServerNightly:
   tolerations: []
   sigtermForceCloseTimeoutMs: ""
   terminationGracePeriodSeconds: 300
-  ## Set to true to run feature-server-nightly as a StatefulSet instead of a
-  ## Deployment (ordered, one-pod-at-a-time rolling upgrades). The service is
-  ## always headless, so SIP/in-dialog routing resolves to real pod IPs in
-  ## both modes. Verified on AWS; expected to work on Azure (AKS) too —
-  ## confirm before prod.
-  useStatefulSet: false
+  ## Set to false to run feature-server-nightly as a Deployment instead of a
+  ## StatefulSet (faster, non-sequential rolling upgrades). The service is always
+  ## headless, so SIP/in-dialog routing resolves to real pod IPs in both modes.
+  ## Verified on AWS; expected to work on Azure (AKS) too — confirm before prod.
+  useStatefulSet: true
   headlessServiceName: feature-server-headless-nightly
   freeswitchConnection: "127.0.0.1:8021:JambonzR0ck$"
   # Sets the max memory size of V8's old memory section - size in Megabytes
@@ -1519,6 +1558,9 @@ featureServerNightly:
       cpu: "1"
       memory: 500Mi
 ## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
+## PINNED: vg-feature-server-legacy is archived (read-only) and dropped from the
+## release lifecycle, so no newer image will ever be published. 2026.18.0 is the
+## last released tag. The release pipelines no longer write this key — do not bump it.
 featureServerLegacy:
   enabled: false
   image: cognigy.azurecr.io/vg-feature-server-legacy:2026.18.0
@@ -1577,7 +1619,7 @@ featureServerLegacy:
       cpu: "1"
       memory: 500Mi
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch:2026.19.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.20.0
   imagePullPolicy: IfNotPresent
   ## FreeSWITCH log level. Valid choices (case-insensitive) are the FreeSWITCH log
   ## levels, from least to most verbose:
@@ -1618,7 +1660,8 @@ freeswitch:
   deepgramSttUseSingleConnection: true
   azureSttUseSingleConnection: false
   # When true (only meaningful alongside vgTestHarness.regionDns.enabled),
-  # the freeswitch pod resolves api.deepgram.com / api.eu.deepgram.com via the
+  # the freeswitch pod resolves api.deepgram.com / api.eu.deepgram.com /
+  # api.au.deepgram.com via the
   # dedicated test-dns CoreDNS instance instead of the cluster's normal DNS —
   # see docs/superpowers/specs/2026-07-24-deepgram-region-test-design.md.
   regionDnsEnabled: false
@@ -1653,12 +1696,12 @@ freeswitchNightly:
   ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
   ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
   ## @see featureServerNightly
-  image: cognigy.azurecr.io/vg-freeswitch:2026.19.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.20.0
 freeswitchLegacy:
   ## You can specify a custom image for the FreeSWITCH in the legacy FeatureServer here
   ## To enable a "legacy FreeSWITCH", you have to enable a legacy FeatureServer.
   ## @see featureServerLegacy
-  image: cognigy.azurecr.io/vg-freeswitch:2026.19.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.20.0
 rtpEngine:
   image: cognigy.azurecr.io/vg-rtpengine:0.2.0
   imagePullPolicy: IfNotPresent
@@ -1674,6 +1717,22 @@ rtpEngine:
   # LQ=listening quality) flags. Off by default -- opt in per environment.
   measureRtp: false
   mos: CQ
+  ## Core dumps from the rtpengine daemon. Needs an image built with debug
+  ## symbols (Cognigy/vg-rtpengine ships those unstripped, plus gdb).
+  coreDumps:
+    enabled: false
+    ## Where the dump lands inside the container.
+    path: /var/cores
+    ## "emptyDir" keeps dumps for the pod's lifetime -- enough for the usual
+    ## case, where rtpengine crashes and only the container restarts.
+    ## "hostPath" keeps them on the node after the pod goes away; you clean up.
+    type: emptyDir
+    sizeLimit: 4Gi
+    hostPath: /var/lib/vg/cores
+    ## /proc/sys/kernel/core_pattern is node-wide, so writing it needs a
+    ## privileged container. Left false, dumps still happen but follow the
+    ## node's own pattern instead of landing in `path`.
+    privileged: false
   extraEnvVars: []
   resources:
     requests:
@@ -1688,7 +1747,7 @@ rtpEngine:
 mediaProcessor:
   ## Enable Media Processor for decoupled STT/TTS processing
   enabled: false
-  image: cognigy.azurecr.io/vg-media-processor:2026.19.0
+  image: cognigy.azurecr.io/vg-media-processor:2026.20.0
   imagePullPolicy: Always
   replicaCount: 2
   serviceName: media-processor
@@ -1735,7 +1794,7 @@ mediaProcessor:
       cpu: "1"
       memory: 512Mi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.19.0
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.20.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1754,7 +1813,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/vg-sbc-call-router:2026.19.0
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.20.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1792,7 +1851,7 @@ sbcCallRouter:
 ## Background: vg-resources/docs/tdd/06-vg-in-ai/002-runtime-gateway-migration-plan.md.
 resourceResolver:
   enabled: true
-  image: cognigy.azurecr.io/vg-resource-resolver:2026.19.0-73
+  image: cognigy.azurecr.io/vg-resource-resolver:2026.20.0-97
   imagePullPolicy: IfNotPresent
   ## Two replicas for availability, matching sbcInbound/sbcOutbound. Capacity is
   ## not the reason: a single replica served 600 concurrent calls at 21% of a 250m
@@ -1825,6 +1884,33 @@ resourceResolver:
   logLevel:
   cacheEnabled: true
   cacheTtlSeconds: 60
+  ## Linked Cognigy.AI clusters this resolver may resolve runtime resources
+  ## against, in the order it tries them. One VG cluster serving several AI
+  ## clusters is real in production (11 of 82 clusters, up to 4 each — see
+  ## vg-resources docs/tdd/06-vg-in-ai/017), which is why this is a list rather
+  ## than the single RUNTIME_API_BASE_URL it replaces.
+  ##
+  ## `name` must match the key this VG cluster is filed under in the target AI
+  ## cluster's trust list (vg-agentic's vgRuntimeApi.auth.clusters) — it becomes
+  ## the JWT's `aud`, so a token minted for one AI cluster cannot be replayed to
+  ## another. `url` carries no /v1 suffix; the resolver appends it.
+  ##
+  ## Empty disables the runtime-resources passthrough entirely. Requires
+  ## vgCluster below: with no signing key the resolver has no credential to
+  ## present and every AI cluster rejects it.
+  ##
+  ##   runtimeApiTargets:
+  ##     - name: ibilousov-test
+  ##       url: https://api-ibilousov-test.cognigy.dev/vg/runtime
+  ##
+  ## MIGRATION: this replaces RUNTIME_API_BASE_URL (and RUNTIME_API_SERVICE_TOKEN),
+  ## which this chart never set — the one place it lives today is a fleet repo,
+  ## passed through extraEnvVars below. Remove that entry in the same change that
+  ## sets this one. The resolver no longer reads it, so a leftover is inert rather
+  ## than dangerous; it is just inert config that reads like live config to the
+  ## next person debugging the link. Deliberately not a render guard: hard-failing
+  ## a reconcile over a variable the consumer ignores costs more than it catches.
+  runtimeApiTargets: []
   extraEnvVars: []
   resources:
     requests:
@@ -1837,8 +1923,70 @@ resourceResolver:
   tolerations: []
   priorityClassName: ""
   podSecurityContext: {}
+####################################
+# Cross-cluster identity (VG -> AI) #
+####################################
+
+## This VG cluster's identity when it calls a linked Cognigy.AI cluster.
+##
+## vg-resource-resolver signs a short-lived ES256 JWT per outbound call with the
+## private key; api-server publishes the public half at /.well-known/jwks.json so
+## the AI cluster's vg-runtime-api can verify it and know which VG cluster it is
+## talking to. Design: vg-resources
+## docs/tdd/06-vg-in-ai/019-vg-resolver-runtime-api-jwt-keypair-auth-proposal.md.
+##
+## The keypair is generated automatically on first install/upgrade, so a cluster
+## picking up this version needs no manual key handling. What stays inert until
+## configured is the LINKING: `resourceResolver.runtimeApiTargets` above is empty
+## by default, so nothing is called and no credential is presented.
+vgCluster:
+  ## Stable identifier for this VG cluster. Becomes the JWT's `iss`, and is the
+  ## key each linked AI cluster files this cluster under in its trust list.
+  ##
+  ## Empty falls back to `billing.clusterId`, then to the webapp ingress host —
+  ## the same chain api-server already uses for VG_CLUSTER_ID, so a cluster
+  ## already has a working identity without anyone setting a new value.
+  ##
+  ## Setting it explicitly is still worth doing for a cluster that will be
+  ## linked: a hostname-derived identity changes if the host ever changes, and
+  ## every linked AI cluster's trust list is keyed by this string. Changing it
+  ## later means editing each of them.
+  name: ""
+  signingKey:
+    ## Generate the keypair automatically. A `pre-install,pre-upgrade` hook Job
+    ## creates it if — and only if — it does not already exist. Modelled on
+    ## cognigy-ai-app's own auth-gateway keypair generator.
+    ##
+    ## The Job never regenerates. That is deliberate: a rotation is a sequenced
+    ## operation (publish both keys, wait past the AI side's refresh interval,
+    ## then retire the old one — docs/008-vg-cluster-signing-key.md), and doing
+    ## it as a side effect of `helm upgrade` would 401 every call this cluster
+    ## makes until each linked AI cluster refreshed.
+    ##
+    ## Its Role grants create + get and deliberately NO update/patch/delete, so
+    ## the generator cannot overwrite an existing identity even if the script
+    ## were wrong. The Secret is created by kubectl rather than Helm, so it
+    ## survives `helm uninstall`.
+    autoGenerate: true
+    ## Bring your own instead: set this to a Secret you manage (e.g. a
+    ## SealedSecret) and the generator Job is not rendered at all. It must hold
+    ## both key files named below.
+    existingSecret: ""
+    ## Key names within that Secret, and what the generator Job writes — so the
+    ## two cannot disagree if you change them.
+    ##
+    ## api-server mounts only the public half and vg-resource-resolver only the
+    ## private half. The `items:` selector on each volume is what makes that true:
+    ## mount-time isolation, so a compromise of api-server does not expose the
+    ## signing key. It is NOT an RBAC boundary — one Secret holds both halves, so
+    ## anyone who can read Secrets in this namespace reads both regardless.
+    privateKeyFile: "signing-key.pem"
+    publicKeyFile: "signing-key.pub.pem"
+    ## Needs bash, openssl and kubectl. This is the same image cognigy-ai-app's
+    ## keypair generator uses.
+    generatorImage: cognigy.azurecr.io/kubectl:latest
 sbcInbound:
-  image: cognigy.azurecr.io/vg-sbc-inbound:2026.19.0
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.20.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1878,7 +2026,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/vg-sbc-outbound:2026.19.0
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.20.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1916,7 +2064,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.19.0
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.20.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1931,7 +2079,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.19.0
+  image: cognigy.azurecr.io/vg-tcm:2026.20.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -1977,7 +2125,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: true
-  image: cognigy.azurecr.io/vg-connector:2026.19.0
+  image: cognigy.azurecr.io/vg-connector:2026.20.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -1996,11 +2144,6 @@ vgConnector:
   priorityClassName: ""
   podSecurityContext: {}
   tolerations: []
-  ## MS Teams is gated by global.enableMsTeams (mirrors Genesys AudioHook).
-  msTeams:
-    ## Record inbound/outbound audio to disk for debugging. Read as
-    ## MSTEAMS_FEATURE_RECORD_AUDIO by the connector.
-    recordAudio: false
   pdb:
     enabled: true
     minAvailable: 1 # use one of minAvailable or maxUnavailable
@@ -2103,7 +2246,7 @@ vgAudioManager:
       cpu: "0.500"
       memory: 512Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.19.0
+  image: cognigy.azurecr.io/vg-webapp:2026.20.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## hot-reload property
@@ -3114,11 +3257,33 @@ phraseList: |
 # stack (mock-cognigy, mock-speech, sip-caller, …) is tracked separately.
 vgTestHarness:
   # Master switch for the in-cluster mock test harness (mock-cognigy,
-  # mock-speech, sip-caller). When true, the FreeSWITCH sidecars are also
-  # given TESTING_OVERRIDE_TTS_URL / TESTING_OVERRIDE_STT_URL so in-scope
-  # speech vendors hit mock-speech over plain HTTP/WS. Requires an
-  # asan/debug freeswitch image (the override is compiled out of prod).
+  # mock-speech, sip-caller). Everything under this key renders only when it is
+  # true, which is what keeps a production install byte-identical.
   enabled: false
+  # Whether the harness intercepts REAL speech-vendor traffic.
+  #
+  #           ADOPTING THIS WHERE A CERTIFICATE ALREADY EXISTS: the chart takes
+  #           ownership of mock-speech-tls / mock-speech-ca. If something else
+  #           created them, either let whatever manages them remove them first
+  #           (a Flux Kustomization with prune: true does this once the files are
+  #           dropped) or set mockSpeech.tls.generate false in the same reconcile.
+  #           Helm refuses to adopt a resource it does not own, so this fails the
+  #           release rather than doing anything quiet.
+  #
+  #   none    (default) Nothing is redirected at the infrastructure level. Not
+  #           "no mocking": an application on a custom:<name> credential still
+  #           reaches mock-speech by the URL stored ON THE CREDENTIAL, which
+  #           needs nothing from this chart. That is how the kind gate works.
+  #
+  #   vendor  VG dials the real vendor hostnames and an in-namespace CoreDNS
+  #           rewrites them to mock-speech's TLS listener -- the only mode that
+  #           runs each vendor's own client code. Derives test-dns and its
+  #           rewrite list, the TLS listener and its certificate, the FreeSWITCH
+  #           and api-server dnsConfig, and the CA-trust overlay. Nothing else
+  #           to set -- the certificate and test-dns's address are both derived.
+  #           See mockSpeech.tls.generate and regionDns.clusterIPBase to override
+  #           either.
+  speechInterception: none
   # The number manifest: which numbers exist, which fixture answers each, and
   # which TO_NUMBER_* variable the Playwright suite reads it from. Empty (the
   # default) keeps the previous single-number behaviour — autoProvision creates
@@ -3249,18 +3414,35 @@ vgTestHarness:
     logLevel: ""
     ## Second listener on :8443, serving the same routes over TLS. Needed only by
     ## the vendor-hostname route, where FreeSWITCH dials a real vendor hostname
-    ## (api.eu.deepgram.com) that a DNS rewrite points here — see
-    ## vgTestHarness.regionDns.rewrites and ci/kind/values-kind-region.yaml.
+    ## (api.eu.deepgram.com) that a DNS rewrite points here — implied by
+    ## speechInterception: vendor, which supplies the rewrites too.
     ##
-    ## The chart does NOT create secretName: the cert has to cover whichever
-    ## hostnames that run intercepts, so it is minted per run and applied
-    ## alongside the release (ci/kind/action.yml's vendor_speech_sans, or the
-    ## `gen-certs` step of docs/quality-gate/deploy-vendor-speech-adapter-to-a-
-    ## dev-namespace.md in vg-test-harness). Enabling this without the secret
-    ## leaves the pod waiting on a missing volume.
+    ## The certificate covers whichever hostnames that route intercepts, so it
+    ## is derived from the same rewrite list rather than configured: see
+    ## generate below.
     tls:
+      # Implied by speechInterception: vendor. Left here so an install that
+      # predates that flag keeps working unchanged -- which is also why setting
+      # it ALONE mints nothing: such an install already supplies its own Secret,
+      # and a chart that started minting would fail on a resource it cannot
+      # adopt. See generate.
       enabled: false
+      # Whether the CHART mints the certificate: a CA and a leaf covering every
+      # rewritten hostname, generated at install and reused on every upgrade.
+      #
+      # Only on the vendor route. speechInterception: vendor is what derives the
+      # hostname list the leaf has to cover, so it is also what makes minting
+      # possible; with tls.enabled alone there is no such list and the Secret
+      # must come from outside (ci/kind/values-kind-region.yaml is the one
+      # in-repo case).
+      #
+      # Set false on the vendor route where a run mints its own -- then
+      # secretName and caConfigMapName must exist before install, or mock-speech
+      # sits Pending on a missing volume.
+      generate: true
       secretName: mock-speech-tls
+      # CA that signed the leaf, mounted by the trust overlay and by api-server.
+      caConfigMapName: mock-speech-ca
     resources:
       requests: {cpu: "0.100", memory: 128Mi}
       limits: {cpu: "0.200", memory: 256Mi}
@@ -3279,23 +3461,40 @@ vgTestHarness:
     resources:
       requests: {cpu: "0.100", memory: 64Mi}
       limits: {cpu: "0.200", memory: 128Mi}
-  # Dedicated CoreDNS instance scoped to exactly two hostnames
-  # (api.deepgram.com, api.eu.deepgram.com), used only by the FreeSWITCH pod
-  # opted in via dnsConfig — see freeswitch.regionDnsEnabled. Everything else
-  # forwards to the cluster's real DNS untouched. This is a narrow, two-
-  # hostname exception to the "no CoreDNS" decision recorded in
+  # Dedicated CoreDNS instance scoped to exactly three hostnames
+  # (api.deepgram.com, api.eu.deepgram.com, api.au.deepgram.com), used only by
+  # the FreeSWITCH pod opted in via dnsConfig — see freeswitch.regionDnsEnabled.
+  # Everything else forwards to the cluster's real DNS untouched. This is a
+  # narrow, three-hostname exception to the "no CoreDNS" decision recorded in
   # docs/superpowers/specs/2026-06-25-vg-test-harness-integration.md — see
   # docs/superpowers/specs/2026-07-24-deepgram-region-test-design.md for why.
   regionDns:
+    # Implied by speechInterception: vendor, which also supplies the rewrites.
+    # Set it directly only for the Deepgram region-routing suite, which uses the
+    # resolver WITHOUT the TLS listener.
     enabled: false
     image: coredns/coredns:1.11.3
-    # Static ClusterIP for the test-dns Service. Required (no safe default —
-    # a valid address depends on each cluster's Service CIDR, which varies
-    # across AWS/Azure/GCP/STACKIT) the moment regionDns.enabled is true,
-    # because Kubernetes' PodDNSConfig.nameservers only accepts literal IPs
-    # (they're written verbatim into /etc/resolv.conf), never a hostname —
-    # see freeswitch.regionDnsEnabled. Choose an unused address within this
-    # cluster's Service CIDR.
+    # Dotted prefix, e.g. "172.20.0", that test-dns's address is derived from
+    # when clusterIP is unset -- the last octet comes from the namespace name.
+    #
+    # Empty is the normal case: the chart reads kube-system/kube-dns and uses
+    # its /24, which Kubernetes reserves for pinned addresses and never
+    # allocates from dynamically, so it is the emptiest part of the Service
+    # CIDR. Set this only to override that, or where the render cannot read the
+    # cluster (helm template, or a reconciler without get on kube-system
+    # Services) -- both of which fail loudly rather than guessing.
+    #
+    # Derived, not verified free: Helm cannot list what is taken, so a collision
+    # is a rejected Service, i.e. a failed install. Pin clusterIP to resolve one.
+    clusterIPBase: ""
+    # Static ClusterIP for the test-dns Service, overriding both clusterIPBase
+    # and the kube-dns-derived default. Pin one to resolve a collision, or where
+    # the address must stay put -- a Service's clusterIP is immutable, so a
+    # namespace already running the adapter cannot be moved onto a derived one.
+    #
+    # An address is unavoidable somewhere in this chain: PodDNSConfig.nameservers
+    # takes literal IPs only (they are written verbatim into /etc/resolv.conf),
+    # never a Service name -- see freeswitch.regionDnsEnabled.
     clusterIP: ""
     # CoreDNS's `forward` plugin only accepts a literal IP address or a
     # readable file path (see plugin/pkg/parse/host.go, HostPortOrFile) — a
@@ -3325,11 +3524,13 @@ vgTestHarness:
     # the hostnames itself, in its own values file (see
     # ci/kind/values-kind-vendor-speech.yaml).
     #
-    # Nothing here renders unless BOTH vgTestHarness.enabled and
-    # regionDns.enabled are true, and an empty list simply yields a CoreDNS
-    # config that forwards everything upstream unchanged.
+    # Nothing here renders unless test-dns itself does, and an empty list simply
+    # yields a CoreDNS config that forwards everything upstream unchanged.
+    #
+    # speechInterception: vendor supplies the vendor hostname list from the chart
+    # and APPENDS this one to it, rather than being replaced by it.
     rewrites: []
-    # Whether the provision Job also creates the labelled eu/us deepgram
+    # Whether the provision Job also creates the labelled eu/us/au deepgram
     # credentials the region-routing regression test resolves. Set false when
     # this CoreDNS instance is being used only to rewrite vendor hostnames for
     # the speech adapter: the rewrites are wanted, the extra credentials (which

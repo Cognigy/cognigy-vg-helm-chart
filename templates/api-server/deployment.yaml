@@ -1,5 +1,6 @@
 {{- $vgTeamSecret := include "common.secretName.render" ( dict "existingSecret" $.Values.api.vgTeam.existingSecret "defaultSecret" "vg-team-credentials") }}
 {{- $sharedSpeechCredentialsSecret := include "common.secretName.render" ( dict "existingSecret" $.Values.sharedSpeechCredentials.existingSecret "defaultSecret" "vg-shared-speech-credentials") }}
+{{- $vgClusterSigningKeySecret := include "vg.clusterSigningKey.secretName" $ }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -17,7 +18,7 @@ spec:
   selector:
     matchLabels:
       app: api-server
-  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas)) }}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) (dig "api" "enabled" false $.Values.hpa.services)) }}
   replicas: {{ .Values.api.replicaCount }}
   {{- end }}
   template:
@@ -25,6 +26,7 @@ spec:
       labels:
         app: api-server
       annotations:
+        {{- with (include "vg.testHarness.caChecksum" $) }}{{- . | nindent 8 }}{{- end }}
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
         checksum/secret: {{ include (print $.Template.BasePath "/common-secrets/vg-homer-password.yaml") $ | sha256sum }}
         {{- if .Values.api.vgTeam.enabled }}
@@ -32,6 +34,16 @@ spec:
         {{- end }}
         {{- if $.Values.sharedSpeechCredentials.enabled }}
         checksum/sharedSpeechCredentials: {{ if not (lookup "v1" "Secret" $.Release.Namespace $sharedSpeechCredentialsSecret) }}{{ $sharedSpeechCredentialsSecret | sha256sum }}{{ else }}{{ toYaml (lookup "v1" "Secret" $.Release.Namespace $sharedSpeechCredentialsSecret).data | sha256sum }}{{ end }}
+        {{- end }}
+        {{- if $vgClusterSigningKeySecret }}
+        ## Rolls the pod when the signing keypair is rotated. api-server reads the
+        ## mounted public key once at boot, so without this a rotation is not
+        ## published until something else happens to restart the pod — and the
+        ## rotation runbook's "publish both, then wait" step would never complete.
+        ## Same lookup idiom as the secrets above: hash the NAME when the secret
+        ## does not exist yet so a fresh cluster still renders, and only .data
+        ## once it does so label churn does not roll the pod.
+        checksum/vg-cluster-signing-key: {{ if not (lookup "v1" "Secret" $.Release.Namespace $vgClusterSigningKeySecret) }}{{ $vgClusterSigningKeySecret | sha256sum }}{{ else }}{{ toYaml (lookup "v1" "Secret" $.Release.Namespace $vgClusterSigningKeySecret).data | sha256sum }}{{ end }}
         {{- end }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
@@ -63,6 +75,7 @@ spec:
         {{- end }}
       {{- end }}
       restartPolicy: Always
+      {{- with (include "vg.testHarness.apiServerDnsConfig" .) }}{{- . | nindent 6 }}{{- end }}
       initContainers:
         - image: kanisterio/mysql-sidecar:0.40.0
           name: db-create-wait
@@ -110,6 +123,7 @@ spec:
               port: {{ .Values.health.port }}
           {{- end }}
           env:
+            {{- with (include "vg.testHarness.apiServerEnv" .) }}{{- . | nindent 12 }}{{- end }}
             - name: NODE_ENV
               value: {{ .Values.global.nodeEnv | quote }}
             - name: HTTP_PORT
@@ -334,17 +348,53 @@ spec:
                   name: {{ $sharedSpeechCredentialsSecret }}
                   key: {{ $.Values.sharedSpeechCredentials.secretKey | quote }}
             {{- end }}
+            {{- if $vgClusterSigningKeySecret }}
+            ## Public half only. api-server publishes it at
+            ## /.well-known/jwks.json so linked AI clusters can verify the JWT
+            ## vg-resource-resolver signs; it has no reason to hold the private
+            ## key and the volume below does not mount it.
+            - name: VG_CLUSTER_PUBLIC_KEY_PATH
+              value: "/var/run/secrets/vg-cluster/{{ $.Values.vgCluster.signingKey.publicKeyFile }}"
+            {{- end }}
           volumeMounts:
             - name: cognigy-env-reloadable
               mountPath: /config/env
               readOnly: true
+            {{- with (include "vg.testHarness.apiServerCaMount" .) }}{{- . | nindent 12 }}{{- end }}
+            {{- if $vgClusterSigningKeySecret }}
+            - name: vg-cluster-public-key
+              mountPath: /var/run/secrets/vg-cluster
+              readOnly: true
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env
       volumes:
+        {{- with (include "vg.testHarness.apiServerCaVolume" .) }}{{- . | nindent 8 }}{{- end }}
         - name: cognigy-env-reloadable
           configMap:
             name: cognigy-env-reloadable
             items:
               - key: cognigy.yaml
                 path: cognigy.yaml
+        {{- if $vgClusterSigningKeySecret }}
+        - name: vg-cluster-public-key
+          secret:
+            secretName: {{ $vgClusterSigningKeySecret | quote }}
+            ## `items` is mount-time isolation, not a convenience: the Secret also
+            ## holds the private signing key, and without this selector the whole
+            ## Secret — private key included — would be mounted into this pod. So
+            ## a compromise of api-server does not expose the signing key.
+            ##
+            ## It is NOT an RBAC boundary. Both halves live in one Secret, so
+            ## anyone who can `get secret vg-cluster-signing-key` in this namespace
+            ## reads both regardless of what is mounted where. Two Secrets bound to
+            ## two ServiceAccounts would be the stronger control; this is not that.
+            items:
+              - key: {{ $.Values.vgCluster.signingKey.publicKeyFile | quote }}
+                path: {{ $.Values.vgCluster.signingKey.publicKeyFile | quote }}
+            ## 0644, intentionally looser than the resolver's 0400 on the private
+            ## half: this is a PUBLIC key that this very pod serves to the internet
+            ## at /.well-known/jwks.json.
+            defaultMode: 420
+        {{- end }}

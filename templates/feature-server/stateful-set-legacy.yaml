@@ -16,7 +16,7 @@ spec:
   selector:
     matchLabels:
       app: feature-server-legacy
-  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas)) }}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) (dig "featureServerLegacy" "enabled" false $.Values.hpa.services)) }}
   replicas: {{ .Values.featureServerLegacy.replicaCount }}
   {{- end }}
   serviceName: feature-server-headless-legacy
@@ -25,6 +25,7 @@ spec:
       labels:
         app: feature-server-legacy
       annotations:
+        {{- with (include "vg.testHarness.caChecksum" $) }}{{- . | nindent 8 }}{{- end }}
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
@@ -68,6 +69,7 @@ spec:
       restartPolicy: Always
       {{- include "vg.freeswitch.regionDnsConfig" $ | nindent 6 }}
       initContainers:
+        {{- with (include "vg.testHarness.caInitContainer" .) }}{{- . | nindent 8 }}{{- end }}
         - image: kanisterio/mysql-sidecar:0.40.0
           name: db-create-wait
           env:
@@ -245,6 +247,9 @@ spec:
               name: temp-audio-volume
             - mountPath: /coredumps
               name: fs-core-dumps
+            {{- /* libwebsockets reads the hashed dir at /etc/ssl/certs and nowhere else; /ca-overlay keeps the gRPC roots path identical in both containers. */}}
+            {{- with (include "vg.testHarness.caVolumeMount" (dict "ctx" $ "mountPath" "/etc/ssl/certs")) }}{{- . | nindent 12 }}{{- end }}
+            {{- with (include "vg.testHarness.caVolumeMount" (dict "ctx" $ "mountPath" "/ca-overlay")) }}{{- . | nindent 12 }}{{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env
@@ -293,7 +298,9 @@ spec:
             - name: cognigy-env-reloadable
               mountPath: /config/env
               readOnly: true
+            {{- with (include "vg.testHarness.caVolumeMount" (dict "ctx" $ "mountPath" "/ca-overlay")) }}{{- . | nindent 12 }}{{- end }}
           env:
+            {{- with (include "vg.testHarness.featureServerEnv" .) }}{{- . | nindent 12 }}{{- end }}
             - name: NODE_ENV
               {{- if .Values.featureServerLegacy.forDevelopment }}
               value: "development"
@@ -511,6 +518,7 @@ spec:
       volumes:
         - name: temp-audio-volume
           emptyDir: {}
+        {{- with (include "vg.testHarness.caVolumes" .) }}{{- . | nindent 8 }}{{- end }}
         - name: fs-core-dumps
           emptyDir:
             sizeLimit: "2Gi"

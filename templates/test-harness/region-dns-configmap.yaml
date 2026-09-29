@@ -1,5 +1,5 @@
 {{/* templates/test-harness/region-dns-configmap.yaml */}}
-{{- if and .Values.vgTestHarness.enabled .Values.vgTestHarness.regionDns.enabled }}
+{{- if include "vg.testHarness.testDnsEnabled" . }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -8,10 +8,19 @@ metadata:
   labels:
     app: test-dns
     owner-team: echo
+{{- /*
+  The vendor route ships its own hostname list (vg.testHarness.vendorRewrites)
+  so no caller has to restate it; regionDns.rewrites is appended, never
+  replaced, so an install can still add one.
+*/}}
+{{- $rewrites := .Values.vgTestHarness.regionDns.rewrites }}
+{{- if include "vg.testHarness.vendorRoute" . }}
+{{- $rewrites = concat (include "vg.testHarness.vendorRewrites" . | fromYamlArray) $rewrites }}
+{{- end }}
 data:
   Corefile: |
     . {
-        {{- range .Values.vgTestHarness.regionDns.rewrites }}
+        {{- range $rewrites }}
         {{- if eq (.type | default "exact") "regex" }}
         {{- /*
           answer auto is required here and NOT on the exact form: a regex rewrite

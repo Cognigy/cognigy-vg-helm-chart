@@ -167,9 +167,21 @@ spec:
                 secretKeyRef:
                   name: voicegateway-drachtio-secret
                   key: secret
+            {{- if include "vg.rtpEngine.coreDumps.enabled" $ }}
+            - name: CORE_DUMP_DIR
+              value: {{ .Values.rtpEngine.coreDumps.path | quote }}
+            {{- end }}
             {{- if .Values.rtpEngine.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.rtpEngine.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
+          {{- if include "vg.rtpEngine.coreDumps.enabled" $ }}
+          {{- if .Values.rtpEngine.coreDumps.privileged }}
+          securityContext:
+            privileged: true
+          {{- end }}
+          volumeMounts:
+            {{- include "vg.rtpEngine.coreDumps.volumeMount" $ | nindent 12 }}
+          {{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env
@@ -286,6 +298,9 @@ spec:
             - configMapRef:
                 name: cognigy-env
       volumes:
+        {{- if include "vg.rtpEngine.coreDumps.enabled" $ }}
+        {{- include "vg.rtpEngine.coreDumps.volume" $ | nindent 8 }}
+        {{- end }}
         - name: cognigy-env-reloadable
           configMap:
             name: cognigy-env-reloadable

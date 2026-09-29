@@ -1,0 +1,71 @@
+{{/* templates/test-harness/mock-speech-certs.yaml */}}
+{{- if include "vg.testHarness.mintCerts" . }}
+{{- $secretName := dig "tls" "secretName" "mock-speech-tls" .Values.vgTestHarness.mockSpeech }}
+{{- /*
+  Reuse before mint, so the CA is stable across upgrades: a fresh one every
+  reconcile rotates the cert under a running mock-speech AND invalidates the
+  trust store the feature-server's init container already built.
+
+  Rendered either way, never conditionally omitted -- Helm prunes what leaves
+  the manifest, so "found it, emit nothing" deletes the Secret.
+
+  lookup returns nothing under `helm template` and --dry-run, so a local render
+  mints every time. Flux and `helm upgrade` run against the API server.
+*/}}
+{{- $existing := lookup "v1" "Secret" .Release.Namespace $secretName }}
+{{- $tlsCrt := "" }}
+{{- $tlsKey := "" }}
+{{- $caCrt := "" }}
+{{- /*
+  A Secret that exists but carries no ca.crt is refused rather than silently
+  replaced. That shape is what cert-manager and most external issuers produce,
+  and overwriting it would swap the CA under every client that already trusts
+  the old one -- which surfaces as an opaque handshake failure with nothing in
+  `helm diff` to explain it. Say so at render time instead.
+
+  (An unreadable Secret cannot be mistaken for an absent one here: Helm stores
+  its own release state in Secrets in this namespace, so a client that can
+  install the chart at all can read them.)
+*/}}
+{{- if and $existing $existing.data (not (index $existing.data "ca.crt")) }}
+{{- fail (printf "Secret %q already exists in namespace %q but has no ca.crt, so this chart cannot reuse it and refuses to overwrite it. Either delete it and let the chart mint its own pair, or set vgTestHarness.mockSpeech.tls.generate=false and supply the matching %s ConfigMap yourself." $secretName .Release.Namespace (include "vg.testHarness.caConfigMapName" .)) }}
+{{- end }}
+{{- if and $existing $existing.data (index $existing.data "ca.crt") }}
+{{- $tlsCrt = index $existing.data "tls.crt" }}
+{{- $tlsKey = index $existing.data "tls.key" }}
+{{- $caCrt = index $existing.data "ca.crt" }}
+{{- else }}
+{{- $ca := genCA "mock-speech-ca" 3650 }}
+{{- $leaf := genSignedCert "mock-speech" nil (include "vg.testHarness.certSans" . | fromYamlArray) 3650 $ca }}
+{{- $tlsCrt = b64enc $leaf.Cert }}
+{{- $tlsKey = b64enc $leaf.Key }}
+{{- $caCrt = b64enc $ca.Cert }}
+{{- end }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secretName }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: mock-speech
+    owner-team: echo
+type: kubernetes.io/tls
+data:
+  tls.crt: {{ $tlsCrt }}
+  tls.key: {{ $tlsKey }}
+  {{- /* Not in the tls Secret contract, but the only way the CA survives a reuse. */}}
+  ca.crt: {{ $caCrt }}
+---
+{{- /* The same CA unencoded, for the trust overlay. From the Secret above, so the pair cannot drift. */}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vg.testHarness.caConfigMapName" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: mock-speech
+    owner-team: echo
+data:
+  ca.pem: |
+{{ $caCrt | b64dec | indent 4 }}
+{{- end }}

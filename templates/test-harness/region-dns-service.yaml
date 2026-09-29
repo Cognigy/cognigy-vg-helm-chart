@@ -1,5 +1,5 @@
 {{/* templates/test-harness/region-dns-service.yaml */}}
-{{- if and .Values.vgTestHarness.enabled .Values.vgTestHarness.regionDns.enabled }}
+{{- if include "vg.testHarness.testDnsEnabled" . }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -10,7 +10,7 @@ metadata:
     owner-team: echo
 spec:
   type: ClusterIP
-  clusterIP: {{ required "vgTestHarness.regionDns.clusterIP is required when vgTestHarness.regionDns.enabled is true — dnsConfig.nameservers requires a literal IP, not a hostname; choose an unused address within this cluster's Service CIDR" .Values.vgTestHarness.regionDns.clusterIP }}
+  clusterIP: {{ include "vg.testHarness.testDnsClusterIP" . }}
   selector:
     app: test-dns
   ports:

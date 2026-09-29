@@ -11,11 +11,9 @@ metadata:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-audio-manager.git"
     "cognigy.com/source-code.db-create-wait": "empty"
 spec:
-  {{- /* Intentional: guard includes .vgAudioManager.enabled so spec.replicas is only
-       suppressed when this service's HPA is actually active. The two-condition guard
-       used by always-on services would drop replicas even when the per-service HPA
-       entry is disabled. */ -}}
-  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) ($.Values.hpa.services.vgAudioManager.enabled)) }}
+  {{- /* spec.replicas is only suppressed when this service's own HPA entry is enabled;
+       otherwise nothing would own the replica count and the workload would default to 1. */ -}}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) (dig "vgAudioManager" "enabled" false $.Values.hpa.services)) }}
   replicas: {{ .Values.vgAudioManager.replicaCount }}
   {{- end }}
   selector:

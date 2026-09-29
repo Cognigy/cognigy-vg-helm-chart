@@ -1,0 +1,208 @@
+{{- if and .Values.vgCluster.signingKey.autoGenerate (not .Values.vgCluster.signingKey.existingSecret) }}
+{{- $secretName := "vg-cluster-signing-key" }}
+{{- $privateKeyFile := .Values.vgCluster.signingKey.privateKeyFile }}
+{{- $publicKeyFile := .Values.vgCluster.signingKey.publicKeyFile }}
+{{- $hookPullSecret := "vg-cluster-signing-key-generator-pull" }}
+{{- $ownPullSecret := and .Values.imageCredentials.registry .Values.imageCredentials.username .Values.imageCredentials.password }}
+# Generates this VG cluster's ES256 signing keypair once, on first install or
+# upgrade, so no operator has to mint and seal one by hand on ~82 clusters.
+#
+# Modelled on cognigy-ai-app's own service-auth-gateway keypair generator, which
+# does exactly this for the platform's internal JWT and runs openssl on this same
+# image. The chart cannot generate the key in a template: Helm's randAlphaNum
+# produces a string, not an EC keypair, and Sprig has no EC generator.
+#
+# IDEMPOTENT, AND THAT IS THE LOAD-BEARING PROPERTY. If the secret exists, the
+# Job exits without touching it. Regenerating on every upgrade would rotate this
+# cluster's identity on every upgrade, and because linked AI clusters only refetch
+# the JWKS on a timer, every call this cluster makes would 401 until each of them
+# refreshed. A rotation is a deliberate, sequenced operation
+# (docs/008-vg-cluster-signing-key.md), never a side effect of `helm upgrade`.
+#
+# The secret is created by kubectl, not by Helm, so Helm never owns it: it
+# survives `helm uninstall`, which is what you want for an identity other
+# clusters have been configured to trust.
+{{- if $ownPullSecret }}
+---
+# The generator's OWN copy of the registry pull secret, and it has to be its own.
+#
+# This is the chart's first pre-install hook that pulls an image, and
+# `cognigy-registry-token` is a plain manifest with no hook annotation — so on a
+# FRESH INSTALL Helm applies it only after every pre-install hook has completed.
+# A Job referencing it here would find no such Secret, fail to authenticate to a
+# private registry, sit in ImagePullBackOff, exhaust backoffLimit and fail the
+# whole `helm install`. That is exactly how CGY-36897 broke the kind gate, via
+# api-migrator's billing-grants hook (see ci/kind/values-kind.yaml).
+#
+# Upgrades would have been fine — the Secret is already there from the previous
+# release — which is precisely what makes this the kind of bug that ships.
+#
+# A distinct NAME, not a hook-annotated `cognigy-registry-token`: hook resources
+# are not tracked in the release, so a same-named hook Secret would still be
+# sitting there when Helm applied the real one and the install would die on
+# "resource already exists and is not owned by this release".
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $hookPullSecret }}
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+  annotations:
+    "helm.sh/hook": "pre-install,pre-upgrade"
+    ## Before the ServiceAccount/Role at -10, and well before the Job at -5.
+    "helm.sh/hook-weight": "-20"
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: {{ template "imagePullSecret" . }}
+{{- end }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vg-cluster-signing-key-generator
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+  annotations:
+    "helm.sh/hook": "pre-install,pre-upgrade"
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vg-cluster-signing-key-generator
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+  annotations:
+    "helm.sh/hook": "pre-install,pre-upgrade"
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+rules:
+  # `create` cannot be restricted by resourceNames -- the create URL carries no
+  # resource name -- so it is granted broadly and the `get` below is scoped.
+  # Note there is deliberately NO update/patch/delete verb: this identity can
+  # bring a keypair into existence and read whether one is already there, and
+  # nothing else. It cannot overwrite the cluster's identity even if the script
+  # were wrong.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ $secretName | quote }}]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vg-cluster-signing-key-generator
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+  annotations:
+    "helm.sh/hook": "pre-install,pre-upgrade"
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+subjects:
+  - kind: ServiceAccount
+    name: vg-cluster-signing-key-generator
+    namespace: {{ $.Release.Namespace | quote }}
+roleRef:
+  kind: Role
+  name: vg-cluster-signing-key-generator
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vg-cluster-signing-key-generator
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+  annotations:
+    "helm.sh/hook": "pre-install,pre-upgrade"
+    ## After the RBAC above (-10) and before anything that mounts the secret.
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      name: vg-cluster-signing-key-generator
+      labels:
+        owner-team: echo
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: vg-cluster-signing-key-generator
+      {{- if $ownPullSecret }}
+      ## The hook-scoped copy above, not `cognigy-registry-token` — see the
+      ## comment on that Secret for why the release's own one is not there yet.
+      imagePullSecrets:
+        - name: {{ $hookPullSecret }}
+      {{- else if $.Values.imageCredentials.pullSecrets }}
+      ## Operator-managed Secrets that exist independently of this release, so
+      ## they are already present at pre-install-hook time.
+      imagePullSecrets:
+        {{- range $.Values.imageCredentials.pullSecrets }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: generate
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.vgCluster.signingKey.generatorImage) }}
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+
+              SECRET_NAME={{ $secretName | quote }}
+              NAMESPACE={{ $.Release.Namespace | quote }}
+              ## Templated, not hardcoded: the two mounts select these exact keys
+              ## out of the Secret with `items:`, so a generator that always wrote
+              ## signing-key.pem would leave both pods stuck in ContainerCreating
+              ## on a "references non-existent secret key" error the moment anyone
+              ## set vgCluster.signingKey.privateKeyFile.
+              PRIVATE_KEY_FILE={{ $privateKeyFile | quote }}
+              PUBLIC_KEY_FILE={{ $publicKeyFile | quote }}
+
+              if kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
+                echo "OK: $SECRET_NAME already exists -- leaving this cluster's identity untouched."
+                echo "To rotate, follow docs/008-vg-cluster-signing-key.md. Rotation is a"
+                echo "sequenced operation, not something an upgrade should do behind your back."
+                exit 0
+              fi
+
+              echo "Generating an ES256 (P-256) keypair for this VG cluster..."
+              # P-256 is not a preference: vg-runtime-api pins ES256 and rejects
+              # every other algorithm, matching what the platform enforces for
+              # internal JWTs.
+              umask 077
+              openssl ecparam -genkey -name prime256v1 -noout -out /tmp/private.pem
+              openssl ec -in /tmp/private.pem -pubout -out /tmp/public.pem
+
+              kubectl create secret generic "$SECRET_NAME" \
+                --namespace "$NAMESPACE" \
+                --from-file="$PRIVATE_KEY_FILE=/tmp/private.pem" \
+                --from-file="$PUBLIC_KEY_FILE=/tmp/public.pem"
+
+              # Best-effort: the Role above deliberately grants no patch verb, so a
+              # failure here must not fail the Job and block the release.
+              kubectl label secret "$SECRET_NAME" -n "$NAMESPACE" owner-team=echo >/dev/null 2>&1 || true
+
+              echo "OK: created $SECRET_NAME."
+              echo "Public key (publish this cluster's JWKS URL to any linked AI cluster):"
+              cat /tmp/public.pem
+          resources:
+            requests:
+              cpu: "50m"
+              memory: 64Mi
+            limits:
+              cpu: "200m"
+              memory: 128Mi
+{{- end }}

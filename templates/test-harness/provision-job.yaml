@@ -3,7 +3,7 @@
 {{- end }}
 {{- if and .Values.vgTestHarness.enabled .Values.vgTestHarness.autoProvision.enabled }}
 {{- $useSecretRef := .Values.vgTestHarness.autoProvision.adminPassSecretRef.name }}
-{{- $vendorTlsEnabled := dig "tls" "enabled" false .Values.vgTestHarness.mockSpeech }}
+{{- $vendorTlsEnabled := include "vg.testHarness.mockSpeechTls" . }}
 {{- $placeholderVendors := dig "placeholderSpeechVendors" (list) .Values.vgTestHarness }}
 {{- $vendorTlsSpeechVendor := dig "tls" "speechVendor" "deepgram" .Values.vgTestHarness.mockSpeech }}
 apiVersion: batch/v1
@@ -171,7 +171,7 @@ spec:
             # credential instead of custom:deepgram — otherwise nothing
             # provisioned actually dials through the new TLS route.
             # vgTestHarness.mockSpeech.tls.speechVendor selects which one
-            # (deepgram/elevenlabs/speechmatics/deepgramflux/google/aws);
+            # (deepgram/elevenlabs/speechmatics/deepgramflux/google/microsoft/aws);
             # defaults to deepgram, matching every install before this existed.
             - "--speech-vendor={{ $vendorTlsSpeechVendor }}"
             {{- end }}

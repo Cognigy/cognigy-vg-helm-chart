@@ -5,25 +5,17 @@
 set -euo pipefail
 
 RELEASE="voicegateway"
-# Default testing freeswitch image (asan build carrying vg-freeswitch PR #255).
-# vg-freeswitch renamed its final image from vg-freeswitch-mrf to vg-freeswitch
-# (Cognigy/vg-freeswitch#244) and appends the buildType with no separator, so the
-# asan variant is `vg-freeswitchasan`. This default was left on the pre-rename
-# name. Preview releases build production only; asan comes from the main
-# build-freeswitch workflow, dev registry only.
-DEFAULT_FS_IMAGE="cognigydevelopment.azurecr.io/vg-freeswitchasan:2026.07.31-30614981012"
 
 usage() {
   cat <<EOF
 Usage: $0 <enable|disable> [--namespace NS] [--freeswitch-image IMAGE]
 
-  enable    Turn on vgTestHarness in the namespace and ensure an asan/debug
-            freeswitch image is in use.
+  enable    Turn on vgTestHarness in the namespace.
   disable   Turn off vgTestHarness.
 
   --namespace NS         Target namespace (default: current kube-context ns)
-  --freeswitch-image IMG Override the testing freeswitch image used by 'enable'
-                         (default: $DEFAULT_FS_IMAGE)
+  --freeswitch-image IMG Pin a specific freeswitch image. Optional, and not
+                         needed for the harness: the production image works.
 EOF
   exit 1
 }
@@ -31,7 +23,7 @@ EOF
 [[ $# -lt 1 ]] && usage
 ACTION="$1"; shift
 NS=""
-FS_IMAGE="$DEFAULT_FS_IMAGE"
+FS_IMAGE=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --namespace) NS="$2"; shift 2 ;;
@@ -53,16 +45,13 @@ helm status "$RELEASE" -n "$NS" >/dev/null 2>&1 \
 
 case "$ACTION" in
   enable)
-    # Matches both the current vg-freeswitchasan/debug names and the pre-rename
-    # vg-freeswitch-mrfasan/debug ones (Cognigy/vg-freeswitch#244). The earlier
-    # 'mrf' filter missed every current build, so `enable` would silently
-    # re-pin the default over a perfectly good asan image the user had set.
-    CUR_FS="$(helm get values "$RELEASE" -n "$NS" -o json 2>/dev/null \
-              | grep -o '"image"[^,}]*vg-freeswitch[a-z-]*[^,}]*' || true)"
+    # No asan/debug image is forced any more. That existed for
+    # TESTING_OVERRIDE_{TTS,STT}_URL, which the chart no longer sets: a
+    # custom:<name> speech credential carries its own URL, and the vendor route
+    # (vgTestHarness.speechInterception=vendor) redirects by DNS. Both work on
+    # the production image, so `enable` no longer swaps it out from under you.
     EXTRA=()
-    if ! printf '%s' "$CUR_FS" | grep -qE 'vg-freeswitch(-mrf)?(asan|debug)'; then
-      echo "WARNING: current freeswitch image is not an asan/debug build."
-      echo "         Setting freeswitch.image=$FS_IMAGE so overrides take effect."
+    if [[ -n "$FS_IMAGE" ]]; then
       EXTRA=(--set "freeswitch.image=$FS_IMAGE")
     fi
     echo "Enabling test harness in namespace '$NS'..."

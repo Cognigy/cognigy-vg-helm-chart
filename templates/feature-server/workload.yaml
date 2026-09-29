@@ -1,6 +1,6 @@
 {{- /*
-  Unified feature-server workload. Renders a Deployment by default, or a
-  StatefulSet when featureServer.useStatefulSet is true.
+  Unified feature-server workload. Renders a StatefulSet when
+  featureServer.useStatefulSet is true (default), otherwise a Deployment.
   The pod spec is identical in both modes; only kind + serviceName differ.
   A Deployment relies on the headless service (see service.yaml) for real
   per-pod DNS/SIP routing, so it works on AWS and Azure alike.
@@ -22,7 +22,7 @@ spec:
   selector:
     matchLabels:
       app: feature-server
-  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas)) }}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) (dig "featureServer" "enabled" false $.Values.hpa.services)) }}
   replicas: {{ .Values.featureServer.replicaCount }}
   {{- end }}
   {{- if .Values.featureServer.useStatefulSet }}
@@ -33,6 +33,7 @@ spec:
       labels:
         app: feature-server
       annotations:
+        {{- with (include "vg.testHarness.caChecksum" $) }}{{- . | nindent 8 }}{{- end }}
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
@@ -76,6 +77,7 @@ spec:
       restartPolicy: Always
       {{- include "vg.freeswitch.regionDnsConfig" $ | nindent 6 }}
       initContainers:
+        {{- with (include "vg.testHarness.caInitContainer" .) }}{{- . | nindent 8 }}{{- end }}
         - image: kanisterio/mysql-sidecar:0.40.0
           name: db-create-wait
           env:
@@ -250,6 +252,9 @@ spec:
               name: temp-audio-volume
             - mountPath: /coredumps
               name: fs-core-dumps
+            {{- /* libwebsockets reads the hashed dir at /etc/ssl/certs and nowhere else; /ca-overlay keeps the gRPC roots path identical in both containers. */}}
+            {{- with (include "vg.testHarness.caVolumeMount" (dict "ctx" $ "mountPath" "/etc/ssl/certs")) }}{{- . | nindent 12 }}{{- end }}
+            {{- with (include "vg.testHarness.caVolumeMount" (dict "ctx" $ "mountPath" "/ca-overlay")) }}{{- . | nindent 12 }}{{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env
@@ -292,7 +297,9 @@ spec:
             - name: cognigy-env-reloadable
               mountPath: /config/env
               readOnly: true
+            {{- with (include "vg.testHarness.caVolumeMount" (dict "ctx" $ "mountPath" "/ca-overlay")) }}{{- . | nindent 12 }}{{- end }}
           env:
+            {{- with (include "vg.testHarness.featureServerEnv" .) }}{{- . | nindent 12 }}{{- end }}
             - name: NODE_ENV
               value: {{ .Values.global.nodeEnv | quote }}
             - name: HTTP_PORT
@@ -311,6 +318,32 @@ spec:
               value: {{ $.Values.sharedSpeechCredentials.microsoftHdVoiceEnabled | quote }}
             - name: JAMBONZ_GATHER_EARLY_HINTS_MATCH
               value: "true"
+            {{- /*
+              AGENT ROUTING FALLBACK. vg-feature-server prefers the
+              per-application agentic_endpoint_hook vg-api-server now derives
+              from each application's own call_hook and stores on save; this
+              env var only still matters for an agent-targeted application that
+              predates that column (has not been re-saved since). When set,
+              feature-server dials <this>/<URLToken> instead of the Cognigy
+              endpoint for such an application.
+
+              The host is DERIVED from cognigyLogin.baseUrl rather than restated:
+              that value already names the Cognigy environment this VG cluster is
+              paired with, and the adapter is mounted on that same API host.
+              Hand-writing it again is how it drifts from the adapter's ingress,
+              and a mismatch misroutes live calls silently.
+
+              The env var is omitted only when BOTH agenticEndpoint.baseUrl and
+              cognigyLogin.baseUrl are empty. cognigyLogin.baseUrl alone is set
+              on most clusters, most of which have no adapter deployed at all —
+              so its presence still emits this var, deployed adapter or not;
+              see the vg.agenticEndpoint.baseUrl helper.
+            */}}
+            {{- $agenticBase := include "vg.agenticEndpoint.baseUrl" . | trim }}
+            {{- if $agenticBase }}
+            - name: AGENTIC_ENDPOINT_BASE_URL
+              value: {{ $agenticBase | quote }}
+            {{- end }}
             - name: JAMBONES_INJECT_CONTENT
               value: "true"
             - name: JAMBONZ_CLEANUP_INTERVAL_MINS
@@ -510,6 +543,7 @@ spec:
       volumes:
         - name: temp-audio-volume
           emptyDir: {}
+        {{- with (include "vg.testHarness.caVolumes" .) }}{{- . | nindent 8 }}{{- end }}
         - name: fs-core-dumps
           emptyDir:
             sizeLimit: "2Gi"

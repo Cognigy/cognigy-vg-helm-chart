@@ -10,10 +10,9 @@ metadata:
   annotations:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-silero-vad.git"
 spec:
-  {{- /* Intentional: guard includes .sileroVad.enabled so spec.replicas is only suppressed when
-       this service's HPA is actually active. Other services use a two-condition guard and would
-       incorrectly drop spec.replicas even when their per-service HPA entry is disabled. */ -}}
-  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) ($.Values.hpa.services.sileroVad.enabled)) }}
+  {{- /* spec.replicas is only suppressed when this service's own HPA entry is enabled;
+       otherwise nothing would own the replica count and the workload would default to 1. */ -}}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) (dig "sileroVad" "enabled" false $.Values.hpa.services)) }}
   replicas: {{ .Values.sileroVad.replicaCount }}
   {{- end }}
   selector:

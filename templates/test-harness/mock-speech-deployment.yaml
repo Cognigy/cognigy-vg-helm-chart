@@ -1,5 +1,5 @@
 {{- if .Values.vgTestHarness.enabled }}
-{{- $tlsEnabled := dig "tls" "enabled" false .Values.vgTestHarness.mockSpeech }}
+{{- $tlsEnabled := include "vg.testHarness.mockSpeechTls" . }}
 {{- $tlsSecretName := dig "tls" "secretName" "mock-speech-tls" .Values.vgTestHarness.mockSpeech }}
 apiVersion: apps/v1
 kind: Deployment

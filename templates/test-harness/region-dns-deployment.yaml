@@ -1,5 +1,5 @@
 {{/* templates/test-harness/region-dns-deployment.yaml */}}
-{{- if and .Values.vgTestHarness.enabled .Values.vgTestHarness.regionDns.enabled }}
+{{- if include "vg.testHarness.testDnsEnabled" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

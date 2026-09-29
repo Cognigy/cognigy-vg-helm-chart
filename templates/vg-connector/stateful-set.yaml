@@ -143,8 +143,6 @@ spec:
             ## connector reads ENABLE_MICROSOFT_TEAMS to mount the Teams module.
             - name: ENABLE_MICROSOFT_TEAMS
               value: {{ .Values.global.enableMsTeams | quote }}
-            - name: MSTEAMS_FEATURE_RECORD_AUDIO
-              value: {{ default "false" .Values.vgConnector.msTeams.recordAudio | quote }}
             - name: POD_NAME
               valueFrom:
                 fieldRef:

@@ -27,6 +27,22 @@
         }
       }
     },
+    "agenticEndpoint": {
+      "description": "Fallback for feature-server's dial-time agent routing only, used for an agent-targeted application that predates vg-api-server's per-application agentic_endpoint_hook column. vg-api-server itself no longer reads this.",
+      "type": "object",
+      "properties": {
+        "pathPrefix": {
+          "description": "Path appended to the derived host. Must match vg-agentic-endpoint's ingress routePrefix + wsPath.",
+          "type": "string",
+          "pattern": "^/[^\\s]*$"
+        },
+        "baseUrl": {
+          "description": "Host override for when the adapter isn't on the API host, same syntax as cognigyLogin.baseUrl (an http(s) URL, not a websocket one) — e.g. https://api-dev.cognigy.ai, no path. The scheme is normalized to ws(s):// and pathPrefix is appended automatically. Empty derives the host from cognigyLogin.baseUrl.",
+          "type": "string",
+          "pattern": "^$|^https?://[^\\s/]+/?$"
+        }
+      }
+    },
     "nice": {
       "type": "object",
       "properties": {
@@ -40,6 +56,11 @@
       "type": "object",
       "properties": {
         "enabled": { "type": "boolean" },
+        "speechInterception": {
+          "type": "string",
+          "enum": ["none", "vendor"],
+          "description": "Whether the harness intercepts real speech-vendor traffic. 'none' (default) redirects nothing at the infrastructure level -- a custom:<name> credential still reaches mock-speech by the URL stored on the credential, needing nothing from this chart. 'vendor' makes VG dial the real vendor hostnames and rewrites them, in-namespace, to mock-speech's TLS listener -- deriving regionDns and its rewrite list, mockSpeech.tls and its certificate, the FreeSWITCH and api-server dnsConfig, and the CA-trust overlay."
+        },
         "mockCognigy": {
           "type": "object",
           "properties": {
@@ -58,7 +79,20 @@
               "type": "object",
               "properties": {
                 "enabled": { "type": "boolean" },
-                "secretName": { "type": "string" }
+                "secretName": { "type": "string" },
+                "generate": {
+                  "type": "boolean",
+                  "description": "Whether the chart mints mock-speech's CA and leaf itself (default true), reusing the existing Secret on upgrade so the CA is stable. Applies on the vendor route only: speechInterception=vendor derives the hostname list the leaf must cover. With mockSpeech.tls.enabled alone the Secret must be supplied from outside. Set false where a run mints its own and needs the CA outside the cluster."
+                },
+                "caConfigMapName": {
+                  "type": "string",
+                  "description": "ConfigMap holding the CA that signed mock-speech's leaf, mounted by the CA-trust overlay the chart renders on the vendor route. The chart creates it alongside the Secret when generate is true; with generate false it must exist before install."
+                },
+                "speechVendor": {
+                  "type": "string",
+                  "enum": ["deepgram", "elevenlabs", "speechmatics", "deepgramflux", "google", "microsoft", "aws"],
+                  "description": "Which vendor the provision Job points every provisioned application at. Every vendor is served simultaneously; this only selects what gets provisioned."
+                }
               }
             }
           }
@@ -91,6 +125,10 @@
             },
             "image": { "type": "string" },
             "clusterIP": { "type": "string" },
+            "clusterIPBase": {
+              "type": "string",
+              "description": "Dotted prefix, e.g. \"172.20.0\", that test-dns's ClusterIP is derived from when clusterIP is unset -- the last octet comes from the namespace name. Normally left empty: the chart defaults the prefix to kube-system/kube-dns's own /24, which Kubernetes reserves for pinned addresses and never allocates from dynamically. Set it only to override that choice."
+            },
             "upstream": { "type": "string" },
             "resources": { "type": "object" }
           }
@@ -253,6 +291,10 @@
           }
         }
       }
+    },
+    "featureServer": {
+      "type": "object",
+      "properties": {}
     }
   }
 }

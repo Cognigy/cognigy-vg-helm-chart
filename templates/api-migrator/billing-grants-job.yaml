@@ -41,6 +41,18 @@ spec:
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       restartPolicy: OnFailure
+      {{- with .Values.apiMigrator.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.apiMigrator.affinity }}
+      ## Shares apiMigrator's scheduling, and for a sharper version of the same
+      ## reason. This container ALSO runs out of the MySQL image just to get the
+      ## `mysql` client, and unlike the migrator it is a post-install hook — so
+      ## `helm install` is already blocked when its image pull starts, with
+      ## nothing else left to overlap it with. Landing it where MySQL, and hence
+      ## that image, already is takes the pull off the critical path entirely.
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: billing-grants
           image: "{{ include "vg.common.image.render" (dict "global" $.Values.global "image" (printf "%s/%s:%s" .Values.mysql.image.registry .Values.mysql.image.repository .Values.mysql.image.tag)) }}"
