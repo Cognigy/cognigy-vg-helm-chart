@@ -292,6 +292,29 @@
         }
       }
     },
+    "otelCollector": {
+      "type": "object",
+      "properties": {
+        "extraOtlpExporters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "endpoint"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "not": { "const": "jaeger" }
+              },
+              "endpoint": { "type": "string", "minLength": 1 },
+              "insecure": { "type": "boolean" },
+              "config": { "type": "object" }
+            }
+          }
+        }
+      }
+    },
     "featureServer": {
       "type": "object",
       "properties": {}
