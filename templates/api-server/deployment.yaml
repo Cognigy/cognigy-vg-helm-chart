@@ -193,6 +193,7 @@ spec:
               value: {{ .Values.redis.host }}
             - name: JAMBONES_REDIS_PORT
               value: {{ .Values.redis.port | quote }}
+            {{- with include "vg.redisAuth.clientEnv" $ }}{{ . | nindent 12 }}{{ end }}
             - name: JAMBONES_TIME_SERIES_HOST
               value: {{ .Values.influxdb.host }}
             - name: JAMBONES_TRUST_PROXY
@@ -313,13 +314,19 @@ spec:
                   key: {{ .Values.api.vgTeam.teamMembers.managedEnvKey | quote }}
                   optional: true
             {{- end }}
+            {{- with include "vg.fedramp.sessionKeyDigest" (dict "override" .Values.api.sessionKeyDigest "root" $) }}
+            - name: SESSION_KEY_DIGEST
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with include "vg.fedramp.auditLogTtlDays" (dict "override" .Values.auditLogging.cleanup.ttlDays "root" $) }}
+            - name: AUDIT_LOG_TTL_DAYS
+              value: {{ . | quote }}
+            {{- end }}
             {{- if .Values.api.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.api.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
             - name: ENABLE_AUDIT_LOGGING
               value: {{ .Values.auditLogging.enabled | quote }}
-            - name: AUDIT_LOGGING_TTL_DAYS
-              value: {{ .Values.auditLogging.cleanup.ttlDays | quote }}
             - name: VG_CLUSTER_ID
               value: {{ .Values.billing.clusterId | default .Values.ingress.webapp.host | quote }}
             - name: VG_SPEECH_BILLING_ENABLED

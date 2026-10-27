@@ -1,4 +1,5 @@
 {{- if .Values.featureServerLegacy.enabled }}
+{{- include "vg.fedramp.refuseLegacyFeatureServer" $ }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -125,6 +126,16 @@ spec:
             {{- if .Values.drachtio.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.drachtio.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
+          {{- if .Values.drachtio.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: {{ .Values.drachtio.metricsPort }}
+            periodSeconds: {{ .Values.drachtio.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.drachtio.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.drachtio.livenessProbe.failureThreshold }}
+            terminationGracePeriodSeconds: {{ .Values.drachtio.livenessProbe.terminationGracePeriodSeconds }}
+          {{- end }}
           lifecycle:
             preStop:
               # 200 = feature-server drained, 000 = feature-server gone (fail open),
@@ -196,6 +207,7 @@ spec:
             {{- range .Values.freeswitch.args }}
             - {{ . }}
             {{- end }}
+            {{- with (include "vg.freeswitch.codecNegotiationArgs" $) }}{{- . | nindent 12 }}{{- end }}
             {{- with (include "vg.freeswitch.logLevelArgs" $) }}{{- . | nindent 12 }}{{- end }}
           env: 
             - name: MOD_AUDIO_FORK_SUBPROTOCOL_NAME
@@ -247,6 +259,7 @@ spec:
               name: temp-audio-volume
             - mountPath: /coredumps
               name: fs-core-dumps
+            {{- with (include "vg.freeswitch.certsVolumeMounts" $) }}{{- . | nindent 12 }}{{- end }}
             {{- /* libwebsockets reads the hashed dir at /etc/ssl/certs and nowhere else; /ca-overlay keeps the gRPC roots path identical in both containers. */}}
             {{- with (include "vg.testHarness.caVolumeMount" (dict "ctx" $ "mountPath" "/etc/ssl/certs")) }}{{- . | nindent 12 }}{{- end }}
             {{- with (include "vg.testHarness.caVolumeMount" (dict "ctx" $ "mountPath" "/ca-overlay")) }}{{- . | nindent 12 }}{{- end }}
@@ -280,6 +293,9 @@ spec:
             httpGet:
               path: /health/startup
               port: {{ .Values.health.port }}
+            periodSeconds: {{ .Values.featureServer.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.featureServer.startupProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.featureServer.startupProbe.failureThreshold }}
           readinessProbe:
             httpGet:
               path: /health
@@ -351,24 +367,10 @@ spec:
                   key: password
             - name: JAMBONES_FREESWITCH
               value: {{ .Values.featureServerLegacy.freeswitchConnection | quote }}
-            - name: ENABLE_METRICS
-              value: {{ if .Values.stats.enabled }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: K8S_POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-            - name: STATS_TAGS
-              value: "pod:$(K8S_POD_NAME)"
-            - name: STATS_PROTOCOL
-              value: {{ .Values.stats.protocol }}
-            - name: STATS_TELEGRAF
-              value: {{ if .Values.stats.telegraf }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
-            - name: STATS_HOST
-              value: {{ .Values.telegraf.serviceName }}
-            - name: STATS_PORT
-              value: {{ .Values.telegraf.port  | quote }}
-            - name: STATS_SAMPLE_RATE
-              value:  {{ .Values.stats.sampleRate | quote }}
             - name: DRACHTIO_HOST
               value: {{ .Values.global.localhost }}
             - name: DRACHTIO_PORT 
@@ -397,6 +399,7 @@ spec:
               value: {{ .Values.redis.host }}
             - name: JAMBONES_REDIS_PORT
               value: {{ .Values.redis.port | quote }}
+            {{- with include "vg.redisAuth.clientEnv" $ }}{{ . | nindent 12 }}{{ end }}
             - name: JAMBONES_TIME_SERIES_HOST
               value: {{ .Values.influxdb.host }}
             - name: JWT_SECRET
@@ -522,6 +525,7 @@ spec:
         - name: fs-core-dumps
           emptyDir:
             sizeLimit: "2Gi"
+        {{- with (include "vg.freeswitch.certsVolume" $) }}{{- . | nindent 8 }}{{- end }}
         - name: cognigy-env-reloadable
           configMap:
             name: cognigy-env-reloadable

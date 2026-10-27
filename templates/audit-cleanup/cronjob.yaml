@@ -25,6 +25,7 @@ spec:
         spec:
           {{- include "image.pullSecrets" $ | nindent 10 }}
           restartPolicy: Never
+          priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.jobs.priorityClassName "context" $) }}
           containers:
           - name: audit-cleanup
             image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.jobs.image) }}

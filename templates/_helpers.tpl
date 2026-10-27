@@ -268,6 +268,96 @@ Usage: {{- with (include "vg.freeswitch.logLevelArgs" $) }}{{- . | nindent 12 }}
 {{- end -}}
 
 {{/*
+Render the FreeSWITCH "--codec-answer-generous" flag from freeswitch.codecNegotiation
+so the chart's generous default survives a freeswitch.args override. It used to live
+in the default freeswitch.args list, so any values file overriding the list for an
+unrelated reason (e.g. "--log-level debug") silently fell back to greedy negotiation:
+FreeSWITCH then answers with its own first codec (PCMU) even when the caller offers
+opus first, and a WebRTC call is narrowed to 8 kHz.
+
+freeswitch.codecNegotiation:
+  generous  answer with the caller's preferred codec (renders the flag)
+  greedy    answer with FreeSWITCH's own preferred codec (renders nothing)
+  ""        auto (default): greedy when freeswitch.args restricts FreeSWITCH to G.711
+            (--g711-only / -g, --g711-only-alaw-preferred), since those clusters rely on
+            their own order winning (e.g. A-law preferred); generous otherwise.
+            --codec-list is deliberately NOT a greedy signal: the documented OPUS recipe
+            (CHANGELOG-2025.10.md) pairs it with --codec-answer-generous.
+            Default values render byte-identical to the pre-helper chart. A values file
+            that overrides freeswitch.args without a codec flag (e.g. only
+            --rtp-range-start) now gains the flag, i.e. flips greedy -> generous; set
+            codecNegotiation: greedy to keep the old behaviour.
+
+Skipped when freeswitch.args already carries --codec-answer-generous, so an in-args
+flag still wins and no duplicate is emitted. An explicit codecNegotiation: greedy
+combined with an in-args --codec-answer-generous fails the render, since the greedy
+setting could not take effect. Included between the freeswitch.args
+range and vg.freeswitch.logLevelArgs so that with default values the rendered flag
+order matches the pre-helper chart (…--codec-answer-generous, --log-level, info).
+
+The `with` wrapper is required, same as vg.freeswitch.logLevelArgs.
+Usage: {{- with (include "vg.freeswitch.codecNegotiationArgs" $) }}{{- . | nindent 12 }}{{- end }}
+*/}}
+{{- define "vg.freeswitch.codecNegotiationArgs" -}}
+{{- $explicit := false -}}
+{{- $ownCodecOrder := false -}}
+{{- range .Values.freeswitch.args }}
+{{- $arg := toString . }}
+{{- if eq $arg "--codec-answer-generous" }}{{- $explicit = true -}}{{- end }}
+{{- if or (eq $arg "-g") (hasPrefix "--g711-only" $arg) }}{{- $ownCodecOrder = true -}}{{- end }}
+{{- end }}
+{{- $mode := .Values.freeswitch.codecNegotiation | default "" -}}
+{{- if not (has $mode (list "" "generous" "greedy")) }}
+{{- fail (printf "freeswitch.codecNegotiation must be \"generous\", \"greedy\" or empty (auto), got %q" (toString $mode)) }}
+{{- end }}
+{{- if and $explicit (eq $mode "greedy") }}
+{{- fail "freeswitch.codecNegotiation is \"greedy\" but freeswitch.args contains --codec-answer-generous; remove the flag from freeswitch.args (codecNegotiation now controls it)" }}
+{{- end }}
+{{- if eq $mode "" }}{{- $mode = ternary "greedy" "generous" $ownCodecOrder -}}{{- end }}
+{{- if and (not $explicit) (eq $mode "generous") -}}
+- --codec-answer-generous
+{{- end }}
+{{- end -}}
+
+{{/*
+FreeSWITCH's pregenerated DTLS/WSS certs (templates/feature-server/freeswitch-certs-secret.yaml).
+Each file is mounted with subPath so the rest of certs/ stays the image's own and writable.
+Both helpers render nothing when freeswitch.pregeneratedCerts.enabled is false, and FreeSWITCH
+then falls back to generating the keys itself at startup.
+
+Usage (freeswitch container):
+  {{- with (include "vg.freeswitch.certsVolumeMounts" $) }}{{- . | nindent 12 }}{{- end }}
+Usage (pod volumes):
+  {{- with (include "vg.freeswitch.certsVolume" $) }}{{- . | nindent 8 }}{{- end }}
+*/}}
+{{- define "vg.freeswitch.certsSecretName" -}}
+freeswitch-certs
+{{- end -}}
+
+{{- define "vg.freeswitch.certsVolumeMounts" -}}
+{{- if .Values.freeswitch.pregeneratedCerts.enabled -}}
+- name: freeswitch-certs
+  mountPath: /usr/local/freeswitch/certs/dtls-srtp.pem
+  subPath: dtls-srtp.pem
+  readOnly: true
+- name: freeswitch-certs
+  mountPath: /usr/local/freeswitch/certs/wss.pem
+  subPath: wss.pem
+  readOnly: true
+{{- end -}}
+{{- end -}}
+
+{{- define "vg.freeswitch.certsVolume" -}}
+{{- if .Values.freeswitch.pregeneratedCerts.enabled -}}
+- name: freeswitch-certs
+  secret:
+    secretName: {{ include "vg.freeswitch.certsSecretName" . }}
+    {{- /* 0440, not 0400: a non-root runAsUser with fsGroup can still read it. */}}
+    defaultMode: 0440
+{{- end -}}
+{{- end -}}
+
+{{/*
 Return the proper Secret Name
 Usage:
 {{ include "common.secretName.render" ( dict "existingSecret" .Values.path.to.existingSecret "defaultSecret" "default-secret-name") }}
@@ -858,6 +948,7 @@ can enumerate.
 {{- if not (kindIs "slice" $targets) -}}
 {{- fail (printf "resourceResolver.runtimeApiTargets must be a list of {name, url} maps, got %s. It is mounted as a YAML list, and vg-resource-resolver rejects a keyed map outright." (kindOf $targets)) -}}
 {{- end -}}
+{{- $seen := dict -}}
 {{- range $i, $t := $targets -}}
 {{- if not (kindIs "map" $t) -}}
 {{- fail (printf "resourceResolver.runtimeApiTargets[%d] must be a map with `name` and `url`, got %s" $i (kindOf $t)) -}}
@@ -868,5 +959,121 @@ can enumerate.
 {{- if not (dig "url" "" $t) -}}
 {{- fail (printf "resourceResolver.runtimeApiTargets[%d] (%v) has no `url`." $i (dig "name" "?" $t)) -}}
 {{- end -}}
+{{- if hasKey $seen (dig "name" "" $t) -}}
+{{- fail (printf "resourceResolver.runtimeApiTargets[%d]: duplicate `name` %q. The name is the JWT `aud`/`iss` and keys the /v2 trust list, so a second entry would silently replace the first one's JWKS." $i (dig "name" "" $t)) -}}
+{{- end -}}
+{{- $_ := set $seen (dig "name" "" $t) true -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+feature-server /v2 (vg-resources docs/tdd/06-vg-in-ai/006 §6.2): true when the
+API is switched on AND at least one AI cluster is linked. Without a linked AI
+cluster there is no key to verify against, and feature-server answers 401 to
+every /v2 request anyway, so nothing below renders.
+*/}}
+{{- define "vg.featureServer.v2Api.active" -}}
+{{- if and .Values.featureServer.v2Api.enabled .Values.resourceResolver.runtimeApiTargets -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+AI_CLUSTER_TRUST_LIST for feature-server: {"<target name>": {"jwksUrl": …}}.
+
+The target `name` is that AI cluster's own name -- the `aud` the resolver
+mints towards it, and the `iss` its vg-runtime-api signs /v2 calls with -- so
+one list describes the link in both directions.
+
+jwksUrl defaults to the target url (minus the optional trailing /v1 the
+resolver tolerates) + /.well-known/jwks.json, where vg-runtime-api serves it.
+Derived from operator config, never from a token. https is required except
+for loopback and in-cluster service DNS, mirroring feature-server's own parser
+so a bad value fails this render instead of the pod's boot.
+*/}}
+{{- define "vg.featureServer.aiClusterTrustList" -}}
+{{- $out := dict -}}
+{{- range $i, $t := .Values.resourceResolver.runtimeApiTargets -}}
+{{- $base := regexReplaceAll "/+$" (regexReplaceAll "/v1/?$" $t.url "") "" -}}
+{{- $jwksUrl := $t.jwksUrl | default (printf "%s/.well-known/jwks.json" $base) -}}
+{{- $lowerUrl := lower $jwksUrl -}}
+{{- $host := regexReplaceAll "^[a-z]+://([^/:?#@]+).*$" $lowerUrl "${1}" -}}
+{{- $plaintextOk := or (eq $host "localhost") (regexMatch "^127\\.[0-9]+\\.[0-9]+\\.[0-9]+$" $host) (hasSuffix ".svc" $host) (hasSuffix ".svc.cluster.local" $host) -}}
+{{- if and (not (hasPrefix "https://" $lowerUrl)) (not $plaintextOk) -}}
+{{- fail (printf "resourceResolver.runtimeApiTargets[%d] (%s): the JWKS URL %q is not https. feature-server fetches the AI cluster's signing keys from it, and a plaintext fetch across clusters lets anyone on the path swap them. Use https (in-cluster *.svc DNS and loopback are exempt)." $i $t.name $jwksUrl) -}}
+{{- end -}}
+{{- $_ := set $out $t.name (dict "jwksUrl" $jwksUrl) -}}
+{{- end -}}
+{{- toJson $out -}}
+{{- end -}}
+
+{{/*
+feature-server container env for /v2. Shared by the stable and nightly
+workloads so the two cannot drift.
+*/}}
+{{- define "vg.featureServer.v2Api.env" -}}
+{{- if include "vg.featureServer.v2Api.active" . }}
+{{- include "vg.runtimeApiTargets.validate" . }}
+{{- include "vg.clusterName.validate" . }}
+- name: VG_CLUSTER_NAME
+  value: {{ include "vg.clusterName" . | quote }}
+- name: AI_CLUSTER_TRUST_LIST
+  value: {{ include "vg.featureServer.aiClusterTrustList" . | quote }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Pod scheduling fields shared by the billing CronJobs: priorityClassName, affinity,
+nodeSelector, tolerations and securityContext. The autoscaler nodeSelector and
+tolerations from .Values.hpa are merged in, like for the HPA managed Deployments,
+so the jobs run on the autoscaling node pool.
+Usage: {{ include "vg.billing.jobScheduling" (dict "job" .Values.billing.preAggregation "context" $) | nindent 10 }}
+*/}}
+{{- define "vg.billing.jobScheduling" -}}
+{{- $ctx := .context -}}
+{{- $shared := $ctx.Values.billing.job -}}
+{{- with .job.priorityClassName }}
+priorityClassName: {{ include "vg.priorityClassName" (dict "name" . "context" $ctx) }}
+{{- end }}
+{{- with $shared.affinity }}
+affinity: {{- include "vg.common.tplvalues.render" (dict "value" . "context" $ctx) | nindent 2 }}
+{{- end }}
+{{- if or $shared.nodeSelector (and $ctx.Values.hpa.enabled $ctx.Values.hpa.useHpaNodeSelector) }}
+nodeSelector:
+  {{- with $shared.nodeSelector }}
+  {{- include "vg.common.tplvalues.render" (dict "value" . "context" $ctx) | nindent 2 }}
+  {{- end }}
+  {{- if and $ctx.Values.hpa.enabled $ctx.Values.hpa.useHpaNodeSelector }}
+  {{- include "vg.common.tplvalues.render" (dict "value" $ctx.Values.hpa.hpaNodeSelector "context" $ctx) | nindent 2 }}
+  {{- end }}
+{{- end }}
+{{- if or $shared.tolerations (and $ctx.Values.hpa.enabled $ctx.Values.hpa.useHpaTolerations) }}
+tolerations:
+  {{- with $shared.tolerations }}
+  {{- include "vg.common.tplvalues.render" (dict "value" . "context" $ctx) | nindent 2 }}
+  {{- end }}
+  {{- if and $ctx.Values.hpa.enabled $ctx.Values.hpa.useHpaTolerations }}
+  {{- include "vg.common.tplvalues.render" (dict "value" $ctx.Values.hpa.hpaTolerations "context" $ctx) | nindent 2 }}
+  {{- end }}
+{{- end }}
+{{- with $shared.podSecurityContext }}
+securityContext: {{- include "vg.common.tplvalues.render" (dict "value" . "context" $ctx) | nindent 2 }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Resolves a priorityClassName value. When the value is a tier key of the priorityClass
+section (critical, high, medium, low) it becomes that tier's configured name, so renaming
+a tier keeps the workloads in sync. It deliberately does not depend on priorityClass.enabled:
+a release that does not create the cluster-scoped classes still needs to reference them.
+Any other value is used as is.
+Usage: {{ include "vg.priorityClassName" (dict "name" .Values.vgConnector.priorityClassName "context" $) }}
+*/}}
+{{- define "vg.priorityClassName" -}}
+{{- $tier := index (.context.Values.priorityClass | default dict) .name -}}
+{{- if and (kindIs "map" $tier) $tier.name -}}
+{{ $tier.name }}
+{{- else -}}
+{{ .name }}
 {{- end -}}
 {{- end -}}

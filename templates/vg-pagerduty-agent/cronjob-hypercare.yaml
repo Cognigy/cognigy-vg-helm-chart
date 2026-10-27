@@ -34,6 +34,7 @@ spec:
           tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgPagerdutyAgent.tolerations "context" $) | nindent 12 }}
           {{- end }}
           restartPolicy: Never
+          priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.jobs.priorityClassName "context" $) }}
           containers:
             - name: hypercare-trigger
               image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.jobs.image) }}

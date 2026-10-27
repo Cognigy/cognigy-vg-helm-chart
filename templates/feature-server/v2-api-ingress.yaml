@@ -1,0 +1,77 @@
+{{- /*
+Public route to feature-server's /v2 API (vg-resources docs/tdd/06-vg-in-ai/006
+§7.2), and nothing else of feature-server: the path is the /v2/ prefix only, so
+/v1 (createCall, updateCall — unauthenticated by design, in-cluster
+callers only) and /health stay unreachable from outside.
+
+Authentication is NOT the ingress's job: feature-server verifies a per-request
+ES256 JWT from a linked AI cluster on every /v2 request. The middlewares below
+only bound abuse before a request reaches a pod — body size and rate.
+
+Backend is the headless feature-server Service: Traefik routes to the endpoint
+(pod) IPs it lists, which is also how SIP reaches these pods. Nightly pods are
+not behind this Service's selector unless they share its labels; /v2 traffic
+goes to whatever the stable Service selects.
+*/ -}}
+{{- if and .Values.ingress.enabled .Values.featureServer.v2Api.ingress.enabled (include "vg.featureServer.v2Api.active" .) }}
+{{- $cfg := .Values.featureServer.v2Api.ingress }}
+{{- $host := $cfg.host | default .Values.ingress.api.host }}
+{{- if not $host }}
+{{- fail "featureServer.v2Api.ingress.enabled is set but there is no host: set featureServer.v2Api.ingress.host, or ingress.api.host to share the API host." }}
+{{- end }}
+{{- if ne .Values.ingress.ingressClassName "traefik" }}
+{{- fail "featureServer.v2Api.ingress requires ingress.ingressClassName=traefik: its body-size and rate limits are Traefik Middlewares, and publishing /v2 without them is not supported." }}
+{{- end }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: feature-server-v2-body-limit
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+spec:
+  buffering:
+    maxRequestBodyBytes: {{ $cfg.maxRequestBodyBytes | int }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: feature-server-v2-rate-limit
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+spec:
+  rateLimit:
+    average: {{ $cfg.rateLimit.average | int }}
+    burst: {{ $cfg.rateLimit.burst | int }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: feature-server-v2
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+  annotations:
+    {{- if .Values.tls.enabled }}
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    {{- else }}
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    {{- end }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-feature-server-v2-body-limit@kubernetescrd,{{ $.Release.Namespace }}-feature-server-v2-rate-limit@kubernetescrd
+spec:
+  ingressClassName: {{ .Values.ingress.ingressClassName }}
+  {{- include "vg.tlsCertificate.secretName.render" $ | nindent 2 }}
+  rules:
+    - host: {{ $host }}
+      http:
+        paths:
+          - path: /v2/
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.featureServer.headlessServiceName }}
+                port:
+                  number: {{ .Values.featureServer.ports.tcp }}
+{{- end }}

@@ -1,4 +1,5 @@
 {{- if .Values.featureServerLegacy.enabled }}
+{{- include "vg.fedramp.refuseLegacyFeatureServer" $ }}
 apiVersion: v1
 kind: Service
 metadata:

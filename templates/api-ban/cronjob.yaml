@@ -42,6 +42,8 @@ spec:
                   value: {{ .Values.redis.host }}
                 - name: REDIS_PORT
                   value: {{ .Values.redis.port | quote }}
+                {{- include "vg.fedramp.apiBanEnv" $ | nindent 16 }}
+                {{- with include "vg.redisAuth.apiBanEnv" $ }}{{ . | nindent 16 }}{{ end }}
                 {{- if .Values.apiBan.extraEnvVars }}
                 {{- include "vg.common.tplvalues.render" (dict "value" .Values.apiBan.extraEnvVars "context" $) | nindent 12 }}
                 {{- end }}
@@ -49,5 +51,6 @@ spec:
                 - configMapRef:
                     name: cognigy-env
           restartPolicy: Never
+          priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.jobs.priorityClassName "context" $) }}
           {{- include "image.pullSecrets" $ | nindent 10 }}
 {{- end }}

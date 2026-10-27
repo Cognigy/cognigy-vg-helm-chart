@@ -22,6 +22,7 @@ spec:
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       restartPolicy: OnFailure
+      priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.jobs.hookPriorityClassName "context" $) }}
       initContainers:
         - name: wait-for-homer-api
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.jobs.image) }}

@@ -31,7 +31,7 @@ spec:
       nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgConnector.nodeSelector "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.vgConnector.priorityClassName }}
-      priorityClassName: {{ .Values.vgConnector.priorityClassName }}
+      priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.vgConnector.priorityClassName "context" $) }}
       {{- end }}
       {{- if .Values.vgConnector.podSecurityContext }}
       securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgConnector.podSecurityContext "context" $) | nindent 8 }}
@@ -164,6 +164,7 @@ spec:
               value: {{ .Values.rtpEngine.endPort | quote }}
             - name: SIGTERM_FORCE_CLOSE_TIMEOUT_MS
               value: {{ .Values.vgConnector.sigtermForceCloseTimeoutMs | quote }}
+            {{- with include "vg.redisAuth.clientEnv" $ }}{{ . | nindent 12 }}{{ end }}
             {{- if .Values.vgConnector.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgConnector.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
