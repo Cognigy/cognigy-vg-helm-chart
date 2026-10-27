@@ -1275,7 +1275,10 @@ api:
       memory: 500Mi
 apiBan:
   enabled: true
-  image: cognigy.azurecr.io/api-ban:1.1.0
+  ## 1.4.0 is the first release with REDIS_USERNAME, see redisHa.vgAuth.apiBanMinVersion.
+  ## Published as vg-api-ban; api-ban holds the builds before 1.4.0.
+  ## 1.4.1 is built on Node 22.23.4 (CVE-2026-111497).
+  image: cognigy.azurecr.io/vg-api-ban:1.4.1
   imagePullPolicy: IfNotPresent
   endpoint: https://apiban.org/api
   redisSetKey: apiban:ips
@@ -2407,7 +2410,7 @@ vgTrafficSniffer:
   ## unless enabled, and even then it idles at 0 replicas until scaled up for a
   ## capture session (via vg-console / flux edit). Scale back to 0 after use.
   enabled: false
-  image: cognigy.azurecr.io/vg-traffic-sniffer:2.0.0
+  image: cognigy.azurecr.io/vg-traffic-sniffer:2.0.1
   imagePullPolicy: IfNotPresent
   replicaCount: 0
   port: 8080
