@@ -659,7 +659,7 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.22.0
+  image: cognigy.azurecr.io/vg-api-migrator:2026.22.1
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -1168,7 +1168,7 @@ jobs:
   priorityClassName: low
   hookPriorityClassName: medium
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.22.0
+  image: cognigy.azurecr.io/vg-api-server:2026.22.1
   imagePullPolicy: Always
   replicaCount: 2
   ## Digest used to derive session-revocation Redis keys: sha256 | md5.
@@ -1379,7 +1379,7 @@ featureServer:
   # Must be 2026.19.0 or newer: the pod gets no JAMBONES_MYSQL_* env and no MySQL
   # wait, and older images assert those vars at start (CGY-41894). Add them back
   # through extraEnvVars only to run an older image.
-  image: cognigy.azurecr.io/vg-feature-server:2026.22.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.22.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1693,7 +1693,7 @@ vadAutotuner:
 featureServerNightly:
   enabled: false
   # Same minimum as featureServer.image: 2026.19.0 or newer (no MySQL env).
-  image: cognigy.azurecr.io/vg-feature-server:2026.22.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.22.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -2024,7 +2024,7 @@ mediaProcessor:
       cpu: "1"
       memory: 512Mi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.22.0
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.22.1
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -2043,7 +2043,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/vg-sbc-call-router:2026.22.0
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.22.1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -2081,7 +2081,7 @@ sbcCallRouter:
 ## Background: vg-resources/docs/tdd/06-vg-in-ai/002-runtime-gateway-migration-plan.md.
 resourceResolver:
   enabled: true
-  image: cognigy.azurecr.io/vg-resource-resolver:2026.22.0
+  image: cognigy.azurecr.io/vg-resource-resolver:2026.22.1
   imagePullPolicy: IfNotPresent
   ## Two replicas for availability, matching sbcInbound/sbcOutbound. Capacity is
   ## not the reason: a single replica served 600 concurrent calls at 21% of a 250m
@@ -2225,7 +2225,7 @@ sbcInbound:
   ## library default ("warn") applies. Ignored while global.fedramp.enabled is true; then
   ## global.fedramp.dtmfSourceValidation applies.
   dtmfSourceValidation: null
-  image: cognigy.azurecr.io/vg-sbc-inbound:2026.22.0
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.22.1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -2269,7 +2269,7 @@ sbcOutbound:
   ## library default ("warn") applies. Ignored while global.fedramp.enabled is true; then
   ## global.fedramp.dtmfSourceValidation applies.
   dtmfSourceValidation: null
-  image: cognigy.azurecr.io/vg-sbc-outbound:2026.22.0
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.22.1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -2307,7 +2307,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.22.0
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.22.1
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -2322,7 +2322,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.22.0
+  image: cognigy.azurecr.io/vg-tcm:2026.22.1
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -2368,7 +2368,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: true
-  image: cognigy.azurecr.io/vg-connector:2026.22.0
+  image: cognigy.azurecr.io/vg-connector:2026.22.1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -2489,7 +2489,7 @@ vgAudioManager:
       cpu: "0.500"
       memory: 512Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.22.0
+  image: cognigy.azurecr.io/vg-webapp:2026.22.1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## hot-reload property
