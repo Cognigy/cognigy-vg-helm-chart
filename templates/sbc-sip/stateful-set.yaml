@@ -252,10 +252,6 @@ spec:
             - {{ .Values.apiBan.refreshInterval | quote }}
             - --blacklist-redis-key
             - {{ .Values.apiBan.redisSetKey | quote }}
-            {{- if include "vg.redisAuth.enabled" . }}
-            - --blacklist-redis-password
-            - "$(REDIS_PASSWORD)"
-            {{- end }}
             - --reject-register-with-no-realm
             - {{ if .Values.drachtio.rejectRegisterWithNoRealm }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
           {{- end }}
@@ -264,7 +260,6 @@ spec:
               value: {{ .Values.global.nodeEnv | quote }}
             - name: CLOUD 
               value: {{ .Values.cloud | quote }}
-            {{- with include "vg.redisAuth.clientEnv" $ }}{{ . | nindent 12 }}{{ end }}
             {{- if eq .Values.cloud "aws" }}
             - name: IMDSv2
               value: {{ .Values.aws.useIMDSv2 | quote }}
@@ -378,13 +373,12 @@ spec:
                   name: voicegateway-drachtio-secret
                   key: secret
             - name: ENABLE_METRICS
-              value: {{ if include "vg.fedramp.statsEnabled" $ }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+              value: {{ if .Values.stats.enabled }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: voicegateway-jwt
                   key: jwt
-{{- if include "vg.fedramp.statsEnabled" $ }}
             - name: STATS_TAGS
               value: "pod:$(K8S_POD_NAME)"
             - name: STATS_PROTOCOL
@@ -397,7 +391,6 @@ spec:
               value: {{ .Values.telegraf.port  | quote }}
             - name: STATS_SAMPLE_RATE
               value:  {{ .Values.stats.sampleRate | quote }}
-{{- end }}
             - name: JAMBONES_LOGLEVEL
               value: {{ if .Values.sbcSipSidecar.logLevel }}{{ .Values.sbcSipSidecar.logLevel }}{{ else }}{{ .Values.global.logLevel }}{{ end }}
             - name: JAMBONES_MYSQL_HOST
@@ -415,7 +408,6 @@ spec:
               value: {{ .Values.redis.host }}
             - name: JAMBONES_REDIS_PORT
               value: {{ .Values.redis.port | quote }}
-            {{- with include "vg.redisAuth.clientEnv" $ }}{{ . | nindent 12 }}{{ end }}
             - name: JAMBONES_REGBOT_CONTACT_USE_IP
               value: "1"
             - name: JAMBONES_TIME_SERIES_HOST

@@ -190,15 +190,18 @@ spec:
               value: {{ .Values.global.nodeEnv | quote }}
             - name: JAMBONES_LOGLEVEL
               value: {{ if  .Values.rtpEngineSidecar.logLevel }}{{ .Values.rtpEngineSidecar.logLevel }}{{ else }}{{ .Values.global.logLevel }}{{ end }}
+            - name: JAMBONES_REDIS_HOST
+              value: {{ .Values.redis.host }}
+            - name: JAMBONES_REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
             - name: RTPENGINE_DTMF_LOG_PORT
               value: {{ .Values.rtpEngineSidecar.ports.dtmf | quote }}
             - name: ENABLE_METRICS
-              value: {{ if include "vg.fedramp.statsEnabled" $ }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+              value: {{ if .Values.stats.enabled }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: K8S_POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-{{- if include "vg.fedramp.statsEnabled" $ }}
             - name: STATS_TAGS
               value: "pod:$(K8S_POD_NAME)"
             - name: STATS_PROTOCOL
@@ -211,7 +214,6 @@ spec:
               value: {{ .Values.telegraf.port | quote }}
             - name: STATS_SAMPLE_RATE
               value:  {{ .Values.stats.sampleRate | quote }}
-{{- end }}
             - name: TRACING_ENABLED
               value: {{ .Values.tracing.enabled | quote }}
             - name: TRACING_BASE_URL_WITH_PROTOCOL

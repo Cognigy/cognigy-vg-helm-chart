@@ -18,138 +18,12 @@
     "required": []
   },
   "properties": {
-    "global": {
-      "type": "object",
-      "properties": {
-        "fedramp": {
-          "type": "object",
-          "properties": {
-            "enabled": {
-              "description": "FedRAMP profile switch. Selects the hardened value of every feature in templates/_fedramp.tpl, and refuses components the profile forbids (the legacy feature-server).",
-              "type": "boolean"
-            },
-            "dtmfSourceValidation": {
-              "description": "DTMF source validation of sbc-inbound and sbc-outbound while the FedRAMP profile is on. Overrides the per-service keys.",
-              "enum": ["enforce", "warn", "off"]
-            },
-            "statsEnabled": {
-              "description": "StatsD (vg-stats-collector, telegraf :8125) while the FedRAMP profile is on. Overrides stats.enabled.",
-              "type": "boolean"
-            },
-            "apiBanStrictRanges": {
-              "description": "vg-api-ban fails the run on a malformed API_BAN_BANNED_RANGES entry while the FedRAMP profile is on. Overrides apiBan.strictRanges.",
-              "type": "boolean"
-            },
-            "apiBanMaxRedirects": {
-              "description": "Redirects vg-api-ban follows while the FedRAMP profile is on. Overrides apiBan.maxRedirects.",
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 10
-            },
-            "apiBanTimeoutMs": {
-              "description": "Timeout of each vg-api-ban request in milliseconds while the FedRAMP profile is on. Overrides apiBan.timeoutMs.",
-              "type": "integer",
-              "minimum": 1000,
-              "maximum": 600000
-            },
-            "apiBanMaxBatches": {
-              "description": "Feed batches (250 addresses each) vg-api-ban reads while the FedRAMP profile is on. Overrides apiBan.maxBatches.",
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 3999
-            },
-            "apiSessionKeyDigest": {
-              "description": "Digest vg-api-server derives session-revocation Redis keys with while the FedRAMP profile is on. Overrides api.sessionKeyDigest.",
-              "type": "string",
-              "enum": ["sha256", "md5"]
-            },
-            "redisAuth": {
-              "description": "Password on redis-ha and a dedicated ACL user for update-api-ban-list while the FedRAMP profile is on. Overrides redisHa.vgAuth.enabled.",
-              "type": "boolean"
-            },
-            "apiAuditLogTtlDays": {
-              "description": "Days vg-api-server keeps audit records while the FedRAMP profile is on (AU-11 requires at least 90). Overrides auditLogging.cleanup.ttlDays. Capped at 99999 so a values-file number cannot overflow on render.",
-              "type": "integer",
-              "minimum": 90,
-              "maximum": 99999
-            }
-          }
-        }
-      }
-    },
-    "sbcInbound": {
-      "type": "object",
-      "properties": {
-        "dtmfSourceValidation": {
-          "description": "DTMF source validation of vg-rtpengine-utils. null renders nothing (library default). Ignored while global.fedramp.enabled is true.",
-          "enum": ["enforce", "warn", "off", null]
-        }
-      }
-    },
-    "sbcOutbound": {
-      "type": "object",
-      "properties": {
-        "dtmfSourceValidation": {
-          "description": "DTMF source validation of vg-rtpengine-utils. null renders nothing (library default). Ignored while global.fedramp.enabled is true.",
-          "enum": ["enforce", "warn", "off", null]
-        }
-      }
-    },
-    "apiBan": {
-      "type": "object",
-      "properties": {
-        "strictRanges": {
-          "description": "vg-api-ban fails the run on a malformed API_BAN_BANNED_RANGES entry. false logs and skips it. Ignored while global.fedramp.enabled is true.",
-          "type": "boolean"
-        },
-        "maxRedirects": {
-          "description": "Redirects vg-api-ban follows. Ignored while global.fedramp.enabled is true.",
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 10
-        },
-        "timeoutMs": {
-          "description": "Timeout of each vg-api-ban request in milliseconds. Ignored while global.fedramp.enabled is true.",
-          "type": "integer",
-          "minimum": 1000,
-          "maximum": 600000
-        },
-        "maxBatches": {
-          "description": "Feed batches (250 addresses each) vg-api-ban reads. Ignored while global.fedramp.enabled is true.",
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 3999
-        }
-      }
-    },
     "api": {
       "type": "object",
       "properties": {
         "allowPrivateCustomUrls": {
           "description": "TEST-ONLY: renders api-server's ALLOW_PRIVATE_CUSTOM_URLS SSRF escape hatch. Must never be enabled on production values. null (default) follows vgTestHarness.enabled; explicit true/false overrides.",
           "type": ["boolean", "null"]
-        },
-        "sessionKeyDigest": {
-          "description": "Digest used to derive session-revocation Redis keys. Ignored while the FedRAMP profile is on. null leaves the variable unset and vg-api-server keeps its default, md5. Changing this on a populated cluster relocates every stored session and needs a scale-to-zero cutover through api.replicaCount - see Cognigy/vg-api-server docs/fedramp-remediation-1-upgrade.md.",
-          "type": ["string", "null"],
-          "enum": ["sha256", "md5", null]
-        }
-      }
-    },
-    "auditLogging": {
-      "type": "object",
-      "properties": {
-        "cleanup": {
-          "type": "object",
-          "properties": {
-            "ttlDays": {
-              "description": "Days vg-api-server keeps audit records (AUDIT_LOG_TTL_DAYS). Ignored while the FedRAMP profile is on. A whole number from 1 to 99999, as a number or a quoted string of digits; null leaves the variable unset. Zero, negative and non-numeric values are refused: vg-api-server images before #255 read a negative value as a window in the future and delete every audit record.",
-              "type": ["integer", "string", "null"],
-              "minimum": 1,
-              "maximum": 99999,
-              "pattern": "^[1-9][0-9]{0,4}$"
-            }
-          }
         }
       }
     },
@@ -186,42 +60,6 @@
           "type": "string",
           "enum": ["none", "vendor"],
           "description": "Whether the harness intercepts real speech-vendor traffic. 'none' (default) redirects nothing at the infrastructure level -- a custom:<name> credential still reaches mock-speech by the URL stored on the credential, needing nothing from this chart. 'vendor' makes VG dial the real vendor hostnames and rewrites them, in-namespace, to mock-speech's TLS listener -- deriving regionDns and its rewrite list, mockSpeech.tls and its certificate, the FreeSWITCH and api-server dnsConfig, and the CA-trust overlay."
-        },
-        "numbers": {
-          "type": ["array", "null"],
-          "description": "Numbers the provisioner creates in VG MySQL (manifest mode). number must be a quoted string: an unquoted YAML number decodes as a float, which neither the provisioner nor the mock-runtime-api overlap guard can compare reliably.",
-          "items": {
-            "type": "object",
-            "properties": {
-              "number": { "type": "string" }
-            }
-          }
-        },
-        "mockRuntimeApi": {
-          "type": "object",
-          "properties": {
-            "enabled": { "type": "boolean" },
-            "image": { "type": "string" },
-            "logLevel": { "type": "string" },
-            "resources": { "type": "object" },
-            "organisations": {
-              "type": "array",
-              "description": "Organisations that exist ONLY in the Cognigy.AI cluster, served by mock-runtime-api (CGY-38776). Their numbers must not also be provisioned into VG MySQL.",
-              "items": {
-                "type": "object",
-                "required": ["name", "number"],
-                "properties": {
-                  "name": { "type": "string" },
-                  "number": { "type": "string" },
-                  "organisationId": { "type": "string" },
-                  "projectId": { "type": "string" },
-                  "endpointId": { "type": "string" },
-                  "webhookUrl": { "type": "string" },
-                  "applicationSid": { "type": "string" }
-                }
-              }
-            }
-          }
         },
         "mockCognigy": {
           "type": "object",
@@ -327,17 +165,7 @@
             "phoneNumber": { "type": "string" },
             "carrierSourceIPv4": { "type": "string" },
             "carrierSourceNetmask": { "type": "integer" },
-            "carrierDefaultApplication": {
-              "type": "boolean",
-              "description": "Whether the test carrier keeps a fallback application (default true). false only for the kindvgai suite (CGY-38776), whose legacy-miss fallback hangs off the no_gateway rejection this pin prevents."
-            },
             "mipTest": {
-              "type": "object",
-              "properties": {
-                "enabled": { "type": "boolean" }
-              }
-            },
-            "ttsFailoverSameVendorTest": {
               "type": "object",
               "properties": {
                 "enabled": { "type": "boolean" }
@@ -362,13 +190,7 @@
     "freeswitch": {
       "type": "object",
       "properties": {
-        "regionDnsEnabled": { "type": "boolean" },
-        "codecNegotiation": { "type": "string", "enum": ["", "generous", "greedy"] },
-        "args": { "type": "array" },
-        "pregeneratedCerts": {
-          "type": "object",
-          "properties": { "enabled": { "type": "boolean" } }
-        }
+        "regionDnsEnabled": { "type": "boolean" }
       }
     },
     "sileroVad": {
@@ -496,20 +318,6 @@
     "featureServer": {
       "type": "object",
       "properties": {}
-    },
-    "redisHa": {
-      "type": "object",
-      "properties": {
-        "vgAuth": {
-          "type": "object",
-          "properties": {
-            "enabled": {
-              "description": "Password on redis-ha and a dedicated ACL user for update-api-ban-list. Ignored while the FedRAMP profile is on (global.fedramp.redisAuth applies).",
-              "type": "boolean"
-            }
-          }
-        }
-      }
     }
   }
 }

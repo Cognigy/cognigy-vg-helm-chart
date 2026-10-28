@@ -23,7 +23,6 @@ spec:
   template:
     spec:
       restartPolicy: OnFailure
-      priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.jobs.hookPriorityClassName "context" $) }}
       {{- include "image.pullSecrets" $ | nindent 6 }}
       containers:
         - name: provision
@@ -102,20 +101,6 @@ spec:
             {{- with .Values.vgTestHarness.autoProvision.carrierSourceNetmask }}
             - "--carrier-source-netmask={{ . }}"
             {{- end }}
-            {{- /*
-              Suppress the carrier's fallback application so an unprovisioned DID
-              is rejected no_gateway instead of routed to the default app. Only
-              the kindvgai suite (CGY-38776) wants this: that rejection is the
-              miss vg-resource-resolver's fallback to vg-runtime-api hangs off.
-              Compared against "false" explicitly so an unset value keeps the
-              pin, which is what every other suite relies on. values.schema.json
-              types it boolean; the toString is belt-and-braces so a value that
-              reaches here some other way cannot crash the render with a
-              string/bool comparison error.
-            */}}
-            {{- if eq (toString .Values.vgTestHarness.autoProvision.carrierDefaultApplication) "false" }}
-            - "--no-carrier-default-application"
-            {{- end }}
             {{/*
               The labelled eu/us deepgram credentials the region-routing test
               needs. Gated on regionDns.enabled AND its own opt-out, because
@@ -159,15 +144,6 @@ spec:
             # two suites are independent, and the flag is a no-op duplicate when
             # both are on (cobra takes the last value, which is identical).
             - "--deepgram-api-key={{ .Values.vgTestHarness.autoProvision.deepgramApiKey }}"
-            {{- end }}
-            {{- if .Values.vgTestHarness.autoProvision.ttsFailoverSameVendorTest.enabled }}
-            # CGY-41943: labelled "broken" / "fallback" Microsoft on-prem
-            # credentials (use_custom_tts + custom_tts_endpoint_url, TTS
-            # streaming off). "broken" points at an unresolvable host so the
-            # primary throws at synthesis; "fallback" at mock-speech's
-            # /cognitiveservices/v1. Like mipTest, the redirection lives on the
-            # credential, so this needs no infrastructure flag.
-            - --tts-failover-same-vendor-test-enabled=true
             {{- end }}
             {{/*
               Provisions the UNLABELLED plain "deepgram" credential a scenario

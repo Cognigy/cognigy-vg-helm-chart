@@ -92,6 +92,8 @@ spec:
               value: {{ .Values.webapp.disableCustomSpeech | quote }}
             - name: ENABLE_ALL_SPEECH_PROVIDERS
               value: {{ .Values.webapp.enableAllSpeechProviders | quote }}
+            - name: ENABLE_ENABLE_SMS
+              value: {{ .Values.webapp.enableSms | quote }}
             - name: DISABLE_DEFAULT_TRUNK_ROUTING
               value: {{ .Values.webapp.disableDefaultTrunkRouting | quote }}
             - name: DISABLE_LCR

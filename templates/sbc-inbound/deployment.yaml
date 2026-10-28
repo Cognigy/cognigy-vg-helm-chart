@@ -143,7 +143,7 @@ spec:
             - name: CALL_COUNTER_LEADER_ELECTION_SECONDS
               value: {{ .Values.global.callCounter.leaderElectionIntervalSeconds | quote }}
             - name: ENABLE_METRICS
-              value: {{ if include "vg.fedramp.statsEnabled" $ }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+              value: {{ if .Values.stats.enabled }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -157,7 +157,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.labels['app']
-{{- if include "vg.fedramp.statsEnabled" $ }}
             - name: STATS_TAGS
               value: "pod:$(K8S_POD_NAME)"
             - name: STATS_PROTOCOL
@@ -170,7 +169,6 @@ spec:
               value: {{ .Values.telegraf.port | quote }}
             - name: STATS_SAMPLE_RATE
               value:  {{ .Values.stats.sampleRate | quote }}
-{{- end }}
             - name: DRACHTIO_PORT
               value: {{ .Values.sbcInbound.ports.tcp | quote }}
             - name: DRACHTIO_SECRET
@@ -193,7 +191,6 @@ spec:
               value: {{ .Values.redis.host }}
             - name: JAMBONES_REDIS_PORT
               value: {{ .Values.redis.port | quote }}
-            {{- with include "vg.redisAuth.clientEnv" $ }}{{ . | nindent 12 }}{{ end }}
             - name: JAMBONES_TIME_SERIES_HOST
               value: {{ .Values.influxdb.host }}
             - name: TRACING_ENABLED
@@ -236,10 +233,6 @@ spec:
             {{- if .Values.resourceResolver.enabled }}
             - name: RESOURCE_RESOLVER_URL
               value: "http://vg-resource-resolver:{{ .Values.resourceResolver.port | default 4000 }}"
-            {{- end }}
-            {{- with include "vg.fedramp.dtmfSourceValidation" (dict "override" .Values.sbcInbound.dtmfSourceValidation "root" $) }}
-            - name: RTPENGINE_DTMF_SOURCE_VALIDATION
-              value: {{ . | quote }}
             {{- end }}
             {{- if .Values.sbcInbound.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcInbound.extraEnvVars "context" $) | nindent 12 }}

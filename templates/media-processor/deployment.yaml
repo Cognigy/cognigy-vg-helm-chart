@@ -123,7 +123,6 @@ spec:
             - name: REDIS_PORT
               value: {{ $.Values.redis.port | quote }}
             {{- end }}
-            {{- with include "vg.redisAuth.clientEnv" $ }}{{ . | nindent 12 }}{{ end }}
             {{- end }}
             {{- if .Values.mediaProcessor.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.mediaProcessor.extraEnvVars "context" $) | nindent 12 }}

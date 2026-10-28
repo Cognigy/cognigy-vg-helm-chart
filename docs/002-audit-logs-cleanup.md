@@ -57,7 +57,7 @@ auditLogging:
 |-----------|-------------|---------|----------|
 | `auditLogging.enabled` | Enable audit logging and cleanup | `false` | ✅ |
 | `auditLogging.cleanup.schedule` | Cron schedule expression | `"0 2 * * *"` | ❌ |
-| `auditLogging.cleanup.ttlDays` | Days to keep audit logs (`AUDIT_LOG_TTL_DAYS` on api-server). 90 is the FedRAMP Moderate minimum (AU-11); ignored while `global.fedramp.enabled` is true | `90` | ❌ |
+| `auditLogging.cleanup.ttlDays` | Days to keep audit logs | `30` | ❌ |
 | `auditLogging.cleanup.ttlSecondsAfterFinished` | Job cleanup time | `180` | ❌ |
 
 ### Complete Configuration Example
@@ -71,8 +71,8 @@ auditLogging:
     ## Cron schedule for audit logs cleanup (daily at 2 AM)
     schedule: "0 2 * * *"
     
-    ## Days to keep audit logs (used by API server, AUDIT_LOG_TTL_DAYS)
-    ttlDays: 90
+    ## Days to keep audit logs (used by API server)
+    ttlDays: 30
     
     ## Time in seconds after finished job to keep for debugging
     ttlSecondsAfterFinished: 180

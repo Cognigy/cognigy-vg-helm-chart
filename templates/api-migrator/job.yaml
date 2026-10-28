@@ -25,7 +25,6 @@ spec:
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       restartPolicy: OnFailure
-      priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.jobs.hookPriorityClassName "context" $) }}
       {{- with .Values.apiMigrator.nodeSelector }}
       nodeSelector: {{- toYaml . | nindent 8 }}
       {{- end }}

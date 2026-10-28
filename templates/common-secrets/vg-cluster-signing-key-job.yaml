@@ -138,7 +138,6 @@ spec:
         owner-team: echo
     spec:
       restartPolicy: OnFailure
-      priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.jobs.hookPriorityClassName "context" $) }}
       serviceAccountName: vg-cluster-signing-key-generator
       {{- if $ownPullSecret }}
       ## The hook-scoped copy above, not `cognigy-registry-token` — see the

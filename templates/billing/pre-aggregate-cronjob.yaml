@@ -18,8 +18,8 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      backoffLimit: {{ .Values.billing.job.backoffLimit }}
-      ttlSecondsAfterFinished: {{ .Values.billing.job.ttlSecondsAfterFinished }}
+      backoffLimit: 3
+      ttlSecondsAfterFinished: 86400
       template:
         metadata:
           labels:
@@ -29,8 +29,7 @@ spec:
             sidecar.istio.io/inject: "false"
         spec:
           {{- include "image.pullSecrets" $ | nindent 10 }}
-          restartPolicy: {{ .Values.billing.job.restartPolicy }}
-          {{- include "vg.billing.jobScheduling" (dict "job" .Values.billing.preAggregation "context" $) | trim | nindent 10 }}
+          restartPolicy: Never
           containers:
             - name: pre-aggregate
               image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.api.image) }}

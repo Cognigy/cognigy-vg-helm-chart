@@ -29,7 +29,7 @@ spec:
       nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" .Values.otelCollector.nodeSelector "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.otelCollector.priorityClassName }}
-      priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.otelCollector.priorityClassName "context" $) }}
+      priorityClassName: {{ .Values.otelCollector.priorityClassName }}
       {{- end }}
       {{- if .Values.otelCollector.podSecurityContext }}
       securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.otelCollector.podSecurityContext "context" $) | nindent 8 }}

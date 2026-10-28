@@ -250,9 +250,6 @@ data:
     [[inputs.procstat]]
       exe = "node"
       
-{{- if include "vg.fedramp.statsEnabled" $ }}
-    ## Local influx line-protocol listeners for the StatsD path. Bound to the
-    ## telegraf pod's own loopback, so nothing outside this pod can reach them.
     [[inputs.socket_listener]]
       service_address = "udp://127.0.0.1:8094"
       data_format = "influx"
@@ -260,14 +257,12 @@ data:
     [[inputs.socket_listener]]
       service_address = "tcp://127.0.0.1:8094"
       data_format = "influx"
-{{- end }}
 
     # scrape stats from heplify-server
     [[inputs.prometheus]]
       urls = ["http://heplify-server:9096/metrics"]
       namedrop = ["go*","process*","promhttp*"]
 
-{{- if include "vg.fedramp.statsEnabled" $ }}
     # # Statsd UDP/TCP Server
     [[inputs.statsd]]
       protocol = "tcp"
@@ -286,4 +281,3 @@ data:
       allowed_pending_messages = 10000
       percentile_limit = 1000
       # read_buffer_size = 65535
-{{- end }}

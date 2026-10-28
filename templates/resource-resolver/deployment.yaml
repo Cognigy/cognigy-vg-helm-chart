@@ -87,7 +87,7 @@ spec:
         {{- end }}
       {{- end }}
       {{- if .Values.resourceResolver.priorityClassName }}
-      priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.resourceResolver.priorityClassName "context" $) }}
+      priorityClassName: {{ .Values.resourceResolver.priorityClassName }}
       {{- end }}
       {{- if .Values.resourceResolver.podSecurityContext }}
       securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.resourceResolver.podSecurityContext "context" $) | nindent 8 }}
@@ -162,7 +162,6 @@ spec:
               value: {{ .Values.redis.host }}
             - name: JAMBONES_REDIS_PORT
               value: {{ .Values.redis.port | quote }}
-            {{- with include "vg.redisAuth.clientEnv" $ }}{{ . | nindent 12 }}{{ end }}
             - name: CACHE_ENABLED
               value: {{ .Values.resourceResolver.cacheEnabled | quote }}
             - name: CACHE_TTL_SECONDS

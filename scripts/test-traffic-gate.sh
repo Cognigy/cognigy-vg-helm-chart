@@ -12,7 +12,7 @@ cd "$CHART_DIR"
 # while a cluster-less helm client reports a newer default, and four values are
 # `required`. None relate to this feature — they just have to be present.
 KUBE_VERSION="${KUBE_VERSION:-1.34.0}"
-FIXTURE="$(mktemp "${TMPDIR:-/tmp}/rtpgate-fixture.XXXXXX")"
+FIXTURE="$(mktemp -t rtpgate-fixture)"
 trap 'rm -f "$FIXTURE"' EXIT
 cat > "$FIXTURE" <<'EOF'
 cloud: aws
@@ -207,7 +207,7 @@ echo "== REGRESSION GUARD: chart defaults must mount no gate at all =="
 # So: with NO trafficGate override, none of the three pieces may appear. Asserted
 # on aws specifically — the cloud where the gate is meant to work — so this cannot
 # pass merely because some cloud test filtered it out.
-DEFAULTS="$(mktemp "${TMPDIR:-/tmp}/rtpgate-defaults.XXXXXX")"
+DEFAULTS="$(mktemp -t rtpgate-defaults)"
 trap 'rm -f "$FIXTURE" "$DEFAULTS"' EXIT
 cat > "$DEFAULTS" <<'EOF'
 cloud: aws
