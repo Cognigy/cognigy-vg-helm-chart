@@ -30,7 +30,12 @@
     "agenticEndpoint": {
       "description": "Fallback for feature-server's dial-time agent routing only, used for an agent-targeted application that predates vg-api-server's per-application agentic_endpoint_hook column. vg-api-server itself no longer reads this.",
       "type": "object",
+      "additionalProperties": false,
       "properties": {
+        "enabled": {
+          "description": "Emit AGENTIC_ENDPOINT_BASE_URL on feature-server. Set false where the paired Cognigy environment does not deploy vg-agentic-endpoint.",
+          "type": "boolean"
+        },
         "pathPrefix": {
           "description": "Path appended to the derived host. Must match vg-agentic-endpoint's ingress routePrefix + wsPath.",
           "type": "string",
@@ -288,29 +293,6 @@
             "user": { "type": "string" },
             "secretName": { "type": "string" },
             "secretKey": { "type": "string" }
-          }
-        }
-      }
-    },
-    "otelCollector": {
-      "type": "object",
-      "properties": {
-        "extraOtlpExporters": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["name", "endpoint"],
-            "properties": {
-              "name": {
-                "type": "string",
-                "pattern": "^[A-Za-z0-9_-]+$",
-                "not": { "const": "jaeger" }
-              },
-              "endpoint": { "type": "string", "minLength": 1 },
-              "insecure": { "type": "boolean" },
-              "config": { "type": "object" }
-            }
           }
         }
       }

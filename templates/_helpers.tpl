@@ -81,24 +81,28 @@ environment is only something to drift out of sync with the adapter's
 ingress. Either way the scheme is normalized to ws(s):// and pathPrefix is
 appended — callers never write the wss:// form themselves.
 
-Returns "" only when BOTH agenticEndpoint.baseUrl and cognigyLogin.baseUrl are
-empty, so callers omit the env var only then, instead of failing the whole
-render. cognigyLogin.baseUrl alone is set on every production cluster, so this
-helper returns a non-empty value there regardless of whether an adapter is
-actually deployed — "cognigyLogin.baseUrl is set" can never be treated as "the
-feature is on".
+Returns "" when agenticEndpoint.enabled is false, or when BOTH
+agenticEndpoint.baseUrl and cognigyLogin.baseUrl are empty; callers omit the
+env var then, instead of failing the whole render. cognigyLogin.baseUrl alone
+is set on every production cluster, so it can never be treated as "the adapter
+is deployed": set agenticEndpoint.enabled=false on clusters whose paired
+Cognigy environment does not run vg-agentic-endpoint, otherwise feature-server
+reroutes agent calls to a path that does not exist there. Only an explicit
+false disables it; an absent key keeps the default (true).
 
 Usage:
 {{ include "vg.agenticEndpoint.baseUrl" . }}
 */}}
 {{- define "vg.agenticEndpoint.baseUrl" -}}
 {{- $ae := .Values.agenticEndpoint -}}
+{{- if ne (toString $ae.enabled) "false" -}}
 {{- $host := $ae.baseUrl -}}
 {{- if not $host -}}
 {{- $host = .Values.cognigyLogin.baseUrl -}}
 {{- end -}}
 {{- if $host -}}
 {{- printf "%s%s" (trimSuffix "/" (replace "https://" "wss://" (replace "http://" "ws://" $host))) $ae.pathPrefix -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 

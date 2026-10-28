@@ -596,7 +596,7 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.21.1
+  image: cognigy.azurecr.io/vg-api-migrator:2026.20.1
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -712,7 +712,7 @@ postgresql:
   image:
     registry: cognigy.azurecr.io
     repository: vg-postgres
-    tag: 14.18.0-debian-12-r1
+    tag: 14.18.0-debian-12-r0
   primary:
     priorityClassName: ""
     persistence:
@@ -729,7 +729,7 @@ postgresql:
     image:
       registry: cognigy.azurecr.io
       repository: vg-postgres-exporter
-      tag: 0.17.1-debian-12-r17
+      tag: 0.17.1-debian-12-r16
     resources:
       requests:
         cpu: "0.200"
@@ -941,21 +941,6 @@ otelCollector:
   podSecurityContext: {}
   tolerations: []
   jaegerEndpoint: "jaeger:4317"
-  # Additional OTLP gRPC exporters. Traces go to Jaeger and to every entry here,
-  # after the enabled processors have run. Requires redactionProcessor.enabled.
-  # Redaction only covers digit patterns: enable spokennumProcessor (spoken
-  # numbers -> digits) and vendortransformProcessor (drops raw vendor STT
-  # payloads) before sending traces outside the namespace.
-  # name: exporter id (otlp/<name>), [A-Za-z0-9_-], not "jaeger", unique
-  # endpoint: host:port (required)
-  # insecure: plaintext gRPC (default false)
-  # config: optional extra otlp exporter settings (headers, retry_on_failure,
-  #   sending_queue, compression, tls.ca_file, ...), rendered as-is
-  extraOtlpExporters: []
-  # extraOtlpExporters:
-  #   - name: alloy
-  #     endpoint: "cognigy-alloy.monitoring.svc.cluster.local:4317"
-  #     insecure: true
   tracing:
     enabled: false
     otelExporterCollectorUrl: "http://otel-collector:4318/v1/traces"
@@ -1052,6 +1037,11 @@ cognigyLogin:
 ## re-saved since) — feature-server derives AGENTIC_ENDPOINT_BASE_URL from it
 ## via the vg.agenticEndpoint.baseUrl helper.
 agenticEndpoint:
+  ## Emit AGENTIC_ENDPOINT_BASE_URL on feature-server. Set false on clusters
+  ## whose paired Cognigy environment does not deploy vg-agentic-endpoint:
+  ## otherwise agent-targeted calls are rerouted to a path that does not exist
+  ## there instead of staying on the endpoint's /voiceGateway hook.
+  enabled: true
   ## Appended to the derived host. Must match vg-agentic-endpoint's ingress
   ## routePrefix + wsPath, or the adapter parses no token and refuses the call.
   pathPrefix: /vg/agentic-endpoint/v1
@@ -1067,7 +1057,7 @@ agenticEndpoint:
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.3
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.21.1
+  image: cognigy.azurecr.io/vg-api-server:2026.20.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1198,7 +1188,7 @@ tmpban:
     ## Ban duration (hours) applied once banThreshold is reached.
     banDurationHours: 1
 drachtio:
-  image: cognigy.azurecr.io/vg-drachtio:1.3.9
+  image: cognigy.azurecr.io/vg-drachtio:1.3.7
   imagePullPolicy: IfNotPresent
   host: 127.0.0.1
   port: 9022
@@ -1236,7 +1226,7 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.21.1
+  image: cognigy.azurecr.io/vg-feature-server:2026.20.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1334,7 +1324,7 @@ sileroVad:
   ## When enabled, feature server receives SILERO_VAD_SERVICE_URL env var
   ## pointing to this service for Plan B audio-fork VAD.
   enabled: false
-  image: cognigy.azurecr.io/vg-silero-vad:2026.21.0
+  image: cognigy.azurecr.io/vg-silero-vad:2026.20.0
   ## Default Always because the default tag is :latest (mutable) — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1457,7 +1447,7 @@ sileroVad:
 ## jambones MySQL DB. Disabled by default — opt in per cluster.
 vadAutotuner:
   enabled: false
-  image: cognigy.azurecr.io/vg-vad-autotuner:2026.21.0-67
+  image: cognigy.azurecr.io/vg-vad-autotuner:2026.20.0-89
   ## Default Always because the default tag may be mutable — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1502,7 +1492,7 @@ vadAutotuner:
   extraEnvVars: []
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.21.1
+  image: cognigy.azurecr.io/vg-feature-server:2026.20.1
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1636,7 +1626,7 @@ featureServerLegacy:
       cpu: "1"
       memory: 500Mi
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch:2026.21.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.20.0
   imagePullPolicy: IfNotPresent
   ## FreeSWITCH log level. Valid choices (case-insensitive) are the FreeSWITCH log
   ## levels, from least to most verbose:
@@ -1713,12 +1703,12 @@ freeswitchNightly:
   ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
   ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
   ## @see featureServerNightly
-  image: cognigy.azurecr.io/vg-freeswitch:2026.21.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.20.0
 freeswitchLegacy:
   ## You can specify a custom image for the FreeSWITCH in the legacy FeatureServer here
   ## To enable a "legacy FreeSWITCH", you have to enable a legacy FeatureServer.
   ## @see featureServerLegacy
-  image: cognigy.azurecr.io/vg-freeswitch:2026.21.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.20.0
 rtpEngine:
   image: cognigy.azurecr.io/vg-rtpengine:0.2.0
   imagePullPolicy: IfNotPresent
@@ -1764,7 +1754,7 @@ rtpEngine:
 mediaProcessor:
   ## Enable Media Processor for decoupled STT/TTS processing
   enabled: false
-  image: cognigy.azurecr.io/vg-media-processor:2026.21.0
+  image: cognigy.azurecr.io/vg-media-processor:2026.20.0
   imagePullPolicy: Always
   replicaCount: 2
   serviceName: media-processor
@@ -1811,7 +1801,7 @@ mediaProcessor:
       cpu: "1"
       memory: 512Mi
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.21.1
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.20.1
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1830,7 +1820,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/vg-sbc-call-router:2026.21.1
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.20.1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1868,7 +1858,7 @@ sbcCallRouter:
 ## Background: vg-resources/docs/tdd/06-vg-in-ai/002-runtime-gateway-migration-plan.md.
 resourceResolver:
   enabled: true
-  image: cognigy.azurecr.io/vg-resource-resolver:2026.21.1
+  image: cognigy.azurecr.io/vg-resource-resolver:2026.20.1
   imagePullPolicy: IfNotPresent
   ## Two replicas for availability, matching sbcInbound/sbcOutbound. Capacity is
   ## not the reason: a single replica served 600 concurrent calls at 21% of a 250m
@@ -2003,7 +1993,7 @@ vgCluster:
     ## keypair generator uses.
     generatorImage: cognigy.azurecr.io/kubectl:latest
 sbcInbound:
-  image: cognigy.azurecr.io/vg-sbc-inbound:2026.21.1
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.20.1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -2043,7 +2033,7 @@ sbcInbound:
       cpu: "0.200"
       memory: 250Mi
 sbcOutbound:
-  image: cognigy.azurecr.io/vg-sbc-outbound:2026.21.1
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.20.1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -2081,7 +2071,7 @@ sbcOutbound:
   supportBestEffortTls: false
   registerRfc3261: false
 sbcSipSidecar:
-  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.21.1
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.20.1
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -2096,7 +2086,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.21.1
+  image: cognigy.azurecr.io/vg-tcm:2026.20.1
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -2142,7 +2132,7 @@ testCallManager:
       memory: 400Mi
 vgConnector:
   enabled: true
-  image: cognigy.azurecr.io/vg-connector:2026.21.1
+  image: cognigy.azurecr.io/vg-connector:2026.20.1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -2263,7 +2253,7 @@ vgAudioManager:
       cpu: "0.500"
       memory: 512Mi
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.21.1
+  image: cognigy.azurecr.io/vg-webapp:2026.20.1
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## hot-reload property

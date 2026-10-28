@@ -333,8 +333,9 @@ spec:
               Hand-writing it again is how it drifts from the adapter's ingress,
               and a mismatch misroutes live calls silently.
 
-              The env var is omitted only when BOTH agenticEndpoint.baseUrl and
-              cognigyLogin.baseUrl are empty. cognigyLogin.baseUrl alone is set
+              The env var is omitted when agenticEndpoint.enabled is false, or
+              when BOTH agenticEndpoint.baseUrl and cognigyLogin.baseUrl are
+              empty. cognigyLogin.baseUrl alone is set
               on most clusters, most of which have no adapter deployed at all —
               so its presence still emits this var, deployed adapter or not;
               see the vg.agenticEndpoint.baseUrl helper.
