@@ -6,6 +6,9 @@ templates/resource-resolver/deployment.yaml.
 Both guards fail the render rather than ship a pod that cannot start: outside
 STANDALONE the service exits without AI_CLUSTER_TRUST_LIST (at least one AI
 cluster) and without HOMER_PASSWORD, which only exists with the bundled Homer.
+With global.reloadableConfig.enabled the link guard is skipped on purpose (vg.eventsApi.active):
+the service reads the trust list live and starts unlinked, so C26 can be switched on by a
+ConfigMap change. That needs the vg-events-api image of PR 17; an older one exits at boot.
 */ -}}
 {{- if .Values.vgEventsApi.enabled }}
 {{- if not (include "vg.eventsApi.active" .) }}
@@ -39,6 +42,7 @@ spec:
       labels:
         app: vg-events-api
       annotations:
+        {{- /* No checksum over the link: with global.reloadableConfig.enabled it lives in cognigy-env-reloadable, read live (CGY-48237). */}}
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
         {{- if .Values.homer.enabled }}
         {{- /* HOMER_PASSWORD comes from vg-homer-password: roll on change, as api-server does. */}}
@@ -155,11 +159,34 @@ spec:
             {{- with include "vg.redisAuth.clientEnv" $ }}{{ . | nindent 12 }}{{ end }}
             ## AI-cluster JWT verification: the same VG_CLUSTER_NAME /
             ## AI_CLUSTER_TRUST_LIST feature-server /v2 gets.
+            {{- if $.Values.global.reloadableConfig.enabled }}
+            ## global.reloadableConfig.enabled: VG_CLUSTER_NAME / AI_CLUSTER_TRUST_LIST come from the
+            ## mounted cognigy-env-reloadable (read live), NOT env -- an env var would beat the file.
+            {{- if include "vg.runtimeApiTargets.effective" $ | fromJsonArray }}
+            {{- include "vg.aiClusterAuth.validate" $ }}
+            {{- end }}
+            {{- else }}
             {{- include "vg.aiClusterAuth.env" $ | trim | nindent 12 }}
+            {{- end }}
             {{- if .Values.vgEventsApi.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgEventsApi.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
+          {{- if $.Values.global.reloadableConfig.enabled }}
+          volumeMounts:
+            - name: cognigy-env-reloadable
+              mountPath: /config/env
+              readOnly: true
+          {{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env
+      {{- if $.Values.global.reloadableConfig.enabled }}
+      volumes:
+        - name: cognigy-env-reloadable
+          configMap:
+            name: cognigy-env-reloadable
+            items:
+              - key: cognigy.yaml
+                path: cognigy.yaml
+      {{- end }}
 {{- end }}

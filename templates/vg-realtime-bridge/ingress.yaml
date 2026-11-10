@@ -2,7 +2,15 @@
 Public route to the bridge Session API: either on its own host
 (ingress.realtimeBridge.host, needs a DNS record) or, with that empty, on the
 shared api host (ingress.api.host) under ingress.realtimeBridge.routePrefix —
-path-based routing, no new DNS record or certificate.
+path-based routing, no new DNS record or certificate. With ingress.api.host
+empty too, the rule is host-less, like api-server's own.
+
+On by default, so the shared-host mode must render on every supported ingress
+setup: with an ingress class other than traefik (no prefix strip) it is
+skipped instead of failing, unless the IP allow-list is on
+(ingress.realtimeBridge.ipWhiteListMiddleware.enabled or the FedRAMP profile):
+that is a Traefik Middleware too, so its own guard still fails the render. An
+own host keeps every guard.
 
 routePrefix is stripped at the edge by a Traefik stripPrefix Middleware, so the
 bridge still receives the paths it mounts (/v1/..., /media/...). It runs LAST in
@@ -13,9 +21,7 @@ allow-list does.
 {{- if and .Values.realtimeBridge.enabled .Values.ingress.enabled .Values.ingress.realtimeBridge.enabled }}
 {{- $cfg := .Values.ingress.realtimeBridge }}
 {{- $host := $cfg.host | default .Values.ingress.api.host }}
-{{- if not $host }}
-{{- fail "ingress.realtimeBridge.enabled is set but there is no host: set ingress.realtimeBridge.host, or ingress.api.host (with ingress.realtimeBridge.routePrefix) to share the API host." }}
-{{- end }}
+{{- if or $cfg.host (eq .Values.ingress.ingressClassName "traefik") }}
 {{- $prefix := $cfg.routePrefix | default "" | trimSuffix "/" }}
 {{- if and $prefix (not (hasPrefix "/" $prefix)) }}
 {{- fail "ingress.realtimeBridge.routePrefix must start with \"/\", e.g. /bridge." }}
@@ -71,7 +77,9 @@ spec:
   ingressClassName: {{ .Values.ingress.ingressClassName }}
   {{- include "vg.tlsCertificate.secretName.render" $ | nindent 2 }}
   rules:
-    - host: {{ $host }}
+    {{- /* No host (no own host, empty ingress.api.host): a host-less rule, like api-server's. */}}
+    - {{ with $host }}host: {{ . }}
+      {{ end -}}
       http:
         paths:
           {{- range $cfg.paths }}
@@ -83,4 +91,5 @@ spec:
             path: {{ printf "%s%s" $prefix . }}
             pathType: Prefix
           {{- end }}
+{{- end }}
 {{- end }}

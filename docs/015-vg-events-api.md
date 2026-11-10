@@ -10,6 +10,7 @@
 
 - `vg-events-api` is a read API for per-call operational data: call lists and details from InfluxDB CDRs, and SIP pcaps from Homer. Its only caller is a linked Cognigy.AI cluster's `vg-resources-api`, never a browser. Design: `vg-resources` `docs/tdd/06-vg-in-ai/025-vg-events-api.md`. The service's README holds the route table and the token contract.
 - It is off by default (`vgEventsApi.enabled: false`). Enabling it needs at least one linked AI cluster (`vgInAi.clusters` or `resourceResolver.runtimeApiTargets`) and `homer.enabled`. Without either, the chart fails the render, because the service refuses to start without them.
+- With `global.reloadableConfig.enabled` (the default) the link is read live from `cognigy-env-reloadable` and the service starts with no link: it renders unlinked, answers 401 to every request until `AI_CLUSTER_TRUST_LIST` and `VG_CLUSTER_NAME` arrive, and `/health/readiness` stays green (it only checks Redis). This needs the image of vg-events-api PR 17; an older image exits at boot on an empty trust list. The render guard above then does not apply.
 - Auth uses the same scheme as feature-server `/v2`: a per-request ES256 JWT from a linked AI cluster, checked against the same `AI_CLUSTER_TRUST_LIST`.
 - It is published at `<api host>/events-api/v1/...`. Traefik strips `/events-api`, so the service receives `/v1/...`.
 

@@ -1,5 +1,6 @@
 {{- include "vg.fedramp.refuseInsecureTraefikEntrypoints" $ }}
 {{- include "vg.networkPolicy.sbcSipResolverWarning" $ }}
+{{- include "vg.realtimeBridge.notesWarnings" $ }}
 You have deployed the following release: {{ .Release.Name }}.
 To get further information, you can run the commands:
   $ helm status -n {{ .Release.Namespace }} {{ .Release.Name }}

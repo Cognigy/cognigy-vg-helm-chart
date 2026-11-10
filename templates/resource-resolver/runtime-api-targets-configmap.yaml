@@ -1,5 +1,5 @@
 {{- $runtimeApiTargets := include "vg.runtimeApiTargets.effective" . | fromJsonArray }}
-{{- if and .Values.resourceResolver.enabled $runtimeApiTargets }}
+{{- if and .Values.resourceResolver.enabled $runtimeApiTargets (not .Values.global.reloadableConfig.enabled) }}
 # Linked Cognigy.AI clusters vg-resource-resolver may resolve runtime resources
 # against, mounted as a file rather than passed as an env var.
 #

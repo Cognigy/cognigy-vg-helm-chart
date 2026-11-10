@@ -74,6 +74,8 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.realtimeBridge.secret.name }}
                   key: {{ .Values.realtimeBridge.secret.bridgeApiKeyKey }}
+                  {{- /* A cluster without the Secret still runs the bridge, with its Session API off (503). */}}
+                  optional: true
             {{- if .Values.realtimeBridge.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.realtimeBridge.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

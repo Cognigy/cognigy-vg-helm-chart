@@ -1200,9 +1200,15 @@ vg-events-api (vg-resources docs/tdd/06-vg-in-ai/025): true when the component
 is switched on AND at least one AI cluster is linked. Its only callers are linked
 AI clusters, and the service refuses to start with an empty trust list, so the
 Deployment template fails the render instead of shipping a pod that crash-loops.
+
+With global.reloadableConfig.enabled the link is not a pod env any more: it arrives
+through cognigy-env-reloadable (AI_CLUSTER_TRUST_LIST, empty until linked) and the
+service starts with an empty list and answers 401 until it is set (CGY-48237). The
+component is then active whenever it is switched on, so a later ConfigMap-only change
+links it without touching the Deployment.
 */}}
 {{- define "vg.eventsApi.active" -}}
-{{- if and .Values.vgEventsApi.enabled (include "vg.runtimeApiTargets.effective" . | fromJsonArray) -}}
+{{- if and .Values.vgEventsApi.enabled (or .Values.global.reloadableConfig.enabled (include "vg.runtimeApiTargets.effective" . | fromJsonArray)) -}}
 true
 {{- end -}}
 {{- end -}}
@@ -1217,6 +1223,56 @@ verifiers cannot drift. Callers gate it on their own `active` helper.
 {{- include "vg.runtimeApiTargets.validate" . }}
 {{- include "vg.clusterName.validate" . }}
 {{ include "vg.aiClusterTrust.env" . }}
+{{- end -}}
+
+{{/*
+The validation half of vg.aiClusterAuth.env, for the reloadable-config path where the
+values are rendered into cognigy-env-reloadable instead of pod env. Callers gate it on
+a linked AI cluster, like the env form.
+*/}}
+{{- define "vg.aiClusterAuth.validate" -}}
+{{- include "vg.runtimeApiTargets.validate" . }}
+{{- include "vg.clusterName.validate" . }}
+{{- end -}}
+
+{{/*
+The C26 link as scalars for cognigy-env-reloadable (CGY-48237). reloadable-config parses
+the file with the failsafe schema and silently skips non-scalars, so each list is ONE JSON
+string, and each key is rendered even when unlinked (empty string) -- same reason as
+SBC_RTP_DRAIN_ADDRESSES (vg.sbcRtp.drainAddresses): a key that is absent when unlinked and
+present when linked is indistinguishable from "never configured", and a later overlay can
+only change a value, not add a key to a running pod's view of the file.
+Only rendered with global.reloadableConfig.enabled; the pods then must NOT also get these
+as env, because the library snapshots process.env at init and an env var beats the file.
+Emits a YAML map (fromYaml-able) of key -> string.
+*/}}
+{{- define "vg.c26Link.reloadable" -}}
+{{- /* The library snapshots process.env at init and an env var of the same name beats the mounted file,
+       so one of these four names in cognigyEnv (envFrom on all three services) or in a consumer's
+       extraEnvVars would silently freeze the link at its boot value. Same guard as
+       SBC_RTP_DRAIN_ADDRESSES (vg.sbcRtp.drainAddresses). */ -}}
+{{- $root := . -}}
+{{- range $k := list "VG_CLUSTER_NAME" "RUNTIME_API_TARGETS" "RESOURCES_API_TARGETS" "AI_CLUSTER_TRUST_LIST" -}}
+{{- if hasKey ($root.Values.cognigyEnv | default dict) $k -}}
+{{- fail (printf "%s must not be set in cognigyEnv while global.reloadableConfig.enabled is true. reloadable-config snapshots process.env at init and that snapshot beats the mounted cognigy-env-reloadable file, so an env copy would freeze the C26 link at its boot value and a ConfigMap change would be ignored. Use vgCluster.name and vgInAi.clusters instead." $k) -}}
+{{- end -}}
+{{- range $svc := list "resourceResolver" "vgEventsApi" "vgAudioManager" -}}
+{{- $extra := (index $root.Values $svc).extraEnvVars -}}
+{{- if kindIs "slice" $extra -}}
+{{- range $e := $extra -}}
+{{- if and (kindIs "map" $e) (eq (get $e "name" | default "") $k) -}}
+{{- fail (printf "%s must not be set in %s.extraEnvVars while global.reloadableConfig.enabled is true: an env var of that name beats the mounted cognigy-env-reloadable file, so the C26 link would be frozen at its boot value. Use vgCluster.name and vgInAi.clusters instead." $k $svc) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- $runtime := include "vg.runtimeApiTargets.effective" . | fromJsonArray -}}
+{{- $resources := include "vg.resourcesApiTargets.effective" . | fromJsonArray -}}
+VG_CLUSTER_NAME: {{ include "vg.clusterName" . | quote }}
+RUNTIME_API_TARGETS: {{ if $runtime }}{{ include "vg.runtimeApiTargets.effective" . | quote }}{{ else }}""{{ end }}
+RESOURCES_API_TARGETS: {{ if $resources }}{{ include "vg.resourcesApiTargets.effective" . | quote }}{{ else }}""{{ end }}
+AI_CLUSTER_TRUST_LIST: {{ if $runtime }}{{ include "vg.aiClusterTrustList" . | quote }}{{ else }}""{{ end }}
 {{- end -}}
 
 {{/*

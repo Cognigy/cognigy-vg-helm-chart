@@ -1,5 +1,12 @@
 {{- $vgClusterSigningKeySecret := include "vg.clusterSigningKey.secretName" $ }}
 {{- $resourcesApiTargets := include "vg.resourcesApiTargets.effective" $ | fromJsonArray }}
+{{- /* global.reloadableConfig.enabled (CGY-48237): the link (VG_CLUSTER_NAME, the targets) comes from
+       cognigy-env-reloadable, not pod env / a mounted ConfigMap / checksum annotations, so linking by a
+       ConfigMap-only change does not roll the pod. The signing key mount and path render whenever the key
+       Secret exists (see vg-resource-resolver's deployment for why no key checksum annotation then). */}}
+{{- $reloadable := $.Values.global.reloadableConfig.enabled }}
+{{- $legacyLink := and $resourcesApiTargets (not $reloadable) }}
+{{- $mountKey := and $vgClusterSigningKeySecret (or $resourcesApiTargets $reloadable) }}
 {{- /* Recording reports to vg-resources-api (CGY-43293), wired like
        resource-resolver/deployment.yaml: same signing key, same identity, same
        file shape. The guards sit OUTSIDE the `enabled` gate for the resolver's
@@ -47,11 +54,15 @@ spec:
         ## rollout. Hashes only the selected key (the secret may hold others), and the secret's NAME and
         ## key while it does not exist yet, so a fresh cluster and `helm template` still render.
         checksum/encryption-secret: {{ if $encryptionSecret }}{{ index ($encryptionSecret.data | default dict) $encryptionSecretKey | default "" | sha256sum }}{{ else }}{{ printf "%s/%s" $encryptionSecretName $encryptionSecretKey | sha256sum }}{{ end }}
-        {{- if $resourcesApiTargets }}
-        ## The target list and the private key are both read once at boot, so
-        ## either changing must roll the pod. Gated on the targets, not on the
-        ## Secret existing: only then is the key mounted (see the resolver's note).
+        {{- if $legacyLink }}
+        ## The target list is read once at boot, so changing it must roll the pod (not with
+        ## global.reloadableConfig.enabled: the list is then read live from cognigy-env-reloadable).
         checksum/vg-resources-api-targets: {{ include (print $.Template.BasePath "/vg-audio-manager/resources-api-targets-configmap.yaml") $ | sha256sum }}
+        {{- end }}
+        {{- if $mountKey }}
+        ## The private key is read once at boot, so a rotation must roll the pod. Gated on the key
+        ## being mounted (linked, or global.reloadableConfig.enabled, which mounts it regardless), not
+        ## on the Secret existing. A link change alone does not move this value, so it rolls nothing.
         checksum/vg-cluster-signing-key: {{ if not (lookup "v1" "Secret" $.Release.Namespace $vgClusterSigningKeySecret) }}{{ $vgClusterSigningKeySecret | sha256sum }}{{ else }}{{ toYaml (lookup "v1" "Secret" $.Release.Namespace $vgClusterSigningKeySecret).data | sha256sum }}{{ end }}
         {{- end }}
     spec:
@@ -74,7 +85,7 @@ spec:
       {{- if .Values.vgAudioManager.priorityClassName }}
       priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.vgAudioManager.priorityClassName "context" $) }}
       {{- end }}
-      {{- if $resourcesApiTargets }}
+      {{- if $mountKey }}
       ## The signing key is mounted 0400 and vg-audio-manager runs as uid 1000
       ## (containerSecurityContext.runAsUser), so it can read the file only
       ## through the group kubelet gives Secret volumes: fsGroup. Added only when
@@ -204,36 +215,58 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            {{- if $resourcesApiTargets }}
+            {{- if $legacyLink }}
             ## Recording reports (CGY-43293). VG_CLUSTER_NAME is this cluster's
             ## `iss`, checked by vg.clusterName.validateFor at the top of this file.
             - name: VG_CLUSTER_NAME
               value: {{ include "vg.clusterName" $ | quote }}
             - name: RESOURCES_API_TARGETS_PATH
               value: "/config/vg-resources-api/targets.yaml"
+            {{- end }}
+            {{- if $mountKey }}
             - name: VG_CLUSTER_SIGNING_KEY_PATH
               value: "/var/run/secrets/vg-cluster/{{ $.Values.vgCluster.signingKey.privateKeyFile }}"
             {{- end }}
             {{- if .Values.vgAudioManager.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgAudioManager.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
-          {{- if $resourcesApiTargets }}
+          {{- if or $legacyLink $mountKey $reloadable }}
           volumeMounts:
+            {{- if $legacyLink }}
             - name: vg-resources-api-targets
               mountPath: /config/vg-resources-api
               readOnly: true
+            {{- end }}
+            {{- if $mountKey }}
             - name: vg-cluster-signing-key
               mountPath: /var/run/secrets/vg-cluster
               readOnly: true
+            {{- end }}
+            {{- if $reloadable }}
+            - name: cognigy-env-reloadable
+              mountPath: /config/env
+              readOnly: true
+            {{- end }}
           {{- end }}
-      {{- if $resourcesApiTargets }}
+      {{- if or $legacyLink $mountKey $reloadable }}
       volumes:
+        {{- if $legacyLink }}
         - name: vg-resources-api-targets
           configMap:
             name: vg-audio-manager-resources-api-targets
             items:
               - key: targets.yaml
                 path: targets.yaml
+        {{- end }}
+        {{- if $reloadable }}
+        - name: cognigy-env-reloadable
+          configMap:
+            name: cognigy-env-reloadable
+            items:
+              - key: cognigy.yaml
+                path: cognigy.yaml
+        {{- end }}
+        {{- if $mountKey }}
         - name: vg-cluster-signing-key
           secret:
             secretName: {{ $vgClusterSigningKeySecret | quote }}
@@ -243,5 +276,6 @@ spec:
               - key: {{ $.Values.vgCluster.signingKey.privateKeyFile | quote }}
                 path: {{ $.Values.vgCluster.signingKey.privateKeyFile | quote }}
             defaultMode: 256
+        {{- end }}
       {{- end }}
 {{- end }}

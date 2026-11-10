@@ -129,8 +129,13 @@ global:
   ## in vg-resources). Delivers COGNIGY_AI_VERSION, COGNIGY_DISPLAY_VERSION, and
   ## K8S_FEATURE_SERVER_CANARY_ENABLED/_PERCENTAGE via a mounted ConfigMap
   ## instead of literal pod-spec env vars, so a chart bump or canary ramp no
-  ## longer restarts every workload. Default false. Enable only once every
-  ## consuming service reads from /config/env/cognigy.yaml.
+  ## longer restarts every workload. Default true. Only turn it on for a cluster
+  ## whose consuming services all read from /config/env/cognigy.yaml.
+  ## It also carries the C26 link (VG_CLUSTER_NAME, RUNTIME_API_TARGETS,
+  ## RESOURCES_API_TARGETS, AI_CLUSTER_TRUST_LIST) for vg-resource-resolver,
+  ## vg-events-api and vg-audio-manager (CGY-48237); those need images that read
+  ## it live (vg-resource-resolver PR 122, vg-events-api PR 17, vg-audio-manager PR 19),
+  ## otherwise they run unlinked.
   reloadableConfig:
     enabled: true
 ###############
@@ -385,11 +390,15 @@ ingress:
         ipStrategy:
           depth: 0
   realtimeBridge:
-    ## Off by default: exposes the bridge Session API (/v1, bearer-key protected) publicly. The media
-    ## WebSocket normally stays in-cluster (realtimeBridge.env.publicMediaUrl).
-    enabled: false
-    ## Own hostname (SRE must add the DNS record). Empty => shares ingress.api.host, which needs
-    ## no new DNS record or certificate; set routePrefix then, so the bridge gets its own path space.
+    ## On by default (with realtimeBridge.enabled): publishes the bridge Session API (/v1,
+    ## bearer-key protected; 503 while the key Secret is missing) on the api host under routePrefix.
+    ## The media WebSocket normally stays in-cluster (realtimeBridge.env.publicMediaUrl).
+    ## Shared-host mode (no own host) needs ingress.ingressClassName=traefik for the prefix strip;
+    ## with another ingress class that route is skipped rather than failing the render.
+    enabled: true
+    ## Own hostname (SRE must add the DNS record). Empty => shares ingress.api.host (or, when that
+    ## is empty too, api-server's host-less rule), which needs no new DNS record or certificate;
+    ## routePrefix then gives the bridge its own path space.
     host: ""
     ## Public path prefix stripped at the edge (Traefik only): the default publishes
     ## <host>/bridge/v1 (e.g. api-vg-dev.cognigy.ai/bridge/v1) while the bridge still receives /v1.
@@ -749,7 +758,7 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.23.0
+  image: cognigy.azurecr.io/vg-api-migrator:2026.23.0-rc3
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -1377,7 +1386,7 @@ jobs:
   priorityClassName: low
   hookPriorityClassName: medium
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.23.0
+  image: cognigy.azurecr.io/vg-api-server:2026.23.0-rc3
   imagePullPolicy: Always
   replicaCount: 2
   ## Digest used to derive session-revocation Redis keys: sha256 | md5.
@@ -1658,7 +1667,7 @@ featureServer:
   # Must be 2026.19.0 or newer: the pod gets no JAMBONES_MYSQL_* env and no MySQL
   # wait, and older images assert those vars at start (CGY-41894). Add them back
   # through extraEnvVars only to run an older image.
-  image: cognigy.azurecr.io/vg-feature-server:2026.23.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.23.0-rc10
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -2014,7 +2023,7 @@ vadAutotuner:
 featureServerNightly:
   enabled: false
   # Same minimum as featureServer.image: 2026.19.0 or newer (no MySQL env).
-  image: cognigy.azurecr.io/vg-feature-server:2026.23.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.23.0-rc10
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -2380,7 +2389,7 @@ sbcCallRouter:
 ## Background: vg-resources/docs/tdd/06-vg-in-ai/002-runtime-gateway-migration-plan.md.
 resourceResolver:
   enabled: true
-  image: cognigy.azurecr.io/vg-resource-resolver:2026.23.0
+  image: cognigy.azurecr.io/vg-resource-resolver:2026.23.0-rc6
   imagePullPolicy: IfNotPresent
   ## Two replicas for availability, matching sbcInbound/sbcOutbound. Capacity is
   ## not the reason: a single replica served 600 concurrent calls at 21% of a 250m
@@ -2650,6 +2659,14 @@ vgEventsApi:
 ##
 ## The explicit lists above still work and are merged with this one; the same `name` in both
 ## fails the render. docs/008-vg-cluster-signing-key.md.
+##
+## With global.reloadableConfig.enabled (CGY-48237) the link is carried by the
+## cognigy-env-reloadable ConfigMap and read live by resource-resolver, vg-events-api and
+## vg-audio-manager. Changing vgInAi.clusters in the VALUES (a flux overlay) re-renders the checks
+## (https-only JWKS, names, the `vgCluster.name` requirement), the ConfigMap and the NetworkPolicy
+## egress, and rolls none of the three. Patching only the live ConfigMap skips those checks and does
+## NOT touch NetworkPolicy egress: with a NetworkPolicy on, allow the new hosts first. api-server and
+## feature-server /v2 still read the trust list as env and see a change only with a values change.
 vgInAi:
   clusters: []
 ## This VG cluster's identity when it calls a linked Cognigy.AI cluster.
@@ -3085,7 +3102,7 @@ vgAudioManager:
     name: voicegateway-jwt
     key: jwt
   serviceName: vg-audio-manager
-  image: cognigy.azurecr.io/vg-audio-manager:2026.23.0
+  image: cognigy.azurecr.io/vg-audio-manager:2026.23.0-rc2
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -3920,8 +3937,12 @@ hpa:
 ## Service) can land on different pods and the WebSocket is rejected, so keep replicaCount at 1 (with
 ## the Recreate strategy: a rolling surge would briefly run two pods) until sessions move to Redis.
 ## No HPA/KEDA: the replica count is fixed.
+##
+## On by default on every cluster (1 replica, requests 200m CPU / 256Mi). The BRIDGE_API_KEY Secret is
+## optional: without it the pod runs and stays healthy, but the Session API answers 503 until the
+## Secret exists and the pod restarts (needs a bridge image that boots without the key).
 realtimeBridge:
-  enabled: false
+  enabled: true
   image: cognigy.azurecr.io/vg-realtime-bridge:2026.23.0
   imagePullPolicy: IfNotPresent
   ## Keep at 1 (see the warning above)
@@ -3957,6 +3978,10 @@ realtimeBridge:
     liveOpeningInstruction: ""
   ## Pre-existing Secret holding BRIDGE_API_KEY (provisioned out of band, e.g. SealedSecret). It must
   ## equal V2V_BRIDGE_API_KEY on service-endpoint / bridge-api-key on vg-agentic-endpoint.
+  ## Mounted with optional: true, so a missing Secret or key never blocks the pod
+  ## (no CreateContainerConfigError); the bridge then refuses sessions with 503. The key is read at
+  ## boot: after creating the Secret, the next helm upgrade rolls the pod (checksum/secret), or
+  ## restart it by hand.
   secret:
     name: vg-realtime-bridge-secrets
     bridgeApiKeyKey: BRIDGE_API_KEY

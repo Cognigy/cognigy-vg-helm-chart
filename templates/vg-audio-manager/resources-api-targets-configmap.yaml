@@ -1,5 +1,5 @@
 {{- $resourcesApiTargets := include "vg.resourcesApiTargets.effective" . | fromJsonArray }}
-{{- if and .Values.vgAudioManager.enabled $resourcesApiTargets }}
+{{- if and .Values.vgAudioManager.enabled $resourcesApiTargets (not .Values.global.reloadableConfig.enabled) }}
 # Linked Cognigy.AI clusters' vg-resources-api that vg-audio-manager reports
 # AI-native recordings to (CGY-43293), in the order it tries them. Same file shape
 # as vg-runtime-api-targets (resource-resolver), mounted as a file for the same

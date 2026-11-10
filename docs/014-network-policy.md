@@ -263,6 +263,13 @@ no-chart-known-CIDR class as `vg-console`'s `changelogEnrichment`, see below.
   workload stage 2 *does* otherwise cover — see the table above. All of these need either an
   enumerated CIDR list per vendor or an egress gateway/proxy — a bigger architectural call
   than either stage should make unilaterally.
+- **`vg-realtime-bridge`** (on by default since CGY-48116) is not covered by
+  `global.fedramp.networkPolicyEnabled`. Its egress is the vendor realtime APIs and the
+  Cognigy callback host on 443, and the vendors publish no stable IPs, so the
+  chart has no CIDR it could default to. The bridge has its own opt-in policy instead
+  (`realtimeBridge.networkPolicy.enabled`), which fails the render until
+  `realtimeBridge.networkPolicy.egress.allowedCidrs` is set (for example an egress proxy).
+  Same no-chart-known-CIDR class as `vg-pagerduty-agent` above.
 - **`feature-server`'s v2-api policy egress** (PR #1131 review): an earlier version of this
   PR added `Egress` here with allow rules for feature-server's in-cluster destinations
   (sbc-sip, sbc-rtp, api-server, etc.). Review caught that this was the wrong shape entirely:

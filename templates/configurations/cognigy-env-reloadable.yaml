@@ -4,6 +4,12 @@
 {{- $_ := set $config "COGNIGY_DISPLAY_VERSION" (.Values.webapp.displayVersionOverride | default (regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.AppVersion)) }}
 {{- $_ := set $config "K8S_FEATURE_SERVER_CANARY_ENABLED" (.Values.featureServer.canary.enabled | toString) }}
 {{- $_ := set $config "K8S_FEATURE_SERVER_CANARY_PERCENTAGE" (.Values.featureServer.canary.trafficPercentageToNightly | toString) }}
+{{- /* C26 link (CGY-48237): resource-resolver, vg-events-api and vg-audio-manager read it live from here instead of pod env. */}}
+{{- if .Values.global.reloadableConfig.enabled }}
+{{- range $k, $v := (include "vg.c26Link.reloadable" . | fromYaml) }}
+{{- $_ := set $config $k $v }}
+{{- end }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

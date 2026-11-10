@@ -1,5 +1,14 @@
 {{- $vgClusterSigningKeySecret := include "vg.clusterSigningKey.secretName" $ }}
 {{- $runtimeApiTargets := include "vg.runtimeApiTargets.effective" $ | fromJsonArray }}
+{{- /* global.reloadableConfig.enabled (CGY-48237): the link (VG_CLUSTER_NAME, the targets) comes from
+       cognigy-env-reloadable, read live, so it is NOT pod env, a mounted ConfigMap or a checksum
+       annotation here -- any of those would roll the pods when C26 is switched on by a ConfigMap-only
+       change, and an env var of the same name would also beat the file (the library snapshots
+       process.env at init). The signing key mount and its path are then rendered whenever the key
+       Secret exists (the chart generates it on install, linked or not), so off-to-on needs no restart. */}}
+{{- $reloadable := $.Values.global.reloadableConfig.enabled }}
+{{- $legacyLink := and $runtimeApiTargets (not $reloadable) }}
+{{- $mountKey := and $vgClusterSigningKeySecret (or $runtimeApiTargets $reloadable) }}
 ## The three guards below sit OUTSIDE the `resourceResolver.enabled` gate on
 ## purpose. Gated on it, a config with the resolver switched off and
 ## runtimeApiTargets still populated -- a plausible mid-migration state, and the
@@ -12,9 +21,13 @@
 {{- if $runtimeApiTargets }}
 {{- include "vg.runtimeApiTargets.validate" $ }}
 {{- include "vg.clusterName.validate" $ }}
+{{- end }}
+{{- /* Linked: always, as before. Reloadable but unlinked: only when the resolver is enabled, so a
+       cluster with the resolver off and a non-root override does not newly fail to render. */}}
+{{- if and $mountKey (or $runtimeApiTargets .Values.resourceResolver.enabled) }}
 {{- $rrPodSecurityContext := $.Values.resourceResolver.podSecurityContext | default dict }}
 {{- if and $rrPodSecurityContext.runAsUser (not $rrPodSecurityContext.fsGroup) }}
-{{- fail "resourceResolver.podSecurityContext sets a non-root runAsUser but no fsGroup while runtimeApiTargets is set -- the cluster signing key is mounted 0400 and owned by root, so without fsGroup the resolver cannot read it and fails at boot. Keep fsGroup (default 1000) when you override resourceResolver.podSecurityContext." }}
+{{- fail "resourceResolver.podSecurityContext sets a non-root runAsUser but no fsGroup while runtimeApiTargets is set (or global.reloadableConfig.enabled mounts the key regardless) -- the cluster signing key is mounted 0400 and owned by root, so without fsGroup the resolver cannot read it and fails at boot. Keep fsGroup (default 1000) when you override resourceResolver.podSecurityContext." }}
 {{- end }}
 {{- end }}
 {{- if .Values.resourceResolver.enabled }}
@@ -46,19 +59,23 @@ spec:
         app: vg-resource-resolver
       annotations:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
-        {{- if $runtimeApiTargets }}
+        {{- if $legacyLink }}
         ## The target list is read once at process start, so an edit only takes
         ## effect on a roll. Rendered-template hash rather than the `lookup`
         ## idiom used for Secrets: a ConfigMap this chart renders itself can be
         ## hashed offline, with no live-cluster read.
         checksum/vg-runtime-api-targets: {{ include (print $.Template.BasePath "/resource-resolver/runtime-api-targets-configmap.yaml") $ | sha256sum }}
         {{- end }}
-        {{- if and $runtimeApiTargets $vgClusterSigningKeySecret }}
+        {{- if $mountKey }}
         ## Rolls the pod when the signing keypair is rotated -- the private key is
         ## likewise read once at boot.
         ##
-        ## Gated on runtimeApiTargets, NOT merely on the Secret existing, because
-        ## that is exactly when the volume below mounts it. The keypair is
+        ## Gated on $mountKey, NOT merely on the Secret existing, because that is
+        ## exactly when the volume below mounts it (linked, or global.reloadableConfig.enabled,
+        ## which mounts the key whether or not a link exists, so off-to-on needs no restart).
+        ## A link change alone does not move this value, so it still rolls nothing; a key
+        ## rotation does, as docs/008 expects. On a fresh install the Secret appears after the
+        ## first render, so the first upgrade rolls the pod once. The keypair is
         ## generated on every cluster by default, so annotating on the Secret alone
         ## would put a rotation trigger on a pod that reads no key -- and would roll
         ## vg-resource-resolver fleet-wide on the upgrade that first creates the
@@ -203,7 +220,7 @@ spec:
             - name: VG_SPEECH_BILLING_MYSQL_ENABLED
               value: "false"
             {{- end }}
-            {{- if $runtimeApiTargets }}
+            {{- if $legacyLink }}
             ## Cross-cluster identity. VG_CLUSTER_NAME is this cluster's `iss`;
             ## the AI side's trust list is keyed by it, so it must match the key
             ## this cluster is filed under there. See vg-resources
@@ -214,32 +231,55 @@ spec:
               value: {{ include "vg.clusterName" $ | quote }}
             - name: RUNTIME_API_TARGETS_PATH
               value: "/config/vg-runtime-api/targets.yaml"
+            {{- end }}
+            {{- if $mountKey }}
             - name: VG_CLUSTER_SIGNING_KEY_PATH
               value: "/var/run/secrets/vg-cluster/{{ $.Values.vgCluster.signingKey.privateKeyFile }}"
             {{- end }}
             {{- if .Values.resourceResolver.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.resourceResolver.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
-          {{- if $runtimeApiTargets }}
+          {{- if or $legacyLink $mountKey $reloadable }}
           volumeMounts:
+          {{- end }}
+          {{- if $legacyLink }}
             - name: vg-runtime-api-targets
               mountPath: /config/vg-runtime-api
               readOnly: true
+          {{- end }}
+          {{- if $mountKey }}
             - name: vg-cluster-signing-key
               mountPath: /var/run/secrets/vg-cluster
+              readOnly: true
+          {{- end }}
+          {{- if $reloadable }}
+            - name: cognigy-env-reloadable
+              mountPath: /config/env
               readOnly: true
           {{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env
-      {{- if $runtimeApiTargets }}
+      {{- if or $legacyLink $mountKey $reloadable }}
       volumes:
+      {{- end }}
+      {{- if $legacyLink }}
         - name: vg-runtime-api-targets
           configMap:
             name: vg-runtime-api-targets
             items:
               - key: targets.yaml
                 path: targets.yaml
+      {{- end }}
+      {{- if $reloadable }}
+        - name: cognigy-env-reloadable
+          configMap:
+            name: cognigy-env-reloadable
+            items:
+              - key: cognigy.yaml
+                path: cognigy.yaml
+      {{- end }}
+      {{- if $mountKey }}
         - name: vg-cluster-signing-key
           secret:
             secretName: {{ $vgClusterSigningKeySecret | quote }}
