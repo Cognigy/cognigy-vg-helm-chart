@@ -1,0 +1,15 @@
+{{- if and (.Values.ingress.enabled) (.Values.realtimeBridge.enabled) (.Values.ingress.realtimeBridge.enabled) (include "vg.fedramp.ingressIpAllowListEnabled" (dict "service" "realtimeBridge" "override" .Values.ingress.realtimeBridge.ipWhiteListMiddleware.enabled "sourceRange" .Values.ingress.realtimeBridge.ipWhiteListMiddleware.ipWhiteList.sourceRange "extraAnnotations" .Values.ingress.realtimeBridge.extraAnnotations "root" $)) }}
+{{- with .Values.ingress.realtimeBridge.ipWhiteListMiddleware }}
+---
+# By default (ipStrategy.depth: 0, or unset) this checks the connection's own remote address, not
+# X-Forwarded-For. See docs/009-fedramp-profile.md for when raising depth to read X-Forwarded-For
+# is (and isn't) safe.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: ipwhitelistrealtimebridge
+  namespace: {{ $.Release.Namespace | quote }}
+spec:
+  ipAllowList: {{- toYaml .ipWhiteList | nindent 4 }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,69 @@
+{{- if and .Values.realtimeBridge.enabled .Values.realtimeBridge.networkPolicy.enabled }}
+{{- if not .Values.realtimeBridge.networkPolicy.egress.allowedCidrs }}
+{{- fail "realtimeBridge.networkPolicy.egress.allowedCidrs is empty. Set the CIDR(s) the bridge may reach on 443 (vendor realtime APIs + Cognigy callback host, e.g. an egress proxy), or disable realtimeBridge.networkPolicy. An empty list would otherwise allow all egress." }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vg-realtime-bridge
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-realtime-bridge
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: vg-realtime-bridge
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Pods of the media namespace (mod_audio_fork) open the media WS / Session API in, plus the
+    # ingress controller when the Ingress is enabled. A bare namespaceSelector admits every pod in
+    # that namespace. With no `from`, the rule below would admit any source, which is what lets
+    # kubelet probes (node-sourced) through; it is limited to the single app port.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              {{ .Values.realtimeBridge.networkPolicy.ingress.mediaPodsNamespaceLabel.key }}: {{ .Values.realtimeBridge.networkPolicy.ingress.mediaPodsNamespaceLabel.value | default $.Release.Namespace | quote }}
+        {{- with .Values.realtimeBridge.networkPolicy.ingress.ingressControllerNamespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . | quote }}
+        {{- end }}
+      ports:
+        - port: {{ .Values.realtimeBridge.port }}
+          protocol: TCP
+    {{- if .Values.realtimeBridge.networkPolicy.ingress.allowProbes }}
+    # kubelet probes: node-sourced traffic is not matched by a namespaceSelector on every CNI, and a
+    # blocked probe would keep the only pod unready. NB: a rule without `from` admits any source on
+    # this port, so it also admits any pod; turn allowProbes off if the CNI lets probes through.
+    - ports:
+        - port: {{ .Values.realtimeBridge.port }}
+          protocol: TCP
+    {{- end }}
+    {{- with .Values.realtimeBridge.networkPolicy.ingress.extraIngress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.realtimeBridge.networkPolicy.egress.dnsNamespace | quote }}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        {{- range .Values.realtimeBridge.networkPolicy.egress.allowedCidrs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
+      ports:
+        - port: {{ .Values.realtimeBridge.networkPolicy.egress.httpsPort }}
+          protocol: TCP
+    {{- with .Values.realtimeBridge.networkPolicy.egress.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

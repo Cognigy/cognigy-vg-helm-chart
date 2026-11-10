@@ -1,0 +1,15 @@
+{{- if and (.Values.ingress.enabled) (.Values.ingress.homer.enabled) (.Values.homer.enabled) (include "vg.fedramp.ingressIpAllowListEnabled" (dict "service" "homer" "override" .Values.ingress.homer.ipWhiteListMiddleware.enabled "sourceRange" .Values.ingress.homer.ipWhiteListMiddleware.ipWhiteList.sourceRange "extraAnnotations" .Values.ingress.homer.extraAnnotations "root" $)) }}
+{{- with .Values.ingress.homer.ipWhiteListMiddleware }}
+---
+# By default (ipStrategy.depth: 0, or unset) this checks the connection's own remote address, not
+# X-Forwarded-For. See docs/009-fedramp-profile.md for when raising depth to read X-Forwarded-For
+# is (and isn't) safe.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: ipwhitelisthomer
+  namespace: {{ $.Release.Namespace | quote }}
+spec:
+  ipAllowList: {{- toYaml .ipWhiteList | nindent 4 }}
+{{- end }}
+{{- end }}

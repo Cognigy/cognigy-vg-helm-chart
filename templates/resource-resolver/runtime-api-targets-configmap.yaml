@@ -1,4 +1,5 @@
-{{- if and .Values.resourceResolver.enabled .Values.resourceResolver.runtimeApiTargets }}
+{{- $runtimeApiTargets := include "vg.runtimeApiTargets.effective" . | fromJsonArray }}
+{{- if and .Values.resourceResolver.enabled $runtimeApiTargets }}
 # Linked Cognigy.AI clusters vg-resource-resolver may resolve runtime resources
 # against, mounted as a file rather than passed as an env var.
 #
@@ -19,5 +20,5 @@ metadata:
     owner-team: echo
 data:
   targets.yaml: |
-    {{- toYaml .Values.resourceResolver.runtimeApiTargets | nindent 4 }}
+    {{- toYaml $runtimeApiTargets | nindent 4 }}
 {{- end }}

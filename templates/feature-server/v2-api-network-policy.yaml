@@ -1,0 +1,68 @@
+{{- /*
+Opt-in (forced on under the FedRAMP profile — CSA-110265 / VHC-SC7-001, SC-7; CSA-110267 /
+VHC-AC4-001, AC-4; see docs/014-network-policy.md). Selecting the feature-server pods with
+a NetworkPolicy makes every ingress port default-deny for them, so this policy re-opens ALL
+other ports to everyone (explicit ranges around the HTTP port, TCP and UDP) and narrows only
+the HTTP port to the ingress controller's namespace and this namespace — the §7.2 "Exposure"
+row. SIP, RTP, drachtio/freeswitch control and metrics are unaffected. SCTP is not used by
+these pods and is therefore closed.
+
+Ingress-only, same as before this PR — egress isolation is deliberately NOT added here (PR
+#1131 review; see "Deferred to a later stage" in docs/014-network-policy.md). mainline
+feature-server's main job is talking to destinations this chart cannot reduce to a CIDR or
+podSelector: STT/TTS speech vendors (Azure, Google, Deepgram, ElevenLabs, ... see the
+*_SPEECH_* env this workload sets), the application's own call_hook/status_hook webhook URLs
+(arbitrary Cognigy.AI or customer HTTPS endpoints), and AGENTIC_ENDPOINT_BASE_URL (Cognigy.AI,
+from agenticEndpoint.baseUrl/cognigyLogin.baseUrl). A default-deny egress policy here, forced
+on under the FedRAMP profile (global.fedramp.networkPolicyEnabled defaults true, overriding
+this policy's own enabled: false), would break real call flow in any FedRAMP environment with
+featureServer.v2Api.enabled on a CNI that enforces egress policy — with no fix expressible as
+an ipBlock, since these are arbitrary hostnames, not a known CIDR. An earlier version of this
+policy added Egress with allow rules only for feature-server's in-cluster destinations
+(sbc-sip, sbc-rtp, api-server, etc.); that masked the problem rather than solving it; a
+podSelector rule also likely does not even cover sbc-sip/sbc-rtp in practice, since they run
+hostNetwork: true and most CNIs (Calico, Cilium) do not create matchable workload endpoints
+for host-network pods. Default-deny egress for feature-server needs either an
+enumerated-CIDR-per-vendor list or an egress gateway/proxy — the same kind of architectural
+call already deferred for vg-pagerduty-agent/vg-console's own external SaaS/LLM egress.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.featureServer.v2Api.networkPolicy.enabled "root" $) }}
+{{- if and $npEnabled (include "vg.featureServer.v2Api.active" .) }}
+{{- $http := .Values.featureServer.ports.tcp | int }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: feature-server-v2-api
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: feature-server
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        {{- if gt $http 1 }}
+        - protocol: TCP
+          port: 1
+          endPort: {{ sub $http 1 }}
+        {{- end }}
+        - protocol: TCP
+          port: {{ add $http 1 }}
+          endPort: 65535
+        - protocol: UDP
+          port: 1
+          endPort: 65535
+    - from:
+        - podSelector: {}
+        {{- with .Values.featureServer.v2Api.networkPolicy.ingressControllerNamespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . | quote }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ $http }}
+{{- end }}

@@ -87,6 +87,34 @@ data:
         endpoint: {{ .Values.otelCollector.jaegerEndpoint | default "jaeger:4317" }}
         tls:
           insecure: true
+      {{- $extraNames := list }}
+      {{- range $i, $e := .Values.otelCollector.extraOtlpExporters }}
+      {{- if not $.Values.otelCollector.redactionProcessor.enabled }}
+      {{- fail "otelCollector.extraOtlpExporters requires otelCollector.redactionProcessor.enabled=true, so traces are redacted before they leave the namespace" }}
+      {{- end }}
+      {{- $name := toString ($e.name | default "") }}
+      {{- if not (regexMatch "^[A-Za-z0-9_-]+$" $name) }}
+      {{- fail (printf "otelCollector.extraOtlpExporters[%d].name %q must match ^[A-Za-z0-9_-]+$" $i $name) }}
+      {{- end }}
+      {{- if or (eq $name "jaeger") (has $name $extraNames) }}
+      {{- fail (printf "otelCollector.extraOtlpExporters[%d].name %q is reserved or used twice" $i $name) }}
+      {{- end }}
+      {{- if not $e.endpoint }}
+      {{- fail (printf "otelCollector.extraOtlpExporters[%d].endpoint is required" $i) }}
+      {{- end }}
+      {{- $extraNames = append $extraNames $name }}
+      {{- $cfg := deepCopy ($e.config | default dict) }}
+      {{- $tls := deepCopy ($cfg.tls | default dict) }}
+      {{- if hasKey $e "insecure" }}
+      {{- $_ := set $tls "insecure" $e.insecure }}
+      {{- else if not (hasKey $tls "insecure") }}
+      {{- $_ := set $tls "insecure" false }}
+      {{- end }}
+      {{- $_ := set $cfg "tls" $tls }}
+      {{- $_ := set $cfg "endpoint" $e.endpoint }}
+      otlp/{{ $name }}:
+        {{- toYaml $cfg | nindent 8 }}
+      {{- end }}
 
     service:
       telemetry:
@@ -108,5 +136,9 @@ data:
             {{- end }}
             {{- $processors = append $processors "batch" }}
             {{ $processors | toJson }}
-          exporters: [otlp/jaeger]
+          {{- $exporters := list "otlp/jaeger" }}
+          {{- range $extraNames }}
+          {{- $exporters = append $exporters (printf "otlp/%s" .) }}
+          {{- end }}
+          exporters: [{{ join ", " $exporters }}]
 {{- end }}

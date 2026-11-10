@@ -1,0 +1,95 @@
+{{- /*
+NetworkPolicy for the update-api-ban-list CronJob (APBN-SC7-001 / CSA-100704, NEW-VABAN-AC4-001 / stage 2; SC-7, AC-4).
+
+The job takes no inbound connections and needs exactly three outbound flows. Without this policy
+it can open a connection to any address, including the cloud instance-metadata endpoint. Switched
+by vg.fedramp.networkPolicyEnabled (templates/_network-policy.tpl): on under the FedRAMP profile,
+apiBan.networkPolicy.enabled (default false) otherwise.
+
+Ingress: none (every inbound connection is denied; the job serves nothing and has no probes).
+Egress
+  - DNS: vg.networkPolicy.dnsEgress (CoreDNS in kube-system), or dnsNamespaceSelector when set.
+  - Redis, matched by pod labels in the release namespace:
+      * redisHa.enabled: the redis-ha pods (Bitnami labels app.kubernetes.io/name=redisHa, or
+        redisHa.nameOverride, and app.kubernetes.io/instance=<release>) on the Redis port and the
+        Sentinel port. vg-api-ban asks Sentinel (REDIS_SENTINEL_HOST/PORT from cognigy-env) for
+        the master and then connects to that pod on the Redis port.
+      * otherwise: the chart's single `redis` StatefulSet (app: redis) on redis.port.
+    A Redis outside the chart (redis.host pointing elsewhere) needs an egressTo rule.
+  - The APIBAN feed (apiBan.endpoint) on TCP 443, to any address outside private and link-local
+    space. A NetworkPolicy matches addresses, not DNS names, and apiban.org publishes no stable
+    range, so this is the narrowest rule a plain NetworkPolicy can express. 169.254.0.0/16 holds
+    the cloud metadata endpoint (169.254.169.254); 100.64.0.0/10 is shared address space that
+    EKS custom networking uses for pods. An HTTPS error-tracking (Sentry) DSN on a
+    public host is covered by the same rule; the chart wires no tracing into this job.
+egressTo is appended verbatim for what an environment's network needs (an external Redis, an
+egress proxy, a node-local DNS cache, Istio ambient's HBONE port 15008).
+*/}}
+{{- if and .Values.apiBan.enabled (include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.apiBan.networkPolicy.enabled "root" $)) }}
+{{- $np := .Values.apiBan.networkPolicy }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: update-api-ban-list
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: update-api-ban-list
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: update-api-ban-list
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    {{- with $np.dnsNamespaceSelector }}
+    - to:
+        - namespaceSelector:
+{{ toYaml . | indent 12 }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- else }}
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+    {{- end }}
+    {{- if .Values.redisHa.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .Values.redisHa.nameOverride | default "redisHa" | quote }}
+              app.kubernetes.io/instance: {{ $.Release.Name | quote }}
+      ports:
+        - protocol: TCP
+          port: {{ dig "replica" "containerPorts" "redis" 6379 .Values.redisHa | int }}
+        - protocol: TCP
+          port: {{ dig "sentinel" "containerPorts" "sentinel" 26379 .Values.redisHa | int }}
+    {{- else }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: {{ .Values.redis.port | int }}
+    {{- end }}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+      ports:
+        - protocol: TCP
+          port: 443
+    {{- with $np.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

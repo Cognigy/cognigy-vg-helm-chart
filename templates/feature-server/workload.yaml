@@ -14,7 +14,6 @@ metadata:
     owner-team: echo
   annotations:
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-feature-server.git"
-    "cognigy.com/source-code.db-create-wait": "empty"
     "cognigy.com/source-code.drachtio": "git@github.com:Cognigy/vg-drachtio.git"
     "cognigy.com/source-code.freeswitch": "git@github.com:Cognigy/vg-freeswitch-mrf.git"
     "cognigy.com/source-code.feature-server": "git@github.com:Cognigy/vg-feature-server.git"
@@ -75,25 +74,11 @@ spec:
             matchLabels:
               app: feature-server
       restartPolicy: Always
-      {{- include "vg.freeswitch.regionDnsConfig" $ | nindent 6 }}
+      {{- with (include "vg.featureServer.podDns" (dict "ctx" $ "dnsConfig" .Values.featureServer.dnsConfig) | trim) }}{{- . | nindent 6 }}{{- end }}
+      {{- with (include "vg.testHarness.caInitContainer" .) }}
       initContainers:
-        {{- with (include "vg.testHarness.caInitContainer" .) }}{{- . | nindent 8 }}{{- end }}
-        - image: kanisterio/mysql-sidecar:0.40.0
-          name: db-create-wait
-          env:
-            - name: PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: voicegateway-mysql-password
-                  key: mysql-password
-          command:
-            - sh 
-            - -c 
-            - |
-              until mysql -u {{ .Values.mysql.auth.username }} -D {{ .Values.mysql.database.name }} -h {{ .Values.mysql.host }} -p${PASSWORD} --protocol=tcp -e "select count(*) from accounts";
-              do 
-                sleep 5
-              done
+        {{- . | nindent 8 }}
+      {{- end }}
       containers:
         - name: drachtio
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.drachtio.image) }}
@@ -133,6 +118,16 @@ spec:
             {{- if .Values.drachtio.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.drachtio.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
+          {{- if .Values.drachtio.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: {{ .Values.drachtio.metricsPort }}
+            periodSeconds: {{ .Values.drachtio.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.drachtio.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.drachtio.livenessProbe.failureThreshold }}
+            terminationGracePeriodSeconds: {{ .Values.drachtio.livenessProbe.terminationGracePeriodSeconds }}
+          {{- end }}
           lifecycle:
             preStop:
               # 200 = feature-server drained, 000 = feature-server gone (fail open),
@@ -201,6 +196,7 @@ spec:
             {{- range .Values.freeswitch.args }}
             - {{ . }}
             {{- end }}
+            {{- with (include "vg.freeswitch.codecNegotiationArgs" $) }}{{- . | nindent 12 }}{{- end }}
             {{- with (include "vg.freeswitch.logLevelArgs" $) }}{{- . | nindent 12 }}{{- end }}
           env: 
             - name: MOD_AUDIO_FORK_SUBPROTOCOL_NAME
@@ -252,6 +248,7 @@ spec:
               name: temp-audio-volume
             - mountPath: /coredumps
               name: fs-core-dumps
+            {{- with (include "vg.freeswitch.certsVolumeMounts" $) }}{{- . | nindent 12 }}{{- end }}
             {{- /* libwebsockets reads the hashed dir at /etc/ssl/certs and nowhere else; /ca-overlay keeps the gRPC roots path identical in both containers. */}}
             {{- with (include "vg.testHarness.caVolumeMount" (dict "ctx" $ "mountPath" "/etc/ssl/certs")) }}{{- . | nindent 12 }}{{- end }}
             {{- with (include "vg.testHarness.caVolumeMount" (dict "ctx" $ "mountPath" "/ca-overlay")) }}{{- . | nindent 12 }}{{- end }}
@@ -284,6 +281,9 @@ spec:
             httpGet:
               path: /health/startup
               port: {{ .Values.health.port }}
+            periodSeconds: {{ .Values.featureServer.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.featureServer.startupProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.featureServer.startupProbe.failureThreshold }}
           readinessProbe:
             httpGet:
               path: /health
@@ -333,9 +333,8 @@ spec:
               Hand-writing it again is how it drifts from the adapter's ingress,
               and a mismatch misroutes live calls silently.
 
-              The env var is omitted when agenticEndpoint.enabled is false, or
-              when BOTH agenticEndpoint.baseUrl and cognigyLogin.baseUrl are
-              empty. cognigyLogin.baseUrl alone is set
+              The env var is omitted only when BOTH agenticEndpoint.baseUrl and
+              cognigyLogin.baseUrl are empty. cognigyLogin.baseUrl alone is set
               on most clusters, most of which have no adapter deployed at all —
               so its presence still emits this var, deployed adapter or not;
               see the vg.agenticEndpoint.baseUrl helper.
@@ -371,24 +370,10 @@ spec:
                   key: password
             - name: JAMBONES_FREESWITCH
               value: {{ .Values.featureServer.freeswitchConnection | quote }}
-            - name: ENABLE_METRICS
-              value: {{ if .Values.stats.enabled }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: K8S_POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-            - name: STATS_TAGS
-              value: "pod:$(K8S_POD_NAME)"
-            - name: STATS_PROTOCOL
-              value: {{ .Values.stats.protocol }}
-            - name: STATS_TELEGRAF
-              value: {{ if .Values.stats.telegraf }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
-            - name: STATS_HOST
-              value: {{ .Values.telegraf.serviceName }}
-            - name: STATS_PORT
-              value: {{ .Values.telegraf.port  | quote }}
-            - name: STATS_SAMPLE_RATE
-              value:  {{ .Values.stats.sampleRate | quote }}
             - name: DRACHTIO_HOST
               value: {{ .Values.global.localhost }}
             - name: DRACHTIO_PORT 
@@ -402,23 +387,14 @@ spec:
               value: {{ if .Values.featureServer.logLevel }}{{ .Values.featureServer.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
             - name: JAMBONES_LOGLEVEL
               value: {{ if .Values.featureServer.logLevel }}{{ .Values.featureServer.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
-            - name: JAMBONES_MYSQL_HOST
-              value: {{ .Values.mysql.host }}
-            - name: JAMBONES_MYSQL_DATABASE
-              value: {{ .Values.mysql.database.name | quote }}
-            - name: JAMBONES_MYSQL_USER
-              value: {{ .Values.mysql.auth.username | quote }}
-            - name: JAMBONES_MYSQL_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: voicegateway-mysql-password
-                  key: mysql-password
             - name: JAMBONES_REDIS_HOST
               value: {{ .Values.redis.host }}
             - name: JAMBONES_REDIS_PORT
               value: {{ .Values.redis.port | quote }}
+            {{- with include "vg.redisAuth.clientEnv" $ }}{{ . | nindent 12 }}{{ end }}
             - name: JAMBONES_TIME_SERIES_HOST
               value: {{ .Values.influxdb.host }}
+            {{- with include "vg.influxdb.aiRetention.env" $ }}{{ . | nindent 12 }}{{ end }}
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -489,6 +465,18 @@ spec:
               value: {{ .Values.featureServer.disableDialPaiHeader | quote }}
             - name: PRE_CACHE_IGNORE_LIST
               value: {{ .Values.featureServer.preCacheIgnoreList | quote }}
+            {{- /* CGY-43437: HTTP webhook connect timeout and retries. Left out when empty, so
+                 feature-server's own defaults apply (3000 ms, 2 retries). */}}
+            {{- $httpConnectTimeoutMs := .Values.featureServer.httpConnectTimeoutMs }}
+            {{- if and (not (kindIs "invalid" $httpConnectTimeoutMs)) (ne (toString $httpConnectTimeoutMs) "") }}
+            - name: JAMBONES_HTTP_CONNECT_TIMEOUT_MS
+              value: {{ $httpConnectTimeoutMs | quote }}
+            {{- end }}
+            {{- $httpConnectRetries := .Values.featureServer.httpConnectRetries }}
+            {{- if and (not (kindIs "invalid" $httpConnectRetries)) (ne (toString $httpConnectRetries) "") }}
+            - name: JAMBONES_HTTP_CONNECT_RETRIES
+              value: {{ $httpConnectRetries | quote }}
+            {{- end }}
             - name: MEDIA_PROCESSOR_ENABLED
               value: {{ and .Values.mediaProcessor.enabled .Values.featureServer.mediaProcessor.enabled | quote }}
             {{- if and (.Values.mediaProcessor.enabled) (.Values.featureServer.mediaProcessor.enabled) }}
@@ -535,6 +523,11 @@ spec:
             - name: RESOURCE_RESOLVER_URL
               value: "http://vg-resource-resolver:{{ .Values.resourceResolver.port | default 4000 }}"
             {{- end }}
+            {{- with (include "vg.featureServer.v2Api.env" .) }}{{- . | nindent 12 }}{{- end }}
+            {{- if include "vg.fedramp.tlsKeylogLocked" (dict "extraEnvVars" .Values.featureServer.extraEnvVars "root" $) }}
+            - name: VG_TLS_KEYLOG_FEDRAMP_LOCKED
+              value: "true"
+            {{- end }}
             {{- if .Values.featureServer.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServer.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
@@ -548,6 +541,7 @@ spec:
         - name: fs-core-dumps
           emptyDir:
             sizeLimit: "2Gi"
+        {{- with (include "vg.freeswitch.certsVolume" $) }}{{- . | nindent 8 }}{{- end }}
         - name: cognigy-env-reloadable
           configMap:
             name: cognigy-env-reloadable

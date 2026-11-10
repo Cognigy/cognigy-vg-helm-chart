@@ -1,4 +1,21 @@
+{{- $vgClusterSigningKeySecret := include "vg.clusterSigningKey.secretName" $ }}
+{{- $resourcesApiTargets := include "vg.resourcesApiTargets.effective" $ | fromJsonArray }}
+{{- /* Recording reports to vg-resources-api (CGY-43293), wired like
+       resource-resolver/deployment.yaml: same signing key, same identity, same
+       file shape. The guards sit OUTSIDE the `enabled` gate for the resolver's
+       reason: a misconfiguration should fail the reconcile whether or not the
+       service is on. */}}
+{{- if and $resourcesApiTargets (not $vgClusterSigningKeySecret) }}
+{{- fail "vgAudioManager.resourcesApiTargets is set but this cluster has no signing key -- vg-audio-manager signs a per-cluster JWT to report recordings to vg-resources-api, so with no key every configured AI cluster would reject it. Either leave vgCluster.signingKey.autoGenerate at its default of true so the chart provisions one, or point vgCluster.signingKey.existingSecret at a Secret you manage (see docs/008-vg-cluster-signing-key.md). Or leave resourcesApiTargets empty." }}
+{{- end }}
+{{- if $resourcesApiTargets }}
+{{- include "vg.resourcesApiTargets.validate" $ }}
+{{- include "vg.clusterName.validateFor" (dict "context" $ "setting" "vgAudioManager.resourcesApiTargets") }}
+{{- end }}
 {{- if .Values.vgAudioManager.enabled }}
+{{- $encryptionSecretName := (.Values.vgAudioManager.encryptionSecret).name | default "voicegateway-jwt" }}
+{{- $encryptionSecretKey := (.Values.vgAudioManager.encryptionSecret).key | default "jwt" }}
+{{- $encryptionSecret := lookup "v1" "Secret" $.Release.Namespace $encryptionSecretName }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -25,6 +42,18 @@ spec:
         app: vg-audio-manager
       annotations:
         checksum/mysql-password: {{ include (print $.Template.BasePath "/common-secrets/voicegateway-mysql-password.yaml") . | sha256sum }}
+        ## Rolls the pod when the decryption key changes: ENCRYPTION_SECRET is an env var, read once at
+        ## container start, so a rotated key would otherwise leave uploads failing until an unrelated
+        ## rollout. Hashes only the selected key (the secret may hold others), and the secret's NAME and
+        ## key while it does not exist yet, so a fresh cluster and `helm template` still render.
+        checksum/encryption-secret: {{ if $encryptionSecret }}{{ index ($encryptionSecret.data | default dict) $encryptionSecretKey | default "" | sha256sum }}{{ else }}{{ printf "%s/%s" $encryptionSecretName $encryptionSecretKey | sha256sum }}{{ end }}
+        {{- if $resourcesApiTargets }}
+        ## The target list and the private key are both read once at boot, so
+        ## either changing must roll the pod. Gated on the targets, not on the
+        ## Secret existing: only then is the key mounted (see the resolver's note).
+        checksum/vg-resources-api-targets: {{ include (print $.Template.BasePath "/vg-audio-manager/resources-api-targets-configmap.yaml") $ | sha256sum }}
+        checksum/vg-cluster-signing-key: {{ if not (lookup "v1" "Secret" $.Release.Namespace $vgClusterSigningKeySecret) }}{{ $vgClusterSigningKeySecret | sha256sum }}{{ else }}{{ toYaml (lookup "v1" "Secret" $.Release.Namespace $vgClusterSigningKeySecret).data | sha256sum }}{{ end }}
+        {{- end }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.vgAudioManager.terminationGracePeriodSeconds }}
@@ -43,9 +72,21 @@ spec:
         {{- end }}
       {{- end }}
       {{- if .Values.vgAudioManager.priorityClassName }}
-      priorityClassName: {{ .Values.vgAudioManager.priorityClassName }}
+      priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.vgAudioManager.priorityClassName "context" $) }}
       {{- end }}
-      {{- if .Values.vgAudioManager.podSecurityContext }}
+      {{- if $resourcesApiTargets }}
+      ## The signing key is mounted 0400 and vg-audio-manager runs as uid 1000
+      ## (containerSecurityContext.runAsUser), so it can read the file only
+      ## through the group kubelet gives Secret volumes: fsGroup. Added only when
+      ## podSecurityContext does not already set fsGroup (docs/008).
+      {{- /* podSecurityContext may be a templated string (vg.common.tplvalues.render accepts both): render
+             and parse it into a map before adding to it. */}}
+      {{- $podSecurityContext := fromYaml (include "vg.common.tplvalues.render" (dict "value" (.Values.vgAudioManager.podSecurityContext | default dict) "context" $)) | default dict }}
+      {{- if not (hasKey $podSecurityContext "fsGroup") }}
+      {{- $_ := set $podSecurityContext "fsGroup" 1000 }}
+      {{- end }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" $podSecurityContext "context" $) | nindent 8 }}
+      {{- else if .Values.vgAudioManager.podSecurityContext }}
       securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgAudioManager.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
       {{- if or (.Values.vgAudioManager.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations)) }}
@@ -143,8 +184,8 @@ spec:
             - name: ENCRYPTION_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: voicegateway-jwt
-                  key: jwt
+                  name: {{ $encryptionSecretName }}
+                  key: {{ $encryptionSecretKey }}
             - name: WS_AUTH_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -163,7 +204,44 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            {{- if $resourcesApiTargets }}
+            ## Recording reports (CGY-43293). VG_CLUSTER_NAME is this cluster's
+            ## `iss`, checked by vg.clusterName.validateFor at the top of this file.
+            - name: VG_CLUSTER_NAME
+              value: {{ include "vg.clusterName" $ | quote }}
+            - name: RESOURCES_API_TARGETS_PATH
+              value: "/config/vg-resources-api/targets.yaml"
+            - name: VG_CLUSTER_SIGNING_KEY_PATH
+              value: "/var/run/secrets/vg-cluster/{{ $.Values.vgCluster.signingKey.privateKeyFile }}"
+            {{- end }}
             {{- if .Values.vgAudioManager.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgAudioManager.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
+          {{- if $resourcesApiTargets }}
+          volumeMounts:
+            - name: vg-resources-api-targets
+              mountPath: /config/vg-resources-api
+              readOnly: true
+            - name: vg-cluster-signing-key
+              mountPath: /var/run/secrets/vg-cluster
+              readOnly: true
+          {{- end }}
+      {{- if $resourcesApiTargets }}
+      volumes:
+        - name: vg-resources-api-targets
+          configMap:
+            name: vg-audio-manager-resources-api-targets
+            items:
+              - key: targets.yaml
+                path: targets.yaml
+        - name: vg-cluster-signing-key
+          secret:
+            secretName: {{ $vgClusterSigningKeySecret | quote }}
+            ## Private half only, 0400 -- as for vg-resource-resolver. Readable
+            ## by the non-root process through the fsGroup set above.
+            items:
+              - key: {{ $.Values.vgCluster.signingKey.privateKeyFile | quote }}
+                path: {{ $.Values.vgCluster.signingKey.privateKeyFile | quote }}
+            defaultMode: 256
+      {{- end }}
 {{- end }}

@@ -81,28 +81,24 @@ environment is only something to drift out of sync with the adapter's
 ingress. Either way the scheme is normalized to ws(s):// and pathPrefix is
 appended — callers never write the wss:// form themselves.
 
-Returns "" when agenticEndpoint.enabled is false, or when BOTH
-agenticEndpoint.baseUrl and cognigyLogin.baseUrl are empty; callers omit the
-env var then, instead of failing the whole render. cognigyLogin.baseUrl alone
-is set on every production cluster, so it can never be treated as "the adapter
-is deployed": set agenticEndpoint.enabled=false on clusters whose paired
-Cognigy environment does not run vg-agentic-endpoint, otherwise feature-server
-reroutes agent calls to a path that does not exist there. Only an explicit
-false disables it; an absent key keeps the default (true).
+Returns "" only when BOTH agenticEndpoint.baseUrl and cognigyLogin.baseUrl are
+empty, so callers omit the env var only then, instead of failing the whole
+render. cognigyLogin.baseUrl alone is set on every production cluster, so this
+helper returns a non-empty value there regardless of whether an adapter is
+actually deployed — "cognigyLogin.baseUrl is set" can never be treated as "the
+feature is on".
 
 Usage:
 {{ include "vg.agenticEndpoint.baseUrl" . }}
 */}}
 {{- define "vg.agenticEndpoint.baseUrl" -}}
 {{- $ae := .Values.agenticEndpoint -}}
-{{- if ne (toString $ae.enabled) "false" -}}
 {{- $host := $ae.baseUrl -}}
 {{- if not $host -}}
 {{- $host = .Values.cognigyLogin.baseUrl -}}
 {{- end -}}
 {{- if $host -}}
 {{- printf "%s%s" (trimSuffix "/" (replace "https://" "wss://" (replace "http://" "ws://" $host))) $ae.pathPrefix -}}
-{{- end -}}
 {{- end -}}
 {{- end -}}
 
@@ -211,24 +207,41 @@ imagePullSecrets:
 {{- end }}
 
 {{/*
-Render the FreeSWITCH pod's opt-in region-DNS dnsPolicy/dnsConfig block used
-for the Deepgram region-routing regression test, or fail loudly if
-freeswitch.regionDnsEnabled is set without the matching vgTestHarness region
-DNS resolver. Shared by the feature-server workload, workload-nightly, and
-stateful-set-legacy templates so the three stay in lockstep.
-Usage: {{- include "vg.freeswitch.regionDnsConfig" $ | nindent 6 }}
+Render the feature-server pod's dnsPolicy/dnsConfig. Shared by the feature-server
+workload and workload-nightly templates so the two stay in lockstep.
+
+- dnsConfig is featureServer.dnsConfig (or featureServerNightly.dnsConfig): a
+  PodDNSConfig merged by the kubelet into the ClusterFirst resolv.conf. By default
+  it sets the resolver timeout and attempts (CGY-45509). Rendered only when it has
+  a non-empty nameservers, searches or options list, so null (or options: [])
+  leaves the plain ClusterFirst resolv.conf. An empty map does not: Helm merges it
+  into the chart default.
+- The opt-in region-DNS block for the Deepgram region-routing regression test
+  (freeswitch.regionDnsEnabled, or vgTestHarness.speechInterception=vendor) switches
+  the pod to dnsPolicy None with the test resolver; the options of dnsConfig still
+  apply there. Fails loudly if freeswitch.regionDnsEnabled is set without the
+  matching vgTestHarness region DNS resolver.
+
+Usage: {{- with (include "vg.featureServer.podDns" (dict "ctx" $ "dnsConfig" .Values.featureServer.dnsConfig) | trim) }}{{- . | nindent 6 }}{{- end }}
 */}}
-{{- define "vg.freeswitch.regionDnsConfig" -}}
-{{- if and .Values.freeswitch.regionDnsEnabled (not (include "vg.testHarness.testDnsEnabled" .)) }}{{ fail "freeswitch.regionDnsEnabled requires vgTestHarness.enabled=true and either vgTestHarness.regionDns.enabled=true or vgTestHarness.speechInterception=vendor (otherwise the FreeSWITCH pod's dnsConfig points at a Service that doesn't exist)" }}{{- end }}
-{{- if or .Values.freeswitch.regionDnsEnabled (include "vg.testHarness.vendorRoute" .) }}
+{{- define "vg.featureServer.podDns" -}}
+{{- $ctx := .ctx -}}
+{{- $dnsConfig := .dnsConfig | default dict -}}
+{{- if and $ctx.Values.freeswitch.regionDnsEnabled (not (include "vg.testHarness.testDnsEnabled" $ctx)) }}{{ fail "freeswitch.regionDnsEnabled requires vgTestHarness.enabled=true and either vgTestHarness.regionDns.enabled=true or vgTestHarness.speechInterception=vendor (otherwise the FreeSWITCH pod's dnsConfig points at a Service that doesn't exist)" }}{{- end }}
+{{- if or $ctx.Values.freeswitch.regionDnsEnabled (include "vg.testHarness.vendorRoute" $ctx) }}
 dnsPolicy: None
 dnsConfig:
   nameservers:
-    - {{ include "vg.testHarness.testDnsClusterIP" . }}
+    - {{ include "vg.testHarness.testDnsClusterIP" $ctx }}
   searches:
-    - {{ printf "%s.svc.cluster.local" .Release.Namespace }}
+    - {{ printf "%s.svc.cluster.local" $ctx.Release.Namespace }}
     - svc.cluster.local
     - cluster.local
+  {{- with $dnsConfig.options }}
+  options: {{- include "vg.common.tplvalues.render" (dict "value" . "context" $ctx) | nindent 4 }}
+  {{- end }}
+{{- else if or $dnsConfig.nameservers $dnsConfig.searches $dnsConfig.options }}
+dnsConfig: {{- include "vg.common.tplvalues.render" (dict "value" $dnsConfig "context" $ctx) | nindent 2 }}
 {{- end }}
 {{- end -}}
 
@@ -249,8 +262,8 @@ see switch_log.c's LEVELS[]), so the other components' "error"/"warn"/"trace"
 values are not valid here and must not leak in. An unrecognised level is silently
 ignored by FreeSWITCH, which would leave the image default of notice in place —
 exactly the failure this helper exists to prevent. Set freeswitch.logLevel.
-Shared by the feature-server workload, workload-nightly, and stateful-set-legacy
-templates so the three stay in lockstep. Included AFTER the freeswitch.args range
+Shared by the feature-server workload and workload-nightly templates so the two
+stay in lockstep. Included AFTER the freeswitch.args range
 so that with default values the rendered flag order matches the pre-helper chart
 (…--codec-answer-generous, --log-level, info) and upgrading does not restate the
 pod's args array — i.e. no needless feature-server rollout.
@@ -269,6 +282,96 @@ Usage: {{- with (include "vg.freeswitch.logLevelArgs" $) }}{{- . | nindent 12 }}
 - --log-level
 - {{ .Values.freeswitch.logLevel | default "info" | quote }}
 {{- end }}
+{{- end -}}
+
+{{/*
+Render the FreeSWITCH "--codec-answer-generous" flag from freeswitch.codecNegotiation
+so the chart's generous default survives a freeswitch.args override. It used to live
+in the default freeswitch.args list, so any values file overriding the list for an
+unrelated reason (e.g. "--log-level debug") silently fell back to greedy negotiation:
+FreeSWITCH then answers with its own first codec (PCMU) even when the caller offers
+opus first, and a WebRTC call is narrowed to 8 kHz.
+
+freeswitch.codecNegotiation:
+  generous  answer with the caller's preferred codec (renders the flag)
+  greedy    answer with FreeSWITCH's own preferred codec (renders nothing)
+  ""        auto (default): greedy when freeswitch.args restricts FreeSWITCH to G.711
+            (--g711-only / -g, --g711-only-alaw-preferred), since those clusters rely on
+            their own order winning (e.g. A-law preferred); generous otherwise.
+            --codec-list is deliberately NOT a greedy signal: the documented OPUS recipe
+            (CHANGELOG-2025.10.md) pairs it with --codec-answer-generous.
+            Default values render byte-identical to the pre-helper chart. A values file
+            that overrides freeswitch.args without a codec flag (e.g. only
+            --rtp-range-start) now gains the flag, i.e. flips greedy -> generous; set
+            codecNegotiation: greedy to keep the old behaviour.
+
+Skipped when freeswitch.args already carries --codec-answer-generous, so an in-args
+flag still wins and no duplicate is emitted. An explicit codecNegotiation: greedy
+combined with an in-args --codec-answer-generous fails the render, since the greedy
+setting could not take effect. Included between the freeswitch.args
+range and vg.freeswitch.logLevelArgs so that with default values the rendered flag
+order matches the pre-helper chart (…--codec-answer-generous, --log-level, info).
+
+The `with` wrapper is required, same as vg.freeswitch.logLevelArgs.
+Usage: {{- with (include "vg.freeswitch.codecNegotiationArgs" $) }}{{- . | nindent 12 }}{{- end }}
+*/}}
+{{- define "vg.freeswitch.codecNegotiationArgs" -}}
+{{- $explicit := false -}}
+{{- $ownCodecOrder := false -}}
+{{- range .Values.freeswitch.args }}
+{{- $arg := toString . }}
+{{- if eq $arg "--codec-answer-generous" }}{{- $explicit = true -}}{{- end }}
+{{- if or (eq $arg "-g") (hasPrefix "--g711-only" $arg) }}{{- $ownCodecOrder = true -}}{{- end }}
+{{- end }}
+{{- $mode := .Values.freeswitch.codecNegotiation | default "" -}}
+{{- if not (has $mode (list "" "generous" "greedy")) }}
+{{- fail (printf "freeswitch.codecNegotiation must be \"generous\", \"greedy\" or empty (auto), got %q" (toString $mode)) }}
+{{- end }}
+{{- if and $explicit (eq $mode "greedy") }}
+{{- fail "freeswitch.codecNegotiation is \"greedy\" but freeswitch.args contains --codec-answer-generous; remove the flag from freeswitch.args (codecNegotiation now controls it)" }}
+{{- end }}
+{{- if eq $mode "" }}{{- $mode = ternary "greedy" "generous" $ownCodecOrder -}}{{- end }}
+{{- if and (not $explicit) (eq $mode "generous") -}}
+- --codec-answer-generous
+{{- end }}
+{{- end -}}
+
+{{/*
+FreeSWITCH's pregenerated DTLS/WSS certs (templates/feature-server/freeswitch-certs-secret.yaml).
+Each file is mounted with subPath so the rest of certs/ stays the image's own and writable.
+Both helpers render nothing when freeswitch.pregeneratedCerts.enabled is false, and FreeSWITCH
+then falls back to generating the keys itself at startup.
+
+Usage (freeswitch container):
+  {{- with (include "vg.freeswitch.certsVolumeMounts" $) }}{{- . | nindent 12 }}{{- end }}
+Usage (pod volumes):
+  {{- with (include "vg.freeswitch.certsVolume" $) }}{{- . | nindent 8 }}{{- end }}
+*/}}
+{{- define "vg.freeswitch.certsSecretName" -}}
+freeswitch-certs
+{{- end -}}
+
+{{- define "vg.freeswitch.certsVolumeMounts" -}}
+{{- if .Values.freeswitch.pregeneratedCerts.enabled -}}
+- name: freeswitch-certs
+  mountPath: /usr/local/freeswitch/certs/dtls-srtp.pem
+  subPath: dtls-srtp.pem
+  readOnly: true
+- name: freeswitch-certs
+  mountPath: /usr/local/freeswitch/certs/wss.pem
+  subPath: wss.pem
+  readOnly: true
+{{- end -}}
+{{- end -}}
+
+{{- define "vg.freeswitch.certsVolume" -}}
+{{- if .Values.freeswitch.pregeneratedCerts.enabled -}}
+- name: freeswitch-certs
+  secret:
+    secretName: {{ include "vg.freeswitch.certsSecretName" . }}
+    {{- /* 0440, not 0400: a non-root runAsUser with fsGroup can still read it. */}}
+    defaultMode: 0440
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -834,13 +937,97 @@ cluster filed this one, so `VG-Team-Dev` may well be correct. Both belong in the
 linking SOP, not in a render guard that would reject working configurations.
 */}}
 {{- define "vg.clusterName.validate" -}}
-{{- $name := include "vg.clusterName" . -}}
+{{- include "vg.clusterName.validateFor" (dict "context" . "setting" "resourceResolver.runtimeApiTargets") -}}
+{{- end -}}
+
+{{/*
+vg.clusterName.validate for any consumer that signs with this cluster's identity:
+`setting` names the value that switched the consumer on, so the failure points at
+it (vgAudioManager.resourcesApiTargets for vg-audio-manager's recording reports).
+*/}}
+{{- define "vg.clusterName.validateFor" -}}
+{{- $name := include "vg.clusterName" .context -}}
 {{- if not $name -}}
-{{- fail "This cluster has no resolvable identity, and resourceResolver.runtimeApiTargets is set. VG_CLUSTER_NAME becomes the JWT `iss` the AI cluster's trust list is keyed by, and an empty issuer is rejected by every verifier. Set vgCluster.name (recommended for a linked cluster), or billing.clusterId, or ingress.webapp.host." -}}
+{{- fail (printf "This cluster has no resolvable identity, and %s is set. VG_CLUSTER_NAME becomes the JWT `iss` the AI cluster's trust list is keyed by, and an empty issuer is rejected by every verifier. Set vgCluster.name (recommended for a linked cluster), or billing.clusterId, or ingress.webapp.host." .setting) -}}
 {{- end -}}
 {{- if regexMatch "\\s" $name -}}
 {{- fail (printf "This cluster's identity %q contains whitespace. It becomes the JWT `iss`, and each linked AI cluster's trust list is keyed by this string byte for byte -- a stray space is a 401 on every call, with nothing in the error to point at it. Fix vgCluster.name (or whichever of billing.clusterId / ingress.webapp.host it fell back to)." $name) -}}
 {{- end -}}
+{{- end -}}
+
+{{/*
+vgInAi.clusters: ONE entry per linked Cognigy.AI cluster (C26, CGY-44772). The chart derives both
+target lists from it, so they cannot disagree:
+
+  resourceResolver.runtimeApiTargets    {name, url: <apiUrl>/vg/runtime[, jwksUrl]}
+  vgAudioManager.resourcesApiTargets    {name, url: <apiUrl>/vg/resources}
+
+That second list is what vg-audio-manager's recording reports AND the sbc-sip sidecar's register
+events are sent to. Forgetting it leaves carriers registering with no status in the UI, so it is
+no longer a separate step. `runtimeApiUrl` / `resourcesApiUrl` override the derived URL for one
+cluster (in-cluster service DNS, a non-standard path). Entries of the two explicit lists are kept
+and merged; the same `name` in both places fails the duplicate-name guard.
+
+vgCluster.name is required here, not left to the fallback chain: it is the JWT `iss` every linked AI
+cluster files this cluster under, and a hostname-derived value changes when the host does.
+*/}}
+{{- define "vg.vgInAi.validate" -}}
+{{- $clusters := (.Values.vgInAi).clusters -}}
+{{- if $clusters -}}
+{{- if not (kindIs "slice" $clusters) -}}
+{{- fail (printf "vgInAi.clusters must be a list of {name, apiUrl} maps, got %s." (kindOf $clusters)) -}}
+{{- end -}}
+{{- if not .Values.vgCluster.name -}}
+{{- fail "vgInAi.clusters is set but vgCluster.name is empty. vgCluster.name becomes the JWT `iss`, the key each linked AI cluster files this cluster under, so a linked cluster must set it explicitly (e.g. vg-trial.cognigy.ai)." -}}
+{{- end -}}
+{{- range $i, $c := $clusters -}}
+{{- if not (kindIs "map" $c) -}}
+{{- fail (printf "vgInAi.clusters[%d] must be a map with `name` and `apiUrl`, got %s." $i (kindOf $c)) -}}
+{{- end -}}
+{{- if not (kindIs "string" (dig "name" "" $c)) -}}
+{{- fail (printf "vgInAi.clusters[%d]: `name` must be a string, got %s." $i (kindOf (dig "name" "" $c))) -}}
+{{- end -}}
+{{- if not (dig "name" "" $c) -}}
+{{- fail (printf "vgInAi.clusters[%d] has no `name`. It is the AI cluster's name and becomes the JWT `aud`; it must equal vgRuntimeApi.clusterName on that cluster." $i) -}}
+{{- end -}}
+{{- if not (or (dig "apiUrl" "" $c) (and (dig "runtimeApiUrl" "" $c) (dig "resourcesApiUrl" "" $c))) -}}
+{{- fail (printf "vgInAi.clusters[%d] (%s) needs `apiUrl` (https://<ai api host>), or both `runtimeApiUrl` and `resourcesApiUrl`." $i $c.name) -}}
+{{- end -}}
+{{- range $k := list "apiUrl" "runtimeApiUrl" "resourcesApiUrl" "jwksUrl" -}}
+{{- if not (kindIs "string" (dig $k "" $c)) -}}
+{{- fail (printf "vgInAi.clusters[%d] (%s): `%s` must be a string, got %s." $i $c.name $k (kindOf (dig $k "" $c))) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/* Explicit resourceResolver.runtimeApiTargets + the ones derived from vgInAi.clusters, as JSON. */}}
+{{- define "vg.runtimeApiTargets.effective" -}}
+{{- include "vg.vgInAi.validate" . -}}
+{{- $out := list -}}
+{{- $explicit := .Values.resourceResolver.runtimeApiTargets -}}
+{{- if kindIs "slice" $explicit -}}{{- $out = concat $out $explicit -}}{{- end -}}
+{{- range $c := (.Values.vgInAi).clusters -}}
+{{- $url := $c.runtimeApiUrl | default (printf "%s/vg/runtime" (trimSuffix "/" $c.apiUrl)) -}}
+{{- $t := dict "name" $c.name "url" $url -}}
+{{- if $c.jwksUrl -}}{{- $_ := set $t "jwksUrl" $c.jwksUrl -}}{{- end -}}
+{{- $out = append $out $t -}}
+{{- end -}}
+{{- toJson $out -}}
+{{- end -}}
+
+{{/* Explicit vgAudioManager.resourcesApiTargets + the ones derived from vgInAi.clusters, as JSON. */}}
+{{- define "vg.resourcesApiTargets.effective" -}}
+{{- include "vg.vgInAi.validate" . -}}
+{{- $out := list -}}
+{{- $explicit := .Values.vgAudioManager.resourcesApiTargets -}}
+{{- if kindIs "slice" $explicit -}}{{- $out = concat $out $explicit -}}{{- end -}}
+{{- range $c := (.Values.vgInAi).clusters -}}
+{{- $url := $c.resourcesApiUrl | default (printf "%s/vg/resources" (trimSuffix "/" $c.apiUrl)) -}}
+{{- $out = append $out (dict "name" $c.name "url" $url) -}}
+{{- end -}}
+{{- toJson $out -}}
 {{- end -}}
 
 {{/*
@@ -858,10 +1045,12 @@ trailing /v1, and the set of valid AI-cluster URLs is not something this chart
 can enumerate.
 */}}
 {{- define "vg.runtimeApiTargets.validate" -}}
-{{- $targets := .Values.resourceResolver.runtimeApiTargets -}}
-{{- if not (kindIs "slice" $targets) -}}
-{{- fail (printf "resourceResolver.runtimeApiTargets must be a list of {name, url} maps, got %s. It is mounted as a YAML list, and vg-resource-resolver rejects a keyed map outright." (kindOf $targets)) -}}
+{{- $raw := .Values.resourceResolver.runtimeApiTargets -}}
+{{- if not (kindIs "slice" $raw) -}}
+{{- fail (printf "resourceResolver.runtimeApiTargets must be a list of {name, url} maps, got %s. It is mounted as a YAML list, and vg-resource-resolver rejects a keyed map outright." (kindOf $raw)) -}}
 {{- end -}}
+{{- $targets := $raw -}}
+{{- $seen := dict -}}
 {{- range $i, $t := $targets -}}
 {{- if not (kindIs "map" $t) -}}
 {{- fail (printf "resourceResolver.runtimeApiTargets[%d] must be a map with `name` and `url`, got %s" $i (kindOf $t)) -}}
@@ -872,5 +1061,219 @@ can enumerate.
 {{- if not (dig "url" "" $t) -}}
 {{- fail (printf "resourceResolver.runtimeApiTargets[%d] (%v) has no `url`." $i (dig "name" "?" $t)) -}}
 {{- end -}}
+{{- if hasKey $seen (dig "name" "" $t) -}}
+{{- fail (printf "resourceResolver.runtimeApiTargets[%d]: duplicate `name` %q. The name is the JWT `aud`/`iss` and keys the /v2 trust list, so a second entry would silently replace the first one's JWKS." $i (dig "name" "" $t)) -}}
+{{- end -}}
+{{- $_ := set $seen (dig "name" "" $t) true -}}
+{{- end -}}
+{{- $merged := dict -}}
+{{- range $t := (include "vg.runtimeApiTargets.effective" . | fromJsonArray) -}}
+{{- if hasKey $merged $t.name -}}
+{{- fail (printf "resourceResolver.runtimeApiTargets and vgInAi.clusters both define `name` %q (or vgInAi.clusters repeats it). Define each AI cluster once; vgInAi.clusters derives both lists." $t.name) -}}
+{{- end -}}
+{{- $_ := set $merged $t.name true -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Fail the render unless every vgAudioManager.resourcesApiTargets entry carries the
+`name` and `url` vg-audio-manager requires (CGY-43293). Same shape and reasoning
+as vg.runtimeApiTargets.validate: vg-audio-manager rejects a malformed file at
+boot, and this moves that failure from a CrashLoopBackOff to a refused reconcile.
+*/}}
+{{- define "vg.resourcesApiTargets.validate" -}}
+{{- $raw := .Values.vgAudioManager.resourcesApiTargets -}}
+{{- if not (kindIs "slice" $raw) -}}
+{{- fail (printf "vgAudioManager.resourcesApiTargets must be a list of {name, url} maps, got %s. It is mounted as a YAML list, and vg-audio-manager rejects anything else." (kindOf $raw)) -}}
+{{- end -}}
+{{- $targets := $raw -}}
+{{- $seen := dict -}}
+{{- range $i, $t := $targets -}}
+{{- if not (kindIs "map" $t) -}}
+{{- fail (printf "vgAudioManager.resourcesApiTargets[%d] must be a map with `name` and `url`, got %s" $i (kindOf $t)) -}}
+{{- end -}}
+{{- if not (dig "name" "" $t) -}}
+{{- fail (printf "vgAudioManager.resourcesApiTargets[%d] has no `name`. It becomes the JWT `aud` and must be the AI cluster's name, the same one resourceResolver.runtimeApiTargets uses for that cluster." $i) -}}
+{{- end -}}
+{{- if not (kindIs "string" (dig "name" "" $t)) -}}
+{{- fail (printf "vgAudioManager.resourcesApiTargets[%d]: `name` must be a string, got %s." $i (kindOf (dig "name" "" $t))) -}}
+{{- end -}}
+{{- if not (dig "url" "" $t) -}}
+{{- fail (printf "vgAudioManager.resourcesApiTargets[%d] (%v) has no `url`." $i (dig "name" "?" $t)) -}}
+{{- end -}}
+{{- if not (kindIs "string" (dig "url" "" $t)) -}}
+{{- fail (printf "vgAudioManager.resourcesApiTargets[%d] (%s): `url` must be a string, got %s." $i (dig "name" "" $t) (kindOf (dig "url" "" $t))) -}}
+{{- end -}}
+{{- if hasKey $seen (dig "name" "" $t) -}}
+{{- fail (printf "vgAudioManager.resourcesApiTargets[%d]: duplicate `name` %q. The name is the JWT `aud`, so two entries would be indistinguishable." $i (dig "name" "" $t)) -}}
+{{- end -}}
+{{- $_ := set $seen (dig "name" "" $t) true -}}
+{{- end -}}
+{{- $merged := dict -}}
+{{- range $t := (include "vg.resourcesApiTargets.effective" . | fromJsonArray) -}}
+{{- if hasKey $merged $t.name -}}
+{{- fail (printf "vgAudioManager.resourcesApiTargets and vgInAi.clusters both define `name` %q (or vgInAi.clusters repeats it). Define each AI cluster once; vgInAi.clusters derives both lists." $t.name) -}}
+{{- end -}}
+{{- $_ := set $merged $t.name true -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+feature-server /v2 (vg-resources docs/tdd/06-vg-in-ai/006 §6.2): true when the
+API is switched on AND at least one AI cluster is linked. Without a linked AI
+cluster there is no key to verify against, and feature-server answers 401 to
+every /v2 request anyway, so nothing below renders.
+*/}}
+{{- define "vg.featureServer.v2Api.active" -}}
+{{- if and .Values.featureServer.v2Api.enabled (include "vg.runtimeApiTargets.effective" . | fromJsonArray) -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+AI_CLUSTER_TRUST_LIST: {"<target name>": {"jwksUrl": …}}. One value for every
+VG-side verifier of AI-cluster JWTs -- feature-server /v2 and vg-events-api read
+the same env with the same parser, so a link is configured once.
+
+The target `name` is that AI cluster's own name -- the `aud` the resolver
+mints towards it, and the `iss` its vg-runtime-api signs /v2 calls with -- so
+one list describes the link in both directions.
+
+jwksUrl defaults to the target url (minus the optional trailing /v1 the
+resolver tolerates) + /.well-known/jwks.json, where vg-runtime-api serves it.
+Derived from operator config, never from a token. https is required except
+for loopback and in-cluster service DNS, mirroring feature-server's own parser
+so a bad value fails this render instead of the pod's boot.
+Also rendered into api-server (vg.apiServer.aiClusterTrust.env), whose parser
+refuses the same URLs at boot, so this check applies with featureServer.v2Api off.
+*/}}
+{{- define "vg.aiClusterTrustList" -}}
+{{- $out := dict -}}
+{{- range $i, $t := (include "vg.runtimeApiTargets.effective" . | fromJsonArray) -}}
+{{- $base := regexReplaceAll "/+$" (regexReplaceAll "/v1/?$" $t.url "") "" -}}
+{{- $jwksUrl := $t.jwksUrl | default (printf "%s/.well-known/jwks.json" $base) -}}
+{{- $lowerUrl := lower $jwksUrl -}}
+{{- $host := regexReplaceAll "^[a-z]+://([^/:?#@]+).*$" $lowerUrl "${1}" -}}
+{{- $plaintextOk := or (eq $host "localhost") (regexMatch "^127\\.[0-9]+\\.[0-9]+\\.[0-9]+$" $host) (hasSuffix ".svc" $host) (hasSuffix ".svc.cluster.local" $host) -}}
+{{- if and (not (hasPrefix "https://" $lowerUrl)) (not $plaintextOk) -}}
+{{- fail (printf "resourceResolver.runtimeApiTargets[%d] (%s): the JWKS URL %q is not https. feature-server /v2 and vg-events-api fetch the AI cluster's signing keys from it, and a plaintext fetch across clusters lets anyone on the path swap them. Use https (in-cluster *.svc DNS and loopback are exempt)." $i $t.name $jwksUrl) -}}
+{{- end -}}
+{{- $_ := set $out $t.name (dict "jwksUrl" $jwksUrl) -}}
+{{- end -}}
+{{- toJson $out -}}
+{{- end -}}
+
+{{/*
+Shared by vg.aiClusterAuth.env and api-server so every verifier trusts the same
+AI clusters under the same identity.
+*/}}
+{{- define "vg.aiClusterTrust.env" -}}
+- name: VG_CLUSTER_NAME
+  value: {{ include "vg.clusterName" . | quote }}
+- name: AI_CLUSTER_TRUST_LIST
+  value: {{ include "vg.aiClusterTrustList" . | quote }}
+{{- end -}}
+
+{{/*
+api-server container env for the AI cluster trust list: rendered whenever an AI
+cluster is linked, independent of featureServer.v2Api. resource-resolver already
+validates the targets and the cluster name for a linked cluster.
+*/}}
+{{- define "vg.apiServer.aiClusterTrust.env" -}}
+{{- if include "vg.runtimeApiTargets.effective" . | fromJsonArray }}
+{{- include "vg.aiClusterTrust.env" . }}
+{{- end }}
+{{- end -}}
+
+{{/*
+feature-server container env for /v2. Shared by the stable and nightly
+workloads so the two cannot drift.
+*/}}
+{{- define "vg.featureServer.v2Api.env" -}}
+{{- if include "vg.featureServer.v2Api.active" . }}
+{{- include "vg.aiClusterAuth.env" . }}
+{{- end }}
+{{- end -}}
+
+{{/*
+vg-events-api (vg-resources docs/tdd/06-vg-in-ai/025): true when the component
+is switched on AND at least one AI cluster is linked. Its only callers are linked
+AI clusters, and the service refuses to start with an empty trust list, so the
+Deployment template fails the render instead of shipping a pod that crash-loops.
+*/}}
+{{- define "vg.eventsApi.active" -}}
+{{- if and .Values.vgEventsApi.enabled (include "vg.runtimeApiTargets.effective" . | fromJsonArray) -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+Verifier env for AI-cluster JWTs: VG_CLUSTER_NAME (the expected `aud`) and
+AI_CLUSTER_TRUST_LIST, after validating the values both come from. Shared by
+feature-server /v2 (vg.featureServer.v2Api.env) and vg-events-api, so the two
+verifiers cannot drift. Callers gate it on their own `active` helper.
+*/}}
+{{- define "vg.aiClusterAuth.env" -}}
+{{- include "vg.runtimeApiTargets.validate" . }}
+{{- include "vg.clusterName.validate" . }}
+{{ include "vg.aiClusterTrust.env" . }}
+{{- end -}}
+
+{{/*
+Pod scheduling fields shared by the billing CronJobs: priorityClassName, affinity,
+nodeSelector, tolerations and securityContext. The autoscaler nodeSelector and
+tolerations from .Values.hpa are merged in, like for the HPA managed Deployments,
+so the jobs run on the autoscaling node pool. An optional podSecurityContext replaces
+billing.job.podSecurityContext.
+Usage: {{ include "vg.billing.jobScheduling" (dict "job" .Values.billing.preAggregation "context" $) | nindent 10 }}
+*/}}
+{{- define "vg.billing.jobScheduling" -}}
+{{- $ctx := .context -}}
+{{- $shared := $ctx.Values.billing.job -}}
+{{- $podSecurityContext := $shared.podSecurityContext -}}
+{{- if hasKey . "podSecurityContext" }}{{ $podSecurityContext = .podSecurityContext }}{{ end -}}
+{{- with .job.priorityClassName }}
+priorityClassName: {{ include "vg.priorityClassName" (dict "name" . "context" $ctx) }}
+{{- end }}
+{{- with $shared.affinity }}
+affinity: {{- include "vg.common.tplvalues.render" (dict "value" . "context" $ctx) | nindent 2 }}
+{{- end }}
+{{- if or $shared.nodeSelector (and $ctx.Values.hpa.enabled $ctx.Values.hpa.useHpaNodeSelector) }}
+nodeSelector:
+  {{- with $shared.nodeSelector }}
+  {{- include "vg.common.tplvalues.render" (dict "value" . "context" $ctx) | nindent 2 }}
+  {{- end }}
+  {{- if and $ctx.Values.hpa.enabled $ctx.Values.hpa.useHpaNodeSelector }}
+  {{- include "vg.common.tplvalues.render" (dict "value" $ctx.Values.hpa.hpaNodeSelector "context" $ctx) | nindent 2 }}
+  {{- end }}
+{{- end }}
+{{- if or $shared.tolerations (and $ctx.Values.hpa.enabled $ctx.Values.hpa.useHpaTolerations) }}
+tolerations:
+  {{- with $shared.tolerations }}
+  {{- include "vg.common.tplvalues.render" (dict "value" . "context" $ctx) | nindent 2 }}
+  {{- end }}
+  {{- if and $ctx.Values.hpa.enabled $ctx.Values.hpa.useHpaTolerations }}
+  {{- include "vg.common.tplvalues.render" (dict "value" $ctx.Values.hpa.hpaTolerations "context" $ctx) | nindent 2 }}
+  {{- end }}
+{{- end }}
+{{- with $podSecurityContext }}
+securityContext: {{- include "vg.common.tplvalues.render" (dict "value" . "context" $ctx) | nindent 2 }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Resolves a priorityClassName value. When the value is a tier key of the priorityClass
+section (critical, high, medium, low) it becomes that tier's configured name, so renaming
+a tier keeps the workloads in sync. It deliberately does not depend on priorityClass.enabled:
+a release that does not create the cluster-scoped classes still needs to reference them.
+Any other value is used as is.
+Usage: {{ include "vg.priorityClassName" (dict "name" .Values.vgConnector.priorityClassName "context" $) }}
+*/}}
+{{- define "vg.priorityClassName" -}}
+{{- $tier := index (.context.Values.priorityClass | default dict) .name -}}
+{{- if and (kindIs "map" $tier) $tier.name -}}
+{{ $tier.name }}
+{{- else -}}
+{{ .name }}
 {{- end -}}
 {{- end -}}

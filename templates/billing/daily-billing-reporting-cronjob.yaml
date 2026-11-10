@@ -1,5 +1,12 @@
 {{- /* Deploy the daily-billing-reporting-v1 CronJob when billing and sendToCentral are enabled */ -}}
+{{- /* Parenthesised so an explicit `sendToCentral: null` or `privateKeySecret: null` doesn't crash the render. */ -}}
+{{- $vgBillingSigningKeySecret := ((.Values.billing.sendToCentral).privateKeySecret).existingSecret }}
+{{- $vgBillingSigningKeySecretKey := ((.Values.billing.sendToCentral).privateKeySecret).secretKey }}
 {{ if and .Values.billing.enabled .Values.billing.sendToCentral.enabled .Values.billing.sendToCentral.serverUrl }}
+{{- /* Only a non-empty privateKeyPath fails: "" (the old default) and null meant unset. */ -}}
+{{- if .Values.billing.sendToCentral.privateKeyPath }}
+{{- fail "billing.sendToCentral.privateKeyPath was removed; use billing.sendToCentral.privateKeySecret.{existingSecret,secretKey} instead" }}
+{{- end }}
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -18,8 +25,8 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      backoffLimit: 3
-      ttlSecondsAfterFinished: 86400
+      backoffLimit: {{ .Values.billing.job.backoffLimit }}
+      ttlSecondsAfterFinished: {{ .Values.billing.job.ttlSecondsAfterFinished }}
       template:
         metadata:
           labels:
@@ -29,7 +36,18 @@ spec:
             sidecar.istio.io/inject: "false"
         spec:
           {{- include "image.pullSecrets" $ | nindent 10 }}
-          restartPolicy: Never
+          restartPolicy: {{ .Values.billing.job.restartPolicy }}
+          {{- $jobScheduling := dict "job" .Values.billing.sendToCentral "context" $ }}
+          {{- if $vgBillingSigningKeySecret }}
+          {{- /* The non-root "node" user (gid 1000) reads the 0400 key through fsGroup, merged into
+             podSecurityContext unless it already sets one (like vg-audio-manager). */}}
+          {{- $podSecurityContext := fromYaml (include "vg.common.tplvalues.render" (dict "value" (.Values.billing.job.podSecurityContext | default dict) "context" $)) | default dict }}
+          {{- if not $podSecurityContext.fsGroup }}
+          {{- $_ := set $podSecurityContext "fsGroup" 1000 }}
+          {{- end }}
+          {{- $_ := set $jobScheduling "podSecurityContext" $podSecurityContext }}
+          {{- end }}
+          {{- include "vg.billing.jobScheduling" $jobScheduling | trim | nindent 10 }}
           containers:
             - name: daily-billing-reporting
               image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.api.image) }}
@@ -64,8 +82,14 @@ spec:
                       key: {{ .Values.billing.mysql.secretKey | quote }}
                 - name: VG_SPEECH_BILLING_SERVER_URL
                   value: {{ .Values.billing.sendToCentral.serverUrl | quote }}
+                {{- if $vgBillingSigningKeySecret }}
                 - name: BILLING_VG_PRIVATE_KEY_PATH
-                  value: {{ .Values.billing.sendToCentral.privateKeyPath | default "" | quote }}
+                  value: "/var/run/secrets/vg-billing/billing-signing-key.pem"
+                {{- end }}
+                {{- with include "vg.fedramp.requireExplicitEncryptionKeys" $ }}
+                - name: REQUIRE_EXPLICIT_ENCRYPTION_KEYS
+                  value: {{ . | quote }}
+                {{- end }}
                 - name: VG_SPEECH_BILLING_REPORTING_LAG_DAYS
                   value: {{ .Values.billing.sendToCentral.reportingLagDays | quote }}
                 {{- /* Reloadable configs were introduced in v2026.17.0; once this service reads COGNIGY_AI_VERSION from the mounted ConfigMap, this fallback can be removed in a future release. */}}
@@ -86,6 +110,11 @@ spec:
                 - name: cognigy-env-reloadable
                   mountPath: /config/env
                   readOnly: true
+                {{- if $vgBillingSigningKeySecret }}
+                - name: billing-signing-key
+                  mountPath: /var/run/secrets/vg-billing
+                  readOnly: true
+                {{- end }}
           volumes:
             - name: cognigy-env-reloadable
               configMap:
@@ -93,4 +122,14 @@ spec:
                 items:
                   - key: cognigy.yaml
                     path: cognigy.yaml
+            {{- if $vgBillingSigningKeySecret }}
+            - name: billing-signing-key
+              secret:
+                secretName: {{ $vgBillingSigningKeySecret | quote }}
+                ## Only the key, under a fixed name. 0400 + fsGroup, like the cluster signing key.
+                items:
+                  - key: {{ required "billing.sendToCentral.privateKeySecret.secretKey is required when existingSecret is set" $vgBillingSigningKeySecretKey | quote }}
+                    path: billing-signing-key.pem
+                defaultMode: 256
+            {{- end }}
 {{- end }}

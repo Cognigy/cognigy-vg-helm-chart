@@ -1,0 +1,81 @@
+{{- /*
+Default-deny ingress+egress for vg-events-api (CSA-110265 / VHC-SC7-001, SC-7; CSA-110267 /
+VHC-AC4-001, AC-4; see docs/014-network-policy.md). Modelled on
+templates/resource-resolver/networkpolicy.yaml.
+
+Ingress: the app port from this chart's own Traefik (the /events-api/ Ingress is its public
+route; its callers are linked AI clusters, which arrive that way) plus any pods/CIDRs listed in
+networkPolicy.ingressFrom; the health port from any source (kubelet probes, same reasoning as
+the resolver); the metrics port from the monitoring namespace. The ingressFrom rule only
+renders while the list is non-empty: an emitted `from: []` would match every source.
+
+Egress: DNS, Redis (jti store), InfluxDB (CDRs), the bundled Homer (pcaps; vgEventsApi needs
+homer.enabled anyway) and each AI cluster's JWKS URL from AI_CLUSTER_TRUST_LIST. The JWKS host
+has no chart-known CIDR, so — like the resolver's runtimeApiTargets — its port is allowed to
+any address except link-local (vg.networkPolicy.externalUrlEgress).
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.vgEventsApi.networkPolicy.enabled "root" $) }}
+{{- if and (include "vg.eventsApi.active" .) $npEnabled }}
+{{- $jwksUrls := list }}
+{{- range $name, $t := (include "vg.aiClusterTrustList" . | fromJson) }}
+{{- $jwksUrls = append $jwksUrls $t.jwksUrl }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vg-events-api
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-events-api
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: vg-events-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+{{ include "vg.networkPolicy.fromTraefik" (dict "port" (.Values.vgEventsApi.port | default 4000) "root" $) | indent 4 }}
+    {{- with .Values.vgEventsApi.networkPolicy.ingressFrom }}
+    - from:
+{{ toYaml . | indent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.vgEventsApi.port | default 4000 }}
+    {{- end }}
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.health.port }}
+    {{- if .Values.vgEventsApi.networkPolicy.allowMonitoringScrape }}
+    - from:
+        - namespaceSelector:
+            {{- if .Values.vgEventsApi.networkPolicy.monitoringNamespaceSelector }}
+{{ toYaml .Values.vgEventsApi.networkPolicy.monitoringNamespaceSelector | indent 12 }}
+            {{- else }}
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.podMonitors.namespace | default "monitoring" | quote }}
+            {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.metrics.port }}
+    {{- end }}
+    {{- with .Values.vgEventsApi.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.redisEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.influxdbEgress" $ | indent 4 }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: homer
+      ports:
+        - protocol: TCP
+          port: {{ .Values.homer.port }}
+{{ include "vg.networkPolicy.externalUrlEgress" (dict "urls" $jwksUrls "root" $) | indent 4 }}
+    {{- with .Values.vgEventsApi.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

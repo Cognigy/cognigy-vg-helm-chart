@@ -1,4 +1,13 @@
-{{- if and .Values.sileroVad.enabled .Values.sileroVad.networkPolicy.enabled }}
+{{- /*
+The application-port ingress rule below only renders while ingressFrom is non-empty: an
+emitted `from: []` is read by Kubernetes as "match every source" (no restriction at all),
+the opposite of what clearing the list is meant to do (same class of bug Copilot found in
+templates/resource-resolver/networkpolicy.yaml, CSA-110265/CSA-110267). Clearing
+ingressFrom (with monitoring scrape also off) instead renders `ingress: []`, Kubernetes'
+actual deny-all spelling.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.sileroVad.networkPolicy.enabled "root" $) }}
+{{- if and .Values.sileroVad.enabled $npEnabled }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -13,12 +22,17 @@ spec:
       app: silero-vad
   policyTypes:
     - Ingress
+    - Egress
   ingress:
+    {{- if not (or .Values.sileroVad.networkPolicy.ingressFrom .Values.sileroVad.networkPolicy.allowMonitoringScrape) }} []
+    {{- end }}
+    {{- with .Values.sileroVad.networkPolicy.ingressFrom }}
     - from:
-{{ toYaml .Values.sileroVad.networkPolicy.ingressFrom | indent 8 }}
+{{ toYaml . | indent 8 }}
       ports:
         - protocol: TCP
-          port: {{ .Values.sileroVad.port }}
+          port: {{ $.Values.sileroVad.port }}
+    {{- end }}
     {{- if .Values.sileroVad.networkPolicy.allowMonitoringScrape }}
     - from:
         - namespaceSelector:
@@ -26,5 +40,16 @@ spec:
       ports:
         - protocol: TCP
           port: {{ .Values.sileroVad.port }}
+    {{- end }}
+  ## Egress (CSA-110267 / VHC-AC4-001, AC-4): DNS always, MySQL only when silero-vad's own
+  ## MySQL connection is enabled. silero-vad is called INTO by feature-server, not the
+  ## other way around, so it has no other outbound dependency today.
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+    {{- if .Values.sileroVad.mysql.enabled }}
+{{ include "vg.networkPolicy.mysqlEgress" $ | indent 4 }}
+    {{- end }}
+    {{- with .Values.sileroVad.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
     {{- end }}
 {{- end }}

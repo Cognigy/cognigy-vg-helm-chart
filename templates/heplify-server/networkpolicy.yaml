@@ -1,0 +1,65 @@
+{{- /*
+Default-deny ingress+egress for heplify-server (CSA-110265/CSA-110267, stage 2; see
+docs/014-network-policy.md). Ingress: the HEP-ingest port (udp) from sbc-rtp, plus sbc-sip
+through ingressFromHostNetwork (hostNetwork, same limitation as vg-resource-resolver's
+sbc-sip regbots); the stats port (tcp), named stats-scraper, from telegraf AND from the
+monitoring namespace directly — templates/heplify-server/pod-monitor.yaml has its own
+PodMonitor targeting that same named port, a separate direct Prometheus scrape alongside
+telegraf's own. No probes on this workload, so neither port needs to be open to any
+source. Egress: the bundled postgresql pod (HEPLIFYSERVER_DBUSER/DBPASS,
+additionalDbParameters.postgresql).
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.heplifyServer.networkPolicy.enabled "root" $) }}
+{{- if $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: heplify-server
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: heplify-server
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: heplify-server
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sbc-rtp
+      ports:
+        - protocol: UDP
+          port: {{ .Values.heplifyServer.ports.udp }}
+    {{- with .Values.heplifyServer.networkPolicy.ingressFromHostNetwork }}
+    - from:
+{{ toYaml . | indent 8 }}
+      ports:
+        - protocol: UDP
+          port: {{ $.Values.heplifyServer.ports.udp }}
+    {{- end }}
+    - from:
+        - podSelector:
+            matchLabels:
+              app: telegraf
+        {{- if .Values.podMonitors.enabled }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.podMonitors.namespace | default "monitoring" | quote }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.heplifyServer.ports.tcp }}
+    {{- with .Values.heplifyServer.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.postgresqlEgress" $ | indent 4 }}
+    {{- with .Values.heplifyServer.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

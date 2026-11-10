@@ -1,0 +1,69 @@
+{{- /*
+Default-deny ingress+egress for vg-audio-manager (CSA-110265/CSA-110267, stage 2; see
+docs/014-network-policy.md). The http port serves both real traffic (feature-server's
+recording forks, ws://.../v1) and kubelet's liveness/readiness/startup probes (no separate
+health port on this workload) — restricting it to podSelector-only callers would risk the
+pod going unready on a CNI that polices node-sourced traffic, so it is open to any source,
+same trade-off as resource-resolver's health port. Metrics is scraped from the monitoring
+namespace (templates/vg-audio-manager/pod-monitor.yaml). Egress: MySQL, plus the
+*effective* resourcesApiTargets — vg.resourcesApiTargets.effective (templates/_helpers.tpl),
+the same helper the Deployment itself uses, which also derives targets from vgInAi.clusters;
+reading .Values.vgAudioManager.resourcesApiTargets directly (as an earlier version of this
+file did) silently drops that derived set whenever the explicit list is empty.
+
+Deliberately NOT covered: recording uploads to the bucket storage vg-audio-manager
+ultimately writes to. The bucket endpoint comes from runtime data (MySQL's
+accounts.bucket_credential rows, or an inline vgRecordBucket blob a paired AI cluster sends
+in the stream itself, not chart config), so there is no URL or CIDR this chart can derive
+at render time — same "needs a bigger architectural call" bucket as vg-console's
+changelogEnrichment (docs/014-network-policy.md).
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.vgAudioManager.networkPolicy.enabled "root" $) }}
+{{- if and .Values.vgAudioManager.enabled $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vg-audio-manager
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: vg-audio-manager
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: vg-audio-manager
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.vgAudioManager.port }}
+    {{- if .Values.vgAudioManager.networkPolicy.allowMonitoringScrape }}
+    - from:
+        - namespaceSelector:
+            {{- if .Values.vgAudioManager.networkPolicy.monitoringNamespaceSelector }}
+{{ toYaml .Values.vgAudioManager.networkPolicy.monitoringNamespaceSelector | indent 12 }}
+            {{- else }}
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.podMonitors.namespace | default "monitoring" | quote }}
+            {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.metrics.port }}
+    {{- end }}
+    {{- with .Values.vgAudioManager.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.mysqlEgress" $ | indent 4 }}
+    {{- $resourcesApiUrls := list }}
+    {{- range (include "vg.resourcesApiTargets.effective" $ | fromJsonArray) }}
+    {{- $resourcesApiUrls = append $resourcesApiUrls .url }}
+    {{- end }}
+{{ include "vg.networkPolicy.externalUrlEgress" (dict "urls" $resourcesApiUrls "root" $) | indent 4 }}
+    {{- with .Values.vgAudioManager.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

@@ -1,0 +1,51 @@
+{{- /*
+Default-deny ingress+egress for vg-traffic-sniffer (CSA-110265/CSA-110267, stage 3; see
+docs/014-network-policy.md). Ingress: the http port, any source — it also serves /healthz
+(no separate health port), same trade-off as vg-audio-manager's http port. The real
+caller of its capture-trigger API could not be confirmed from the chart (see the
+values.yaml KNOWN GAP comment) — use extraIngress once it is known.
+
+Egress: this workload's whole purpose is calling the Kubernetes API directly
+(templates/vg-traffic-sniffer/rbac.yaml — pods/exec, pods/ephemeralcontainers) to attach a
+tcpdump sidecar to other pods, so — same as api-server — the policy degrades gracefully:
+without global.fedramp.networkPolicyKubernetesApiCidr it stays ingress-only (no Egress
+policyType, no egress: key at all, so this workload's Kubernetes API access is exactly as
+unrestricted as it would be with no policy); with the CIDR supplied, the full
+Ingress+Egress policy applies.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.vgTrafficSniffer.networkPolicy.enabled "root" $) }}
+{{- if and .Values.vgTrafficSniffer.enabled $npEnabled }}
+{{- $canEnforceEgress := or (not (include "vg.fedramp.enabled" $)) (dig "fedramp" "networkPolicyKubernetesApiCidr" "" .Values.global) }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vg-traffic-sniffer
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: vg-traffic-sniffer
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: vg-traffic-sniffer
+  policyTypes:
+    - Ingress
+    {{- if $canEnforceEgress }}
+    - Egress
+    {{- end }}
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.vgTrafficSniffer.port }}
+    {{- with .Values.vgTrafficSniffer.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  {{- if $canEnforceEgress }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.apiServerEgress" (dict "root" $ "needed" true) | indent 4 }}
+    {{- with .Values.vgTrafficSniffer.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,66 @@
+{{- /*
+Default-deny ingress+egress for sbc-call-router (CSA-110265/CSA-110267, stage 3; see
+docs/014-network-policy.md). Ingress: the health port (any source, kubelet probes) and the
+metrics port (monitoring namespace) only — the app port's real caller could not be
+confirmed from the chart alone; see the KNOWN GAP comment in values.yaml. Egress:
+sbc-inbound, sbc-outbound (K8S_SBC_INBOUND_SERVICE_NAME / K8S_SBC_OUTBOUND_SERVICE_NAME)
+and tracing (tracing.baseUrl, auto-derived port, when set).
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.sbcCallRouter.networkPolicy.enabled "root" $) }}
+{{- if $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sbc-call-router
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: sbc-call-router
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: sbc-call-router
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.health.port }}
+    {{- if .Values.sbcCallRouter.networkPolicy.allowMonitoringScrape }}
+    - from:
+        - namespaceSelector:
+            {{- if .Values.sbcCallRouter.networkPolicy.monitoringNamespaceSelector }}
+{{ toYaml .Values.sbcCallRouter.networkPolicy.monitoringNamespaceSelector | indent 12 }}
+            {{- else }}
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.podMonitors.namespace | default "monitoring" | quote }}
+            {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.metrics.port }}
+    {{- end }}
+    {{- with .Values.sbcCallRouter.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: sbc-inbound
+      ports:
+        - protocol: TCP
+          port: {{ .Values.sbcInbound.ports.tcp }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: sbc-outbound
+      ports:
+        - protocol: TCP
+          port: {{ .Values.sbcOutbound.ports.tcp }}
+{{ include "vg.networkPolicy.externalUrlEgress" (dict "urls" (list .Values.tracing.baseUrl) "root" $) | indent 4 }}
+    {{- with .Values.sbcCallRouter.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

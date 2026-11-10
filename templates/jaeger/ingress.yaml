@@ -1,4 +1,12 @@
 {{- if and (.Values.ingress.enabled) (.Values.ingress.jaeger.enabled) }}
+{{- $ipAllowListEnabled := include "vg.fedramp.ingressIpAllowListEnabled" (dict "service" "jaeger" "override" .Values.ingress.jaeger.ipWhiteListMiddleware.enabled "sourceRange" .Values.ingress.jaeger.ipWhiteListMiddleware.ipWhiteList.sourceRange "extraAnnotations" .Values.ingress.jaeger.extraAnnotations "root" $) }}
+{{- $middlewares := list }}
+{{- if $ipAllowListEnabled }}
+{{- $middlewares = append $middlewares (printf "%s-ipwhitelistjaeger@kubernetescrd" $.Release.Namespace) }}
+{{- end }}
+{{- if .Values.ingress.jaeger.basicAuthMiddleware.enabled }}
+{{- $middlewares = append $middlewares (printf "%s-jaegerauth@kubernetescrd" $.Release.Namespace) }}
+{{- end }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -13,11 +21,11 @@ metadata:
     {{- else }}
     traefik.ingress.kubernetes.io/router.entrypoints: web
     {{- end }}
-    {{- if .Values.ingress.jaeger.ipWhiteListMiddleware.enabled }}
-    traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-ipwhitelistjaeger@kubernetescrd
-    {{- end }}
-    {{- if .Values.ingress.jaeger.basicAuthMiddleware.enabled }}
-    traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-jaegerauth@kubernetescrd
+    {{- if $middlewares }}
+    ## Both the IP allow-list and basic-auth middlewares used to write this same annotation key;
+    ## whichever rendered second silently won, so the IP allow-list never actually applied while
+    ## basicAuthMiddleware (on by default) was also enabled (found fixing VHC-SC7-002, SC-7).
+    traefik.ingress.kubernetes.io/router.middlewares: {{ join "," $middlewares }}
     {{- end }}
   {{- end }}
   {{- if .Values.ingress.jaeger.extraAnnotations }}

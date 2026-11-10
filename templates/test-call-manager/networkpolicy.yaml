@@ -1,0 +1,86 @@
+{{- /*
+Default-deny ingress+egress for test-call-manager and its clean-up CronJob
+(CSA-110265/CSA-110267, stage 2; see docs/014-network-policy.md). The Deployment has no
+in-cluster podSelector caller — its real traffic arrives externally through its own
+ingress.yaml (CSA-110266), so Traefik is the only direct network peer this policy can
+name. The CronJob calls api-server's own public ingress hostname to self-clean test
+calls; no chart-known CIDR for that, same treatment as vg-resource-resolver's
+runtimeApiTargets.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.testCallManager.networkPolicy.enabled "root" $) }}
+{{- if and .Values.testCallManager.enabled $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: test-call-manager
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: test-call-manager
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: test-call-manager
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.health.port }}
+    {{- if .Values.testCallManager.networkPolicy.allowMonitoringScrape }}
+    - from:
+        - namespaceSelector:
+            {{- if .Values.testCallManager.networkPolicy.monitoringNamespaceSelector }}
+{{ toYaml .Values.testCallManager.networkPolicy.monitoringNamespaceSelector | indent 12 }}
+            {{- else }}
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.podMonitors.namespace | default "monitoring" | quote }}
+            {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.metrics.port }}
+    {{- end }}
+{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.testCallManager.port "root" $) | indent 4 }}
+    {{- with .Values.testCallManager.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.redisEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.externalUrlEgress" (dict "urls" (list .Values.tracing.baseUrl (printf "%s://%s" .Values.api.protocol .Values.ingress.api.host)) "root" $) | indent 4 }}
+    {{- with .Values.testCallManager.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: test-call-manager-cleanup
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: test-call-manager-cleanup
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+    {{- /* Mirrors templates/test-call-manager/cronjob.yaml's own URL env var exactly: its
+    own public ingress hostname when the ingress-derived pieces are set, else the
+    configurable cleanUpEndpoint fallback (empty by default, which the externalUrlEgress
+    helper below simply skips). This is NOT api-server — see the Deployment's own
+    VG_ENDPOINT for that, covered by the sibling policy above. */}}
+    {{- $cleanupUrl := .Values.testCallManager.cleanUpEndpoint }}
+    {{- if and .Values.testCallManager.cleanUpEndpointProtocol .Values.ingress.testCallManager.host .Values.testCallManager.cleanUpEndpointPath }}
+    {{- $cleanupUrl = printf "%s://%s%s" .Values.testCallManager.cleanUpEndpointProtocol .Values.ingress.testCallManager.host .Values.testCallManager.cleanUpEndpointPath }}
+    {{- end }}
+{{ include "vg.networkPolicy.externalUrlEgress" (dict "urls" (list $cleanupUrl) "root" $) | indent 4 }}
+    {{- with .Values.testCallManager.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

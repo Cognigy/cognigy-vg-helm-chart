@@ -25,6 +25,9 @@ spec:
       annotations:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
         checksum/sbc-sip: {{ include (print $.Template.BasePath "/sbc-sip/config-map.yaml") $ | sha256sum }}
+        {{- with include "vg.sbcSip.runtimeRegbots.annotations" $ }}
+        {{- . | nindent 8 }}
+        {{- end }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       hostNetwork: true
@@ -200,6 +203,10 @@ spec:
             - {{ .Values.apiBan.refreshInterval | quote }}
             - --blacklist-redis-key
             - {{ .Values.apiBan.redisSetKey | quote }}
+            {{- if include "vg.redisAuth.enabled" . }}
+            - --blacklist-redis-password
+            - "$(REDIS_PASSWORD)"
+            {{- end }}
             - --reject-register-with-no-realm
             - {{ if .Values.drachtio.rejectRegisterWithNoRealm }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
           {{- end }}
@@ -216,6 +223,7 @@ spec:
                   fieldPath: status.podIP
             - name: CLOUD
               value: {{ .Values.cloud | quote }}
+            {{- with include "vg.redisAuth.clientEnv" $ }}{{ . | nindent 12 }}{{ end }}
             {{- if eq .Values.cloud "aws" }}
             - name: IMDSv2
               value: {{ .Values.aws.useIMDSv2 | quote }}
@@ -307,7 +315,7 @@ spec:
                   name: voicegateway-drachtio-secret
                   key: secret
             - name: ENABLE_METRICS
-              value: {{ if .Values.stats.enabled }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+              value: {{ if include "vg.fedramp.statsEnabled" $ }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -317,6 +325,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+{{- if include "vg.fedramp.statsEnabled" $ }}
             - name: STATS_TAGS
               value: "pod:$(K8S_POD_NAME)"
             - name: STATS_PROTOCOL
@@ -329,6 +338,7 @@ spec:
               value: {{ .Values.telegraf.port  | quote }}
             - name: STATS_SAMPLE_RATE
               value:  {{ .Values.stats.sampleRate | quote }}
+{{- end }}
             - name: JAMBONES_LOGLEVEL
               value: {{ .Values.sbcSipSidecar.logLevel }}
             - name: JAMBONES_MYSQL_HOST
@@ -346,10 +356,13 @@ spec:
               value: {{ .Values.redis.host }}
             - name: JAMBONES_REDIS_PORT
               value: {{ .Values.redis.port | quote }}
+            {{- with include "vg.redisAuth.clientEnv" $ }}{{ . | nindent 12 }}{{ end }}
             - name: JAMBONES_REGBOT_CONTACT_USE_IP
               value: "1"
+            {{- if include "vg.fedramp.sbcSipSidecarAlerts" $ }}
             - name: JAMBONES_TIME_SERIES_HOST
               value: {{ .Values.influxdb.host }}
+            {{- end }}
             - name: TRACING_ENABLED
               value: {{ .Values.tracing.enabled | quote }}
             - name: TRACING_BASE_URL_WITH_PROTOCOL
@@ -373,6 +386,9 @@ spec:
               value: {{ .Values.tmpban.register.trackingWindowMinutes | quote }}
             - name: VG_REDIS_BAN_DURATION_HOURS
               value: {{ .Values.tmpban.register.banDurationHours | quote }}
+            {{- with include "vg.sbcSip.runtimeRegbots.env" $ }}
+            {{- . | nindent 12 }}
+            {{- end }}
             {{- if .Values.sbcSipSidecar.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcSipSidecar.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
@@ -380,6 +396,9 @@ spec:
             - name: cognigy-env-reloadable
               mountPath: /config/env
               readOnly: true
+            {{- with include "vg.sbcSip.runtimeRegbots.volumeMounts" $ }}
+            {{- . | nindent 12 }}
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env
@@ -407,4 +426,7 @@ spec:
           items:
           - key: drachtio.conf.xml
             path: drachtio.conf.xml
+      {{- with include "vg.sbcSip.runtimeRegbots.volumes" $ }}
+      {{- . | nindent 6 }}
+      {{- end }}
 {{- end }}

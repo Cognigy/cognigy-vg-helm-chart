@@ -1,0 +1,34 @@
+{{- /*
+Default-deny ingress+egress for the influxdb-ai-retention hook Job (CSA-110265/
+CSA-110267, stage 2; see docs/014-network-policy.md). Same shape as the api-migrator
+Job's policy: nothing calls it, so ingress is empty; it only reaches InfluxDB
+(influxdb.host/port). Gated by influxdb's own switch, since the Job is part of the
+influxdb component, and rendered only while the Job is.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.influxdb.networkPolicy.enabled "root" $) }}
+{{- if and $npEnabled .Values.influxdb.aiRetention .Values.influxdb.aiRetention.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: influxdb-ai-retention
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: influxdb-ai-retention
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: influxdb-ai-retention
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.influxdbEgress" $ | indent 4 }}
+    {{- with .Values.influxdb.aiRetention.networkPolicy }}
+    {{- with .egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+    {{- end }}
+{{- end }}

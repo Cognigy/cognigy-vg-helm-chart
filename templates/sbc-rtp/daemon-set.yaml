@@ -11,7 +11,6 @@ metadata:
     "cluster-autoscaler.kubernetes.io/safe-to-evict": "true"
     "cognigy.com/source-code": "git@github.com:Cognigy/vg-sbc-rtpengine-sidecar.git"
     "cognigy.com/source-code.ec2-eip-allocator": "git@github.com:Cognigy/vg-external-services.git"
-    "cognigy.com/source-code.db-create-wait": "empty"
     "cognigy.com/source-code.rtp-engine": "git@github.com:Cognigy/vg-external-services.git"
     "cognigy.com/source-code.sbc-rtpengine-sidecar": "git@github.com:Cognigy/vg-sbc-rtpengine-sidecar.git"
 spec:
@@ -44,8 +43,8 @@ spec:
       tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbc.rtp.tolerations "context" $) | nindent 8 }}
       {{- end }}
       restartPolicy: Always
+      {{- if and (.Values.sbc.ec2EipAllocator.enabled) (eq .Values.cloud "aws") }}
       initContainers:
-        {{- if and (.Values.sbc.ec2EipAllocator.enabled) (eq .Values.cloud "aws") }}
         - name: ec2-eip-allocator
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.sbc.ec2EipAllocator.image) }}
           env:
@@ -63,23 +62,7 @@ spec:
                 secretKeyRef:
                   key: awsSecretKey
                   name: {{ .Values.sbc.ec2EipAllocator.vgOperatorUser }}
-        {{- end }}
-        - image: kanisterio/mysql-sidecar:0.40.0
-          name: db-create-wait
-          env:            
-            - name: PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: voicegateway-mysql-password
-                  key: mysql-password
-          command:
-            - sh 
-            - -c 
-            - |
-              until mysql -u {{ .Values.mysql.auth.username }} -D {{ .Values.mysql.database.name }} -h {{ .Values.mysql.host }} -p${PASSWORD} --protocol=tcp -e "select count(*) from accounts";
-              do 
-                sleep 5
-              done
+      {{- end }}
       containers:
         - name: rtp-engine 
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.rtpEngine.image) }}
@@ -190,18 +173,15 @@ spec:
               value: {{ .Values.global.nodeEnv | quote }}
             - name: JAMBONES_LOGLEVEL
               value: {{ if  .Values.rtpEngineSidecar.logLevel }}{{ .Values.rtpEngineSidecar.logLevel }}{{ else }}{{ .Values.global.logLevel }}{{ end }}
-            - name: JAMBONES_REDIS_HOST
-              value: {{ .Values.redis.host }}
-            - name: JAMBONES_REDIS_PORT
-              value: {{ .Values.redis.port | quote }}
             - name: RTPENGINE_DTMF_LOG_PORT
               value: {{ .Values.rtpEngineSidecar.ports.dtmf | quote }}
             - name: ENABLE_METRICS
-              value: {{ if .Values.stats.enabled }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
+              value: {{ if include "vg.fedramp.statsEnabled" $ }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             - name: K8S_POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+{{- if include "vg.fedramp.statsEnabled" $ }}
             - name: STATS_TAGS
               value: "pod:$(K8S_POD_NAME)"
             - name: STATS_PROTOCOL
@@ -214,6 +194,7 @@ spec:
               value: {{ .Values.telegraf.port | quote }}
             - name: STATS_SAMPLE_RATE
               value:  {{ .Values.stats.sampleRate | quote }}
+{{- end }}
             - name: TRACING_ENABLED
               value: {{ .Values.tracing.enabled | quote }}
             - name: TRACING_BASE_URL_WITH_PROTOCOL

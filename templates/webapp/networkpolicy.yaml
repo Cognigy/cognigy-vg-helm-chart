@@ -1,0 +1,37 @@
+{{- /*
+Default-deny ingress+egress for webapp (CSA-110265/CSA-110267, stage 3; see
+docs/014-network-policy.md). Ingress: this chart's own Traefik only — webapp has no
+in-cluster podSelector caller (its real traffic is external, via its own ingress.yaml,
+CSA-110266) and no probes of its own, so there is no separate health port to leave
+unconditionally open. Egress: api-server and tracing, both via auto-derived ports (no
+chart-known CIDR), plus cognigyUrl if set.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.webapp.networkPolicy.enabled "root" $) }}
+{{- if $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: webapp
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: webapp
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: webapp
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.webapp.port "root" $) | indent 4 }}
+    {{- with .Values.webapp.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.externalUrlEgress" (dict "urls" (list (printf "%s://%s" .Values.api.protocol .Values.ingress.api.host) .Values.tracing.baseUrl .Values.webapp.cognigyUrl) "root" $) | indent 4 }}
+    {{- with .Values.webapp.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

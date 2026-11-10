@@ -1,0 +1,23 @@
+{{- if .Values.realtimeBridge.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: vg-realtime-bridge
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-realtime-bridge
+    owner-team: echo
+  {{- with .Values.realtimeBridge.service.annotations }}
+  annotations:
+    {{- include "vg.common.tplvalues.render" (dict "value" . "context" $) | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  selector:
+    app: vg-realtime-bridge
+  ports:
+    - name: http
+      port: {{ .Values.realtimeBridge.service.port }}
+      targetPort: http
+      protocol: TCP
+{{- end }}

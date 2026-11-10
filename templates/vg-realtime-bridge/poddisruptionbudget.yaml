@@ -1,0 +1,15 @@
+{{- if and .Values.realtimeBridge.enabled .Values.realtimeBridge.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: vg-realtime-bridge
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-realtime-bridge
+    owner-team: echo
+spec:
+  minAvailable: {{ .Values.realtimeBridge.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app: vg-realtime-bridge
+{{- end }}

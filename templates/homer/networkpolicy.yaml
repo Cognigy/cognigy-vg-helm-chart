@@ -1,0 +1,56 @@
+{{- /*
+Default-deny ingress+egress for homer (CSA-110265/CSA-110267, stage 2; see
+docs/014-network-policy.md). Ingress: api-server (HOMER_API_URL), vg-events-api when enabled (HOMER_BASE_URL, pcap export), the homer-password-update
+hook Job (templates/homer/job.yaml — a pre-install/pre-upgrade hook that logs in and resets
+the admin password; admitted by its stable Kubernetes-injected job-name label, since the Job
+itself carries no app: label of its own and its metadata.name has no per-run suffix) and
+this chart's own Traefik (homer has its own ingress.yaml, CSA-110266 IP-allow-listed) —
+Traefik is the real direct peer for traffic that arrives that way, see
+vg.networkPolicy.fromTraefik. No health probe exists on this workload today, so there is no
+unconditional health-port rule. Egress: the bundled postgresql pod
+(DB_HOST/additionalDbParameters.postgresql), homer's only dependency.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.homer.networkPolicy.enabled "root" $) }}
+{{- if and .Values.homer.enabled $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: homer
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: homer
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: homer
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api-server
+        - podSelector:
+            matchLabels:
+              job-name: homer-password-update
+        {{- if .Values.vgEventsApi.enabled }}
+        - podSelector:
+            matchLabels:
+              app: vg-events-api
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.homer.port }}
+{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.homer.port "root" $) | indent 4 }}
+    {{- with .Values.homer.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.postgresqlEgress" $ | indent 4 }}
+    {{- with .Values.homer.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

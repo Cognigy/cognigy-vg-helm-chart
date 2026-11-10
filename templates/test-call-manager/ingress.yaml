@@ -13,7 +13,7 @@ metadata:
     {{- else }}
     traefik.ingress.kubernetes.io/router.entrypoints: web
     {{- end }}
-    {{- if .Values.ingress.testCallManager.ipWhiteListMiddleware.enabled }}
+    {{- if include "vg.fedramp.ingressIpAllowListEnabled" (dict "service" "testCallManager" "override" .Values.ingress.testCallManager.ipWhiteListMiddleware.enabled "sourceRange" .Values.ingress.testCallManager.ipWhiteListMiddleware.ipWhiteList.sourceRange "extraAnnotations" .Values.ingress.testCallManager.extraAnnotations "root" $) }}
     traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-ipwhitelisttestcallmanager@kubernetescrd
     {{- end }}
   {{- end }}

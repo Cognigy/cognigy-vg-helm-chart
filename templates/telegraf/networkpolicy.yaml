@@ -1,0 +1,63 @@
+{{- /*
+Default-deny ingress+egress for telegraf (CSA-110265/CSA-110267, stage 2; see
+docs/014-network-policy.md). telegraf's StatefulSet renders unconditionally (only its
+Service is gated by vg.fedramp.statsEnabled), so this policy gates only on the
+profile/opt-in switch. Ingress: sbc-inbound/sbc-outbound/sbc-rtp (STATS_HOST), plus
+sbc-sip through ingressFromHostNetwork (hostNetwork, same limitation as
+vg-resource-resolver's sbc-sip regbots). Egress: influxdb and heplify-server's stats port.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.telegraf.networkPolicy.enabled "root" $) }}
+{{- if $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: telegraf
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: telegraf
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: telegraf
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sbc-inbound
+        - podSelector:
+            matchLabels:
+              app: sbc-outbound
+        - podSelector:
+            matchLabels:
+              app: sbc-rtp
+      ports:
+        - protocol: TCP
+          port: {{ .Values.telegraf.port }}
+    {{- with .Values.telegraf.networkPolicy.ingressFromHostNetwork }}
+    - from:
+{{ toYaml . | indent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.telegraf.port }}
+    {{- end }}
+    {{- with .Values.telegraf.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.influxdbEgress" $ | indent 4 }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: heplify-server
+      ports:
+        - protocol: TCP
+          port: {{ .Values.heplifyServer.ports.tcp }}
+    {{- with .Values.telegraf.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

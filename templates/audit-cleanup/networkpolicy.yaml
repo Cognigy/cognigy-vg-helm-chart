@@ -1,0 +1,31 @@
+{{- /*
+Default-deny ingress+egress for the audit-logs-cleanup CronJob (CSA-110265/CSA-110267,
+stage 2; see docs/014-network-policy.md). Nothing calls this pod, so ingress is simply
+empty. Its only dependency is api-server's own public ingress hostname
+({{ `{{ .Values.api.protocol }}://{{ .Values.ingress.api.host }}` }}) — no chart-known
+in-cluster CIDR for that, same treatment as vg-resource-resolver's runtimeApiTargets.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.auditLogging.cleanup.networkPolicy.enabled "root" $) }}
+{{- if and .Values.auditLogging.enabled $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: audit-logs-cleanup
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: audit-logs-cleanup
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.externalUrlEgress" (dict "urls" (list (printf "%s://%s" .Values.api.protocol .Values.ingress.api.host)) "root" $) | indent 4 }}
+    {{- with .Values.auditLogging.cleanup.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

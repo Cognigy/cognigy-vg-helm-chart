@@ -13,7 +13,7 @@ metadata:
     {{- else }}
     traefik.ingress.kubernetes.io/router.entrypoints: web
     {{- end }}
-    {{- if .Values.ingress.vgPagerdutyAgent.ipWhiteListMiddleware.enabled }}
+    {{- if include "vg.fedramp.ingressIpAllowListEnabled" (dict "service" "vgPagerdutyAgent" "override" .Values.ingress.vgPagerdutyAgent.ipWhiteListMiddleware.enabled "sourceRange" .Values.ingress.vgPagerdutyAgent.ipWhiteListMiddleware.ipWhiteList.sourceRange "extraAnnotations" .Values.ingress.vgPagerdutyAgent.extraAnnotations "root" $) }}
     traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-ipwhitelistvgpagerdutyagent@kubernetescrd
     {{- end }}
   {{- end }}

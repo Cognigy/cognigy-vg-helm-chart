@@ -1,0 +1,107 @@
+{{- /*
+Default-deny ingress+egress for vg-pagerduty-agent and its two hypercare helpers
+(CSA-110265/CSA-110267, stage 3; see docs/014-network-policy.md). The main Deployment's
+app port serves both real traffic and kubelet's probes (no separate health port), so it is
+open to any source, same trade-off as vg-audio-manager's http port; it also admits this
+chart's own Traefik (own ingress.yaml, CSA-110266). Egress covers vg-console (in-cluster
+and via its own public hostname) and the hypercare activate-remote target — NOT the
+Elasticsearch/PagerDuty/Anthropic/Grafana/Azure-DevOps egress this workload also has; see
+the values.yaml doc comment for why those stay deferred. The hypercare CronJob and the
+post-upgrade activate-remote Job are both egress-only.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.vgPagerdutyAgent.networkPolicy.enabled "root" $) }}
+{{- if and .Values.vgPagerdutyAgent.enabled $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vg-pagerduty-agent
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: vg-pagerduty-agent
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: vg-pagerduty-agent
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.vgPagerdutyAgent.port | default 3000 }}
+{{ include "vg.networkPolicy.fromTraefik" (dict "port" (.Values.vgPagerdutyAgent.port | default 3000) "root" $) | indent 4 }}
+    {{- with .Values.vgPagerdutyAgent.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vg-console
+      ports:
+        - protocol: TCP
+          port: {{ .Values.vgConsole.port | default 4000 }}
+    {{- $vgConsolePublicUrls := list }}
+    {{- if and .Values.ingress.enabled .Values.ingress.vgConsole.host }}
+    {{- $vgConsolePublicUrls = append $vgConsolePublicUrls (printf "%s://%s" .Values.api.protocol .Values.ingress.vgConsole.host) }}
+    {{- end }}
+{{ include "vg.networkPolicy.externalUrlEgress" (dict "urls" $vgConsolePublicUrls "root" $) | indent 4 }}
+    {{- with .Values.vgPagerdutyAgent.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vg-pagerduty-agent-hypercare
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: vg-pagerduty-agent-hypercare
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vg-pagerduty-agent
+      ports:
+        - protocol: TCP
+          port: {{ .Values.vgPagerdutyAgent.port | default 3000 }}
+{{- end }}
+{{- /*
+The activate-remote Job (templates/vg-pagerduty-agent/job-hypercare-activate-remote.yaml)
+renders independently of vgPagerdutyAgent.enabled — it's the *deploying* (spoke) cluster's
+hook, which calls a separate *central* cluster's vg-console/vg-pagerduty-agent and need not
+run vg-pagerduty-agent itself. Its policy therefore gates on $npEnabled alone, matching that
+real render condition instead of nesting under the block above.
+*/}}
+{{- if $npEnabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vg-pagerduty-agent-hypercare-activate-remote
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: vg-pagerduty-agent-hypercare-activate-remote
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.externalUrlEgress" (dict "urls" (list (coalesce .Values.vgPagerdutyAgent.hypercare.centralConsoleUrl .Values.vgPagerdutyAgent.hypercare.centralAgentUrl)) "root" $) | indent 4 }}
+{{- end }}

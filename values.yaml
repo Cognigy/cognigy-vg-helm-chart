@@ -5,6 +5,81 @@
 global:
   ## Indication that is a Kubernetes deployment
   k8s: true
+  ## FedRAMP profile (templates/_fedramp.tpl, docs/009-fedramp-profile.md). An environment sets
+  ## only `enabled`. The keys below it are the values FedRAMP requires; they apply only while
+  ## `enabled` is true, and then per-service overrides (for example
+  ## sbcInbound.dtmfSourceValidation) are ignored. Change a key below only in an environment's
+  ## Flux overlay, as a documented deviation (for example during an incident).
+  fedramp:
+    enabled: false
+    ## DTMF source validation of vg-rtpengine-utils on sbc-inbound and sbc-outbound:
+    ## enforce | warn | off.
+    dtmfSourceValidation: enforce
+    ## StatsD (vg-stats-collector -> telegraf :8125), which has no transport encryption
+    ## (STAT-SC8-001, SC-8). false removes the whole flow. See `stats` below.
+    statsEnabled: false
+    ## vg-api-ban (update-api-ban-list CronJob), see `apiBan` below. Used instead of the apiBan.*
+    ## keys while the profile is on.
+    ## Fail the run on a malformed API_BAN_BANNED_RANGES entry (false: log it and skip it).
+    apiBanStrictRanges: true
+    ## HTTP redirects followed to the feed. 0: the API key is a path segment, a redirect would hand it on.
+    apiBanMaxRedirects: 0
+    ## Timeout of each request to the feed, in milliseconds.
+    apiBanTimeoutMs: 30000
+    ## Feed batches of 250 addresses. Ranges plus feed must stay under 1,000,000 (the limit drachtio
+    ## loads), so vg-api-ban derives the range limit from this and rejects a value that leaves no room.
+    apiBanMaxBatches: 1000
+    ## Digest vg-api-server derives session-revocation Redis keys with (APIS-SC13-001, SC-13):
+    ## sha256 | md5. See `api.sessionKeyDigest` below.
+    apiSessionKeyDigest: sha256
+    ## Strict SSRF validation of registration_hook / queue_event_hook in vg-api-server
+    ## (SSIP-AC4-001, AC-4). See `api.strictRegistrationHookValidationEnabled` below.
+    apiStrictRegistrationHookValidation: true
+    ## Password on redis-ha and a dedicated ACL user for update-api-ban-list (APBN-SC28-001, SC-28 /
+    ## AC-3). Used instead of redisHa.vgAuth.enabled; needs redisHa.enabled and redisHa.auth set as
+    ## described there. See docs/013-redis-auth.md.
+    redisAuth: true
+    ## Days vg-api-server keeps audit records before the nightly cleanup deletes them
+    ## (APIS-AU11-001, AU-11). FedRAMP Moderate requires at least 90; the schema accepts 90 to 99999.
+    ## Used instead of `auditLogging.cleanup.ttlDays` while the profile is on.
+    apiAuditLogTtlDays: 90
+    ## Default-deny ingress+egress NetworkPolicy, per workload (CSA-110265 / VHC-SC7-001,
+    ## SC-7; CSA-110267 / VHC-AC4-001, AC-4). See docs/014-network-policy.md for which
+    ## workloads this stage covers and which are deliberately deferred. Used instead of
+    ## each workload's own networkPolicy.enabled while the profile is on. Covers
+    ## vg-resource-resolver too (that workload's policy renders from this stage's shared
+    ## pattern; it has no key of its own), and update-api-ban-list (apiBan.networkPolicy).
+    networkPolicyEnabled: true
+    ## CIDR of the Kubernetes API server endpoint. Required (the render fails otherwise)
+    ## only for a workload that needs direct Kubernetes API egress while the profile is on
+    ## (none are wired to this yet — see docs/014-network-policy.md). No chart default: the
+    ## control-plane endpoint differs by cloud and cannot be discovered at render time.
+    networkPolicyKubernetesApiCidr: ""
+    ## IP allow-list (ipWhiteListMiddleware) on the 8 externally-exposed ingresses below
+    ## (VHC-SC7-002, SC-7). Used instead of each ingress.<service>.ipWhiteListMiddleware.enabled
+    ## while the profile is on. The render fails if the resulting middleware would be enabled with
+    ## an IPv4-mapped IPv6 address, or a prefix shorter than /8 (IPv4) or /32 (IPv6), anywhere in
+    ## its ipWhiteList.sourceRange — set real ranges per service, or per environment in a Flux
+    ## overlay. See docs/009-fedramp-profile.md.
+    ingressIpAllowListEnabled: true
+    ## TLS keylog capture (vg-speech-utils), which writes TLS session keys to a file on the pod
+    ## (VDCL-SC13-001; SC-8(1), SC-13, SC-28(1)). Locked off while the profile is on. No per-service
+    ## key: capture has no chart-level setting. See docs/009-fedramp-profile.md.
+    tlsKeylogLocked: true
+    ## Refuse vg-api-server's built-in billing signing key (KR-68; IA-5(7)), so privateKeySecret must mount
+    ## another key. Overrides billing.sendToCentral.requireExplicitEncryptionKeys.
+    requireExplicitEncryptionKeys: true
+    ## sbc-sip-sidecar alerts (account-device-limit, OPTIONS ping failure) written to InfluxDB over plain
+    ## HTTP from the host network (CGY-42786, SC-8). false drops JAMBONES_TIME_SERIES_HOST from the
+    ## sidecar, which then only logs these events. Shown only on the standalone VG portal's Alerts page.
+    sbcSipSidecarAlerts: false
+    ## Regbots for carriers configured in Cognigy.AI (sbcSipSidecar.runtimeRegbots, CGY-44772). The
+    ## sidecar polls vg-resource-resolver over plain HTTP from the host network, outside the mesh, and
+    ## the resolver NetworkPolicy admits it only by node CIDR, empty by default
+    ## (resourceResolver.networkPolicy.ingressFromHostNetwork; SC-8, SC-7). false: AI-side
+    ## carriers that require REGISTER are not registered. Used instead of
+    ## sbcSipSidecar.runtimeRegbots.enabled while the profile is on.
+    sbcSipRuntimeRegbots: false
   ## Node environment
   nodeEnv: ""
   ## Default local host IP
@@ -39,6 +114,17 @@ global:
   ## flag flipped per environment that the vg-connector reads as
   ## ENABLE_MICROSOFT_TEAMS to mount the Teams module. Default false.
   enableMsTeams: false
+  ## Amazon Connect vendor_integrations CRUD + Audio Connectors UI master
+  ## switch — gates vg-api-server's VendorIntegrations route mount
+  ## (lib/routes/api/accounts.ts) and vg-webapp's Amazon Connect vendor
+  ## option, mirroring enableGenesysAudioHook/enableMsTeams above. Distinct
+  ## from vgConnector.enableAmazonConnect below, which gates the connector's
+  ## own protocol adapter — that flag predates this one, from when
+  ## api-server/webapp had no Amazon Connect awareness at all. The two are
+  ## independently togglable by design (an operator can run the connector
+  ## without exposing the CRUD/UI, or vice versa); set both together for the
+  ## common case of wanting the whole vendor on. Default false.
+  enableAmazonConnect: false
   ## Reloadable config master switch (see docs/plans/012-reloadable-config-api-server-pilot.md
   ## in vg-resources). Delivers COGNIGY_AI_VERSION, COGNIGY_DISPLAY_VERSION, and
   ## K8S_FEATURE_SERVER_CANARY_ENABLED/_PERCENTAGE via a mounted ConfigMap
@@ -157,10 +243,22 @@ stackit:
     storageClassName: "postgres"
     provisionerName: "cinder.csi.openstack.org"
     pdType: "storage_premium_perf6"
+## StatsD metrics (vg-stats-collector -> telegraf -> InfluxDB "telegraf" database).
+## Separate from Prometheus, which is always on and unaffected by anything here.
 stats:
-  ## Metrics will be generate
+  ## Global StatsD kill switch. When off, nothing in the release emits, listens
+  ## for, or is configured with StatsD:
+  ##   - ENABLE_METRICS is "0", so the SBC services never construct a StatsD client
+  ##   - no STATS_* env var is rendered on any workload
+  ##   - telegraf renders no [[inputs.statsd]] and no [[inputs.socket_listener]]
+  ##   - the telegraf Service is not created, so :8125 is unreachable
+  ## Telegraf itself keeps running: its heplify-server scrape and "homer" output
+  ## are untouched, so Homer's statistics keep working.
+  ## Ignored while global.fedramp.enabled is true; then global.fedramp.statsEnabled applies
+  ## (StatsD has no transport encryption, finding STAT-SC8-001, SC-8 / SC-8(1)).
+  ## See vg-resources docs/plans/014-vg-stats-collector-decommission.md.
   enabled: true
-  ## Connection type
+  ## Connection type. Only read when enabled is true.
   protocol: tcp
   ## Metrics will be generated in Telegraf format
   telegraf: true
@@ -286,6 +384,31 @@ ingress:
           - 0.0.0.0/0
         ipStrategy:
           depth: 0
+  realtimeBridge:
+    ## Off by default: exposes the bridge Session API (/v1, bearer-key protected) publicly. The media
+    ## WebSocket normally stays in-cluster (realtimeBridge.env.publicMediaUrl).
+    enabled: false
+    ## Own hostname (SRE must add the DNS record). Empty => shares ingress.api.host, which needs
+    ## no new DNS record or certificate; set routePrefix then, so the bridge gets its own path space.
+    host: ""
+    ## Public path prefix stripped at the edge (Traefik only): the default publishes
+    ## <host>/bridge/v1 (e.g. api-vg-dev.cognigy.ai/bridge/v1) while the bridge still receives /v1.
+    ## Required on the shared api host, where api-server already owns /v1; set "" only with an own
+    ## host. With a public media leg, include it in publicMediaUrl too (wss://<host>/bridge): the
+    ## bridge appends /media/<token> to it.
+    routePrefix: /bridge
+    ## Routed paths, under routePrefix. Only the Session API by default; add "/media" only when
+    ## publicMediaUrl is a public wss:// URL that goes through this ingress.
+    paths:
+      - /v1
+    extraAnnotations: {}
+    ipWhiteListMiddleware:
+      enabled: false
+      ipWhiteList:
+        sourceRange:
+          - 0.0.0.0/0
+        ipStrategy:
+          depth: 0
   vgConsole:
     host: ""
     extraAnnotations: {}
@@ -349,30 +472,60 @@ billing:
     username: billing
     existingSecret: vg-billing-mysql-password
     secretKey: billing-password
+  ## Pod settings shared by the three billing CronJobs below. The autoscaler nodeSelector
+  ## and tolerations from the hpa section are added on top when hpa.enabled is true.
+  job:
+    backoffLimit: 3
+    ttlSecondsAfterFinished: 86400
+    restartPolicy: Never
+    affinity: {}
+    nodeSelector: {}
+    tolerations: []
+    podSecurityContext: {}
   ## Refresh-organisations job - keeps the organisations cache warm so the
   ## reporting job's lazy handshake fallback rarely has to run
   refreshOrganisations:
     enabled: true
     ## Schedule: Daily at 01:00 UTC (ahead of pre-aggregation)
     schedule: "0 1 * * *"
+    ## PriorityClass for the job pod (see priorityClass section)
+    priorityClassName: low
   ## Pre-aggregation job - runs daily to calculate 10-minute billing packages
   preAggregation:
     enabled: true
     ## Schedule: Daily at 02:00 UTC
     schedule: "0 2 * * *"
+    ## PriorityClass for the job pod (see priorityClass section)
+    priorityClassName: low
   ## Daily billing reporting job - ships signed tar archives to the Central Billing Server
   sendToCentral:
     enabled: true
     ## Schedule: Daily at 03:00 UTC (after pre-aggregation)
     schedule: "0 3 * * *"
+    ## PriorityClass for the job pod (see priorityClass section)
+    priorityClassName: low
     ## Central Billing Server multipart POST endpoint (required if enabled)
     serverUrl: ""
     ## How many days behind today to set the reporting cutoff (default 2 — ensures
     ## late-arriving call records are included before the day is shipped)
     reportingLagDays: 2
-    ## Path to PEM-encoded ED25519 private key file inside the container.
-    ## Leave empty to use the dev fallback key (CBS will reject archives in production).
-    privateKeyPath: ""
+    ## Existing Secret (and key within it) holding the PEM ED25519 key that signs billing archives,
+    ## mounted as a file. Empty uses vg-api-server's hardcoded fallback key (KR-68): don't leave it
+    ## empty on a cluster reporting real usage.
+    privateKeySecret:
+      existingSecret: ""
+      secretKey: "key.pem"
+    ## true refuses the built-in signing key (REQUIRE_EXPLICIT_ENCRYPTION_KEYS); null keeps it as the
+    ## fallback. Ignored under the FedRAMP profile (global.fedramp.requireExplicitEncryptionKeys).
+    requireExplicitEncryptionKeys: null
+  ## Default-deny egress for the three CronJobs above (NEW-VBILL-AC4-001, SC-7/AC-4, stage 2).
+  ## Forced on under the FedRAMP profile (global.fedramp.networkPolicyEnabled). Nothing calls
+  ## these pods, so there is no ingress side to configure.
+  networkPolicy:
+    enabled: false
+    ## NetworkPolicyEgressRule entries appended verbatim, for anything this chart can't
+    ## resolve on its own (for example an external MySQL when mysql.enabled is false).
+    egressTo: []
 nice:
   ## SIP header used to propagate the carrier's `nice_business_unit` (composite value `bu:<BU>~sid:<call_sid>`).
   ## opt-in. Only attached to inbound 200 OK and outbound INVITE when the carrier has a value.
@@ -596,11 +749,17 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.20.1
+  image: cognigy.azurecr.io/vg-api-migrator:2026.23.0
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
   migrationTarget: "latest"
+  ## Default-deny egress for the api-migrator and billing-grants Jobs (NEW-VAMIG-AC4-001,
+  ## SC-7/AC-4, stage 2). Forced on under the FedRAMP profile. Nothing calls these pods,
+  ## so there is no ingress side.
+  networkPolicy:
+    enabled: false
+    egressTo: []
 additionalDbParameters:
   postgresql:
     host: postgres
@@ -626,6 +785,60 @@ influxdb:
     name: call_counts
   host: influxdb
   port: 8086
+  ## Separate retention for VG-in-AI call data (docs/015-vg-events-api.md,
+  ## "Retention of AI-path call data"). CDRs and alerts of calls admitted on the
+  ## AI path (tagged organisationId/projectId/endpointId, no account_sid) go to
+  ## the NON-default policy below on the `cdrs` and `alerts` databases; legacy
+  ## data stays in the default policy (`autogen`, infinite), unchanged.
+  aiRetention:
+    ## Off by default, so the default render is unchanged: an install that does not
+    ## opt in gets no Job and no env on the writers. Turn it on together with
+    ## vgEventsApi (or once any AI-path writer is in use).
+    ## On: a post-install/pre-upgrade hook Job creates the policy (or ALTERs its
+    ## duration) on both databases, and sbc-inbound, sbc-outbound, feature-server
+    ## and vg-events-api get JAMBONES_TIME_SERIES_RUNTIME_RETENTION_POLICY.
+    ## Off: no Job, no env; everything is written to and read from the default
+    ## policy. Turning it off never drops the policy: data already in it stays
+    ## (and expires on schedule) but the AI side no longer reads it until re-enabled.
+    enabled: false
+    ## Policy name, shared by every writer and reader. Must match
+    ## ^[A-Za-z_][A-Za-z0-9_]{0,63}$ and must not be `autogen`. Renaming creates a
+    ## new, empty policy; data in the old one is no longer read (it is not moved).
+    policyName: vg_ai
+    ## How long AI-path CDRs and alerts are kept: <n>h, <n>d or <n>w (min 1h).
+    ## Changing it ALTERs the existing policy on the next upgrade.
+    duration: 30d
+    ## How long the Job waits for InfluxDB to answer /ping. On timeout it logs a
+    ## warning and exits 0 (best-effort), so the upgrade is not blocked. Keep it
+    ## plus pod start-up below the release's `helm --timeout` (default 5m), or Helm
+    ## fails the hook before the Job reaches its exit 0.
+    waitTimeoutSeconds: 120
+    ## The hook Job (influxdb-ai-retention). Keep `hook` a post-install,pre-upgrade
+    ## pairing: the policy must exist before the writers roll (see the template).
+    hook:
+      hook: post-install,pre-upgrade
+      weight: "0"
+      deletePolicy: before-hook-creation,hook-succeeded
+      backoffLimit: 3
+      ttlSecondsAfterFinished: 86400
+    ## curl-only Job: a handful of HTTP calls to InfluxDB.
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+    ## Scheduling of the Job's pod. Empty by default; the fleet sets the
+    ## autoscaler node pool here (node-role: autoscaler + its toleration).
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    ## The Job's FedRAMP NetworkPolicy (on with influxdb.networkPolicy / the profile)
+    ## allows DNS and the in-chart influxdb pod. For an external influxdb.host, add
+    ## its egress rule here, or the hook cannot reach it and the upgrade fails.
+    networkPolicy:
+      egressTo: []
   resources:
     requests:
       cpu: "0.500"
@@ -633,6 +846,15 @@ influxdb:
     limits:
       cpu: "1"
       memory: 1.5Gi
+  ## Default-deny ingress+egress (NEW-VINFLUX-SC7-001, SC-7/AC-4, stage 2). Forced on
+  ## under the FedRAMP profile. Ingress: every direct writer (api-migrator, api-server,
+  ## feature-server/nightly, sbc-inbound/outbound, telegraf) plus sbc-sip through
+  ## ingressFromHostNetwork (hostNetwork, same limitation as vg-resource-resolver's
+  ## sbc-sip regbots). influxdb calls nothing of its own.
+  networkPolicy:
+    enabled: false
+    ingressFromHostNetwork: []
+    extraIngress: []
 ## Bitnami Chart, image info: bitnami/mysql:8.0.39-debian-12-r5
 mysql:
   enabled: true
@@ -712,7 +934,7 @@ postgresql:
   image:
     registry: cognigy.azurecr.io
     repository: vg-postgres
-    tag: 14.18.0-debian-12-r0
+    tag: 14.18.0-debian-12-r1
   primary:
     priorityClassName: ""
     persistence:
@@ -729,7 +951,7 @@ postgresql:
     image:
       registry: cognigy.azurecr.io
       repository: vg-postgres-exporter
-      tag: 0.17.1-debian-12-r16
+      tag: 0.17.1-debian-12-r17
     resources:
       requests:
         cpu: "0.200"
@@ -773,17 +995,52 @@ redisHa:
     registry: cognigy.azurecr.io
     repository: redis
     tag: 7.4.8-debian-12-r2
+  ## With Redis auth on (vgAuth.enabled, or global.fedramp.redisAuth under the FedRAMP profile), set
+  ## auth.enabled: true and point existingSecret at the Secret the chart mints
+  ## (templates/redis/redis-ha-auth-secret.yaml); the chart fails the render otherwise. Left empty,
+  ## auth.enabled alone keeps Bitnami's own generated Secret, as before. Sentinel auth stays off.
   auth:
     enabled: false
     sentinel: false
+    existingSecret: ""
+    existingSecretPasswordKey: redis-password
+  ## Password on redis-ha plus an ACL user `apiban` for update-api-ban-list (CSA-100703,
+  ## docs/013-redis-auth.md). Ignored while the FedRAMP profile is on (global.fedramp.redisAuth).
+  vgAuth:
+    enabled: false
+    secretName: redis-ha-auth
+    ## Lowest vg-api-ban release that understands REDIS_USERNAME, so the chart refuses to
+    ## give the `apiban` ACL user to a client that would ignore it. Only the tag is visible
+    ## here, so a non-semver tag is left alone. Empty disables the check.
+    apiBanMinVersion: "1.4.0"
+  ## The tpl lines follow the auth switch above; with it off they render exactly as before.
   commonConfiguration: |-
     appendonly no
-    protected-mode no
+    protected-mode {{ if include "vg.redisAuth.server" . }}yes{{ else }}no{{ end }}
     repl-diskless-sync no
     save ""
     stop-writes-on-bgsave-error yes
     maxmemory-policy volatile-ttl
+    {{- if include "vg.redisAuth.server" . }}
+    aclfile /opt/bitnami/redis/acl/users.acl
+    {{- end }}
   replica:
+    ## ACL file from the redis-ha-auth Secret, only while Redis auth is on.
+    extraVolumes: |-
+      {{- if include "vg.redisAuth.server" . }}
+      - name: redis-acl
+        secret:
+          secretName: {{ .Values.vgAuth.secretName }}
+          items:
+            - key: users.acl
+              path: users.acl
+      {{- end }}
+    extraVolumeMounts: |-
+      {{- if include "vg.redisAuth.server" . }}
+      - name: redis-acl
+        mountPath: /opt/bitnami/redis/acl
+        readOnly: true
+      {{- end }}
     replicaCount: 3
     resources:
       requests:
@@ -875,6 +1132,16 @@ heplifyServer:
     limits:
       cpu: "0.100"
       memory: 800Mi
+  ## Default-deny ingress+egress (NEW-VHEPLIFY-SC7-001, SC-7/AC-4, stage 2). Forced on
+  ## under the FedRAMP profile. Ingress: the HEP-ingest port (udp) from sbc-rtp, plus
+  ## sbc-sip through ingressFromHostNetwork (hostNetwork, same limitation as
+  ## vg-resource-resolver's sbc-sip regbots); the stats port (tcp) from telegraf. Egress:
+  ## the bundled postgresql pod.
+  networkPolicy:
+    enabled: false
+    ingressFromHostNetwork: []
+    extraIngress: []
+    egressTo: []
 homer:
   enabled: true
   ## We build and tag this image by ourselves
@@ -904,6 +1171,13 @@ homer:
     limits:
       cpu: "0.100"
       memory: 150Mi
+  ## Default-deny ingress+egress (NEW-VHOMER-SC7-001, SC-7/AC-4, stage 2). Forced on under
+  ## the FedRAMP profile. Ingress: the app port from api-server and this chart's own
+  ## Traefik (its own ingress.yaml, CSA-110266). Egress: the bundled postgresql pod.
+  networkPolicy:
+    enabled: false
+    extraIngress: []
+    egressTo: []
 jaeger:
   image: cognigy.azurecr.io/vg-jaeger:1.61.0
   imagePullPolicy: IfNotPresent
@@ -930,6 +1204,14 @@ jaeger:
     limits:
       cpu: "0.150"
       memory: 450Mi
+  ## Default-deny ingress+egress (NEW-VJAEGER-SC7-001, SC-7/AC-4, stage 2). Forced on under
+  ## the FedRAMP profile. Ingress: feature-server (compact/UDP), otel-collector
+  ## (otlp-grpc/4317), api-server (the UI/query API, ports.tcp) and this chart's own
+  ## Traefik (jaeger's own ingress.yaml, CSA-110266). No egress: all-in-one, DNS only.
+  networkPolicy:
+    enabled: false
+    extraIngress: []
+    egressTo: []
 otelCollector:
   enabled: false
   image: cognigy.azurecr.io/vg-otel-collector:2026.8.0
@@ -937,10 +1219,25 @@ otelCollector:
   replicaCount: 1
   affinity: {}
   nodeSelector: {}
-  priorityClassName: ""
+  priorityClassName: medium
   podSecurityContext: {}
   tolerations: []
   jaegerEndpoint: "jaeger:4317"
+  # Additional OTLP gRPC exporters. Traces go to Jaeger and to every entry here,
+  # after the enabled processors have run. Requires redactionProcessor.enabled.
+  # Redaction only covers digit patterns: enable spokennumProcessor (spoken
+  # numbers -> digits) and vendortransformProcessor (drops raw vendor STT
+  # payloads) before sending traces outside the namespace.
+  # name: exporter id (otlp/<name>), [A-Za-z0-9_-], not "jaeger", unique
+  # endpoint: host:port (required)
+  # insecure: plaintext gRPC (default false)
+  # config: optional extra otlp exporter settings (headers, retry_on_failure,
+  #   sending_queue, compression, tls.ca_file, ...), rendered as-is
+  extraOtlpExporters: []
+  # extraOtlpExporters:
+  #   - name: alloy
+  #     endpoint: "cognigy-alloy.monitoring.svc.cluster.local:4317"
+  #     insecure: true
   tracing:
     enabled: false
     otelExporterCollectorUrl: "http://otel-collector:4318/v1/traces"
@@ -987,6 +1284,20 @@ otelCollector:
     limits:
       cpu: "500m"
       memory: 512Mi
+  ## Default-deny ingress+egress (NEW-VOTEL-SC7-001, SC-7/AC-4, stage 2). Forced on under
+  ## the FedRAMP profile. Ingress: feature-server/feature-server-nightly (OTLP gRPC/HTTP).
+  ## Egress: this chart's own jaeger (jaegerEndpoint, default "jaeger:4317" — pointing it
+  ## elsewhere needs egressTo, same expectation as mysql.host/redis.host).
+  ## extraOtlpExporters (arbitrary external host:port, requires redactionProcessor) is
+  ## deliberately NOT covered here: no chart-known CIDR, and no URL scheme to derive a
+  ## port from the way runtimeApiTargets can — same "needs a bigger architectural call"
+  ## treatment as vg-console's changelogEnrichment LLM-vendor egress
+  ## (docs/014-network-policy.md). Use egressTo for each configured exporter's real
+  ## destination until that design exists.
+  networkPolicy:
+    enabled: false
+    extraIngress: []
+    egressTo: []
 metrics:
   port: 8002
 health:
@@ -1012,6 +1323,17 @@ telegraf:
     limits:
       cpu: "0.100"
       memory: 250Mi
+  ## Default-deny ingress+egress (NEW-VTELEGRAF-SC7-001, SC-7/AC-4, stage 2). Forced on
+  ## under the FedRAMP profile. telegraf's StatefulSet renders unconditionally (only its
+  ## Service is gated by vg.fedramp.statsEnabled), so this policy gates only on the
+  ## profile/opt-in switch. Ingress: sbc-inbound/outbound/sbc-rtp (STATS_HOST) plus
+  ## sbc-sip through ingressFromHostNetwork (hostNetwork, same limitation as
+  ## vg-resource-resolver's sbc-sip regbots). Egress: influxdb and heplify-server.
+  networkPolicy:
+    enabled: false
+    ingressFromHostNetwork: []
+    extraIngress: []
+    egressTo: []
 ## You can enable the pod monitor if any prometheus instance is running on your cluster.
 podMonitors:
   enabled: false
@@ -1037,11 +1359,6 @@ cognigyLogin:
 ## re-saved since) — feature-server derives AGENTIC_ENDPOINT_BASE_URL from it
 ## via the vg.agenticEndpoint.baseUrl helper.
 agenticEndpoint:
-  ## Emit AGENTIC_ENDPOINT_BASE_URL on feature-server. Set false on clusters
-  ## whose paired Cognigy environment does not deploy vg-agentic-endpoint:
-  ## otherwise agent-targeted calls are rerouted to a path that does not exist
-  ## there instead of staying on the endpoint's /voiceGateway hook.
-  enabled: true
   ## Appended to the derived host. Must match vg-agentic-endpoint's ingress
   ## routePrefix + wsPath, or the adapter parses no token and refuses the call.
   pathPrefix: /vg/agentic-endpoint/v1
@@ -1056,10 +1373,28 @@ agenticEndpoint:
 ###########################
 jobs:
   image: cognigy.azurecr.io/vg-k8s-tools:3.23.3
+  ## PriorityClass for scheduled jobs and for helm hook jobs (see priorityClass section)
+  priorityClassName: low
+  hookPriorityClassName: medium
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.20.1
+  image: cognigy.azurecr.io/vg-api-server:2026.23.0
   imagePullPolicy: Always
   replicaCount: 2
+  ## Digest used to derive session-revocation Redis keys: sha256 | md5.
+  ## Ignored while the FedRAMP profile is on (global.fedramp.apiSessionKeyDigest applies).
+  ## null leaves the variable unset and vg-api-server keeps its own default, md5.
+  ##
+  ## The digest IS the Redis key address, so changing it on a running cluster relocates every
+  ## stored session. Old and new pods then disagree about where a session lives and a logout
+  ## handled by an old pod returns 204 without revoking anything, for up to JWT_EXPIRES_IN.
+  ## This chart renders no strategy: block for api-server, so changing this on a populated
+  ## cluster needs a scale-to-zero cutover through api.replicaCount. Where the workload is
+  ## KEDA-managed (hpa.enabled, hpa.removeReplicas and hpa.services.api.enabled all true) the
+  ## template omits replicas, so hpa.services.api.enabled must come off for the window too or
+  ## the ScaledObject scales it back up. See the runbook at Cognigy/vg-api-server
+  ## docs/fedramp-remediation-1-upgrade.md. A new environment starts with an empty Redis and
+  ## has nothing to move.
+  sessionKeyDigest:
   ## valid choices are debug, info, error, warn
   logLevel:
   port: 3000
@@ -1139,6 +1474,20 @@ api:
   ## (so the harness autoProvision Job can register its webhook). Set explicitly to
   ## true/false to override the automatic behavior either way.
   allowPrivateCustomUrls: null
+  ## CSA-102746 / SSIP-AC4-001: registration_hook (service-providers) never went
+  ## through the same SSRF guard as call_hook/call_status_hook/messaging_hook
+  ## (applications). This turns strict validation on for registration_hook too,
+  ## at save time only: the chart renders it on api-server alone. The dial-time
+  ## check (vg-digest-utils's httpAuthenticate in sbc-inbound / sbc-sip) is not
+  ## wired yet, so hooks saved before the flag is on are still dialed.
+  ## Ignored while the FedRAMP profile is on
+  ## (global.fedramp.apiStrictRegistrationHookValidation applies, true by default).
+  ## null leaves the variable unset and vg-api-server keeps its own default.
+  ## Only api-server images with vg-api-server#289 read the variable.
+  ## No "fedramp" in the name by design (see Cognigy/copilot-domain#11 review
+  ## discussion) so the same flag is reusable for other restricted/sovereign
+  ## regions later, not just FedRAMP.
+  strictRegistrationHookValidationEnabled:
   extraEnvVars: []
   resources:
     requests:
@@ -1147,12 +1496,32 @@ api:
     limits:
       cpu: "0.500"
       memory: 500Mi
+  ## Default-deny ingress+egress (NEW-VAPISRV-SC7-001, SC-7/AC-4, stage 2). Forced on
+  ## under the FedRAMP profile. Ingress: the health port (any source, kubelet probes), the
+  ## metrics port (monitoring namespace) and the app port from this chart's own Traefik —
+  ## NOT a podSelector list of application callers. Almost every real caller (sbc-inbound,
+  ## webapp, test-call-manager, audit-cleanup, feature-server/nightly) reaches api-server
+  ## through its own public ingress hostname (ingress.api.host), which Traefik proxies;
+  ## from api-server's pod's own point of view Traefik is the only direct network peer,
+  ## same reasoning as every other chart-fronted-by-Traefik workload (see
+  ## vg.networkPolicy.fromTraefik). Only templates/test-harness/provision-job.yaml (CI-only)
+  ## calls the in-cluster Service directly. Egress: MySQL, Redis. api-server's own direct
+  ## Kubernetes API need (vg.networkPolicy.apiServerEgress, secrets management via its
+  ## ServiceAccount RBAC) stays explicitly deferred — see docs/014-network-policy.md.
+  networkPolicy:
+    enabled: false
+    allowMonitoringScrape: true
+    monitoringNamespaceSelector: {}
+    extraIngress: []
+    egressTo: []
 apiBan:
   enabled: true
-  ## Published as vg-api-ban since 1.4.0; api-ban holds the builds before that.
-  ## 1.4.1 is built on Node 22.23.4 (CVE-2026-111497).
-  image: cognigy.azurecr.io/vg-api-ban:1.4.1
+  ## 1.4.0 is the first release with REDIS_USERNAME, see redisHa.vgAuth.apiBanMinVersion.
+  ## Published as vg-api-ban; api-ban holds the builds before 1.4.0.
+  image: cognigy.azurecr.io/vg-api-ban:1.4.0
   imagePullPolicy: IfNotPresent
+  ## The NetworkPolicy (networkPolicy below) allows the feed on TCP 443 only: an http:// URL or
+  ## another port needs an egressTo entry.
   endpoint: https://apiban.org/api
   redisSetKey: apiban:ips
   refreshInterval: 3600
@@ -1166,7 +1535,51 @@ apiBan:
   ## Add a list of known CIDRs to be banned, e.g.: "192.255.255.255/12, 168.255.255.255/24"
   bannedIpsList: ""
   cronjobSchedule: "0 * * * *"
+  ## Hardening of vg-api-ban (needs the image of Cognigy/vg-api-ban#24, older images ignore these).
+  ## Ignored while global.fedramp.enabled is true: global.fedramp.apiBan* applies instead.
+  ## false: a malformed API_BAN_BANNED_RANGES entry is logged at error level and skipped.
+  strictRanges: false
+  maxRedirects: 0
+  timeoutMs: 30000
+  maxBatches: 1000
   extraEnvVars: []
+  ## Run as the Node image's unprivileged `node` user (uid/gid 1000), never root, with no privilege
+  ## escalation, no capabilities and a read-only root filesystem (APBN-CM2-001, CM-2). The image
+  ## has run as `node` since Cognigy/vg-api-ban#18 and writes nothing to its filesystem; a writable
+  ## emptyDir is mounted at /tmp anyway while readOnlyRootFilesystem is true. Overrides are MERGED
+  ## into these defaults: a key is dropped by setting it to null, and `podSecurityContext: null`
+  ## removes the block.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  ## Default-deny NetworkPolicy for the CronJob (APBN-SC7-001, NEW-VABAN-AC4-001; SC-7 / AC-4): no ingress; egress
+  ## only to DNS, the chart's Redis (redis-ha pods when redisHa.enabled, else the `redis`
+  ## StatefulSet; Sentinel port included for redis-ha) and TCP 443 outside private and link-local
+  ## space for the APIBAN feed. A NetworkPolicy cannot match a DNS name, so the feed rule cannot be
+  ## narrowed to apiban.org; use DNS-aware egress (e.g. Cilium FQDN policies) for that. It has an
+  ## effect only where the cluster's CNI enforces NetworkPolicy.
+  networkPolicy:
+    ## Ignored while the FedRAMP profile is on (global.fedramp.networkPolicyEnabled applies). Off by
+    ## default so existing clusters do not change: an external Redis or an egress proxy needs an
+    ## egressTo rule first.
+    enabled: false
+    ## Where cluster DNS runs. Empty uses the shared kube-system/k8s-app: kube-dns rule
+    ## (vg.networkPolicy.dnsEgress); set this only for a non-standard DNS location.
+    dnsNamespaceSelector: {}
+    ## NetworkPolicyEgressRule entries appended verbatim: an external Redis (redis.host outside
+    ## the chart), an egress proxy, a node-local DNS cache, a private error-tracking endpoint, or
+    ## the Redis TLS ports if the chart adds them.
+    egressTo: []
 ## Temporary (Redis TTL-backed) per-IP bans for rejected-request floods, distinct from the
 ## permanent apiBan blocklist above. sbc-inbound (INVITE) and sbc-sip-sidecar (REGISTER) share
 ## the same VG_REDIS_BAN_* env var names/semantics, so each gets its own threshold/window/duration
@@ -1188,11 +1601,27 @@ tmpban:
     ## Ban duration (hours) applied once banThreshold is reached.
     banDurationHours: 1
 drachtio:
-  image: cognigy.azurecr.io/vg-drachtio:1.3.7
+  image: cognigy.azurecr.io/vg-drachtio:1.3.22
   imagePullPolicy: IfNotPresent
   host: 127.0.0.1
   port: 9022
   metricsPort: 8088
+  ## Feature-server pod only (main, nightly): the sbc-sip drachtio, which
+  ## shares this `drachtio:` block, has no probe yet.
+  ## Restart drachtio when it stops answering its Prometheus endpoint (metricsPort,
+  ## /metrics). drachtio has no health endpoint, and a TCP probe on `port` would pass
+  ## even with the process frozen (the kernel completes the handshake), so this needs a
+  ## drachtio thread to answer. It cannot prove the SIP loop itself is healthy.
+  ## Detection window ≈ periodSeconds * failureThreshold.
+  livenessProbe:
+    enabled: true
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    ## Grace for the restart this probe triggers. Without it Kubernetes uses the pod's
+    ## terminationGracePeriodSeconds (300s for call draining): a frozen drachtio never
+    ## handles SIGTERM, so it would sit there for 5 minutes before the SIGKILL.
+    terminationGracePeriodSeconds: 10
   homerId: 10
   ## TLS Configuration for SIP over TLS (SIPS) and WebSocket Secure (WSS)
   tls:
@@ -1226,7 +1655,10 @@ drachtio:
       cpu: "0.5"
       memory: 500Mi
 featureServer:
-  image: cognigy.azurecr.io/vg-feature-server:2026.20.1
+  # Must be 2026.19.0 or newer: the pod gets no JAMBONES_MYSQL_* env and no MySQL
+  # wait, and older images assert those vars at start (CGY-41894). Add them back
+  # through extraEnvVars only to run an older image.
+  image: cognigy.azurecr.io/vg-feature-server:2026.23.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1268,6 +1700,33 @@ featureServer:
   tolerations: []
   sigtermForceCloseTimeoutMs: ""
   terminationGracePeriodSeconds: 300
+  ## Pod DNS resolver options (CGY-45509), merged by the kubelet into the ClusterFirst
+  ## /etc/resolv.conf of all three containers (a PodDNSConfig: options, and optionally
+  ## nameservers/searches). Set to null (or options: []) for the plain ClusterFirst
+  ## resolv.conf (5 s timeout, 2 attempts); {} would merge into this default.
+  ## FreeSWITCH resolves with blocking glibc getaddrinfo() calls, some of them on the
+  ## shared mod_audio_fork libwebsockets service thread, so one lost DNS reply stalls
+  ## every audio fork on the pod for as long as the resolver waits.
+  ##   timeout:2, attempts:2
+  ##     glibc (freeswitch, drachtio): a lost reply is resent after 2 s instead of 5 s,
+  ##     and a name that never answers gives up after 4 s instead of 10 s.
+  ##     musl (feature-server, Alpine): timeout is the total budget for a lookup, so 2 s
+  ##     instead of 5 s, with one resend after 1 s (timeout / attempts).
+  ## ndots is deliberately left at the ClusterFirst default (5). Lowering it would cut
+  ## search-list queries for external names, but it changes which names resolve: musl
+  ## never falls back to the search list for a name with ndots or more dots, so a
+  ## partly qualified name such as "svc.ns.svc" would stop resolving in feature-server.
+  ## It would also not help the bare in-cluster names (silero-vad) behind CGY-45509,
+  ## which hit on the first search domain either way.
+  ## Overriding options replaces the whole list: repeat timeout and attempts when adding
+  ## another option, or the pod falls back to the 5 s glibc default.
+  ## featureServerNightly.dnsConfig overrides this for the nightly workload when set.
+  dnsConfig:
+    options:
+      - name: timeout
+        value: "2"
+      - name: attempts
+        value: "2"
   ## Set to false to run feature-server as a Deployment instead of a StatefulSet
   ## (faster, non-sequential rolling upgrades). The service is always headless,
   ## so SIP/in-dialog routing resolves to real pod IPs in both modes. The old
@@ -1286,6 +1745,12 @@ featureServer:
   disableDialPaiHeader: false
   ## list of comma-separated vendors that should not be pre-cached. Valid values are aws, deepgram, elevenlabs, google, ibm, microsoft, nuance, wellsaid, whisper, playh
   preCacheIgnoreList: "deepgram"
+  ## CGY-43437: HTTP webhooks (status callbacks, call_hook, actionHooks) fail a stalled connect
+  ## fast and retry it. Empty = feature-server defaults: 3000 ms, 2 retries. Timeout 100-10000 ms;
+  ## retries 0-5, capped so (retries + 1) x timeout <= 10 s. httpConnectTimeoutMs: 10000 restores
+  ## the old single 10 s attempt. Not used when JAMBONES_HTTP_PROXY_IP is set.
+  httpConnectTimeoutMs: ""
+  httpConnectRetries: ""
   ## Override global.enableTtsStreaming for this feature-server. When set (true/false), takes precedence
   ## over the global switch. Leave as null to inherit from global.enableTtsStreaming.
   enableTtsStreaming: null
@@ -1315,16 +1780,70 @@ featureServer:
     limits:
       cpu: "1"
       memory: 500Mi
+  ## Both probed every second so the pod turns Ready as soon as the app is up
+  ## (it used to wait for the next 10s startup / 5s readiness tick). The thresholds
+  ## keep the old budgets: startup ~30s (was the k8s default 10s x 3), readiness
+  ## 30 failures in a row once startupProbe has passed (30-60s with the 2s timeout,
+  ## which leaves room for event-loop lag in the /health handler).
+  startupProbe:
+    periodSeconds: 1
+    timeoutSeconds: 1
+    failureThreshold: 30
   readinessProbe:
-    periodSeconds: 5
-    timeoutSeconds: 5
-    failureThreshold: 6 # ~30s of retries once startupProbe has passed
+    periodSeconds: 1
+    timeoutSeconds: 2
+    failureThreshold: 30
+  ## Public /v2 API: outbound calls initiated by a linked Cognigy.AI cluster's
+  ## vg-runtime-api. Design: vg-resources docs/tdd/06-vg-in-ai/006 §6-§7, and
+  ## docs/010-feature-server-v2-api.md here.
+  ##
+  ## Its only caller is the vg-runtime-api of an AI cluster listed in
+  ## resourceResolver.runtimeApiTargets, proven per request by an ES256 JWT
+  ## (aud = this cluster's name, body hash, single-use jti) verified against
+  ## that AI cluster's JWKS. /v1 stays unexposed.
+  ##
+  ## Off by default: POST /v2/createCall answers 501 until outbound runtime
+  ## resolution (006 G5) lands, so there is nothing to route yet.
+  v2Api:
+    enabled: false
+    ## Public Ingress for the /v2/ prefix ONLY, on ingress.api.host unless
+    ## `host` is set. Traefik middlewares cap the body and rate-limit the
+    ## caller.
+    ingress:
+      enabled: false
+      host: ""
+      ## The JWT carries the AI cluster's identity, but an ingress cannot read
+      ## it, so the limit is per source IP. The AI side egresses from a handful
+      ## of NAT addresses, so set this for the busiest linked AI cluster.
+      rateLimit:
+        average: 50
+        burst: 100
+      ## Matches the service's own 16 KB express.raw limit; rejected here
+      ## first so an oversized body never reaches a pod.
+      maxRequestBodyBytes: 16384
+    ## Opt-in NetworkPolicy on the feature-server pods (forced on under the FedRAMP
+    ## profile — global.fedramp.networkPolicyEnabled, CSA-110265/CSA-110267). Ingress-only
+    ## (PR #1131 review): restricts ONLY the HTTP port (featureServer.ports.tcp) to the
+    ## ingress controller and this namespace; every other TCP/UDP port stays open to
+    ## everyone, exactly as without a policy, via explicit port ranges around the HTTP
+    ## port. Egress is deliberately NOT restricted here — mainline feature-server's main
+    ## job is calling destinations this chart cannot reduce to a CIDR or podSelector
+    ## (STT/TTS speech vendors, call_hook/status_hook webhooks, Cognigy.AI), and a
+    ## default-deny egress policy with no fix for those would break real call flow once
+    ## forced on under FedRAMP. See docs/014-network-policy.md ("Deferred to a later
+    ## stage") for why and what a fix needs.
+    networkPolicy:
+      enabled: false
+      ## Namespace of an EXTERNAL ingress controller. Empty (default): the
+      ## chart's own Traefik subchart, which runs in this release's namespace
+      ## and is already covered by the same-namespace rule.
+      ingressControllerNamespace: ""
 sileroVad:
   ## Enable vg-silero-vad microservice deployment.
   ## When enabled, feature server receives SILERO_VAD_SERVICE_URL env var
   ## pointing to this service for Plan B audio-fork VAD.
   enabled: false
-  image: cognigy.azurecr.io/vg-silero-vad:2026.20.0
+  image: cognigy.azurecr.io/vg-silero-vad:2026.23.0
   ## Default Always because the default tag is :latest (mutable) — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1362,9 +1881,6 @@ sileroVad:
       - podSelector:
           matchLabels:
             app: feature-server-nightly
-      - podSelector:
-          matchLabels:
-            app: feature-server-legacy
     # When true, also allow Prometheus scraping of /metrics from the
     # monitoring namespace. Leave on unless you scrape via DaemonSet on
     # node-local IPs.
@@ -1372,6 +1888,11 @@ sileroVad:
     monitoringNamespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: monitoring
+    ## Extra egress rules (CSA-110267 / VHC-AC4-001, AC-4), appended after the built-in DNS
+    ## and (conditional) MySQL allow rules. Each entry is a raw NetworkPolicyEgressRule —
+    ## use this for an external MySQL host (mysql.enabled: false) or any other dependency
+    ## this chart cannot resolve to an in-cluster podSelector on its own.
+    egressTo: []
   podMonitor:
     enabled: true # also gated by global podMonitors.enabled
     path: /metrics
@@ -1447,7 +1968,7 @@ sileroVad:
 ## jambones MySQL DB. Disabled by default — opt in per cluster.
 vadAutotuner:
   enabled: false
-  image: cognigy.azurecr.io/vg-vad-autotuner:2026.20.0-89
+  image: cognigy.azurecr.io/vg-vad-autotuner:2026.22.0-21
   ## Default Always because the default tag may be mutable — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1492,7 +2013,8 @@ vadAutotuner:
   extraEnvVars: []
 featureServerNightly:
   enabled: false
-  image: cognigy.azurecr.io/vg-feature-server:2026.20.1
+  # Same minimum as featureServer.image: 2026.19.0 or newer (no MySQL env).
+  image: cognigy.azurecr.io/vg-feature-server:2026.23.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1526,6 +2048,11 @@ featureServerNightly:
   tolerations: []
   sigtermForceCloseTimeoutMs: ""
   terminationGracePeriodSeconds: 300
+  ## Pod DNS resolver options. Unset (default): inherits featureServer.dnsConfig.
+  ## Set a PodDNSConfig to override it for the nightly workload, or null, {} or
+  ## options: [] for the plain ClusterFirst resolv.conf. options: [] (or null) is the
+  ## spelling that opts out on featureServer.dnsConfig too; {} there merges into the default.
+  # dnsConfig: {}
   ## Set to false to run feature-server-nightly as a Deployment instead of a
   ## StatefulSet (faster, non-sequential rolling upgrades). The service is always
   ## headless, so SIP/in-dialog routing resolves to real pod IPs in both modes.
@@ -1542,67 +2069,9 @@ featureServerNightly:
   disableDialPaiHeader: false
   ## list of comma-separated vendors that should not be pre-cached. Valid values are aws, deepgram, elevenlabs, google, ibm, microsoft, nuance, wellsaid, whisper, playh
   preCacheIgnoreList: "deepgram"
-  mediaProcessor:
-    enabled: false
-    sttVendors: []
-    ttsVendors: []
-  ## Override global.enableTtsStreaming for this feature-server. When set (true/false), takes precedence
-  ## over the global switch. Leave as null to inherit from global.enableTtsStreaming.
-  enableTtsStreaming: null
-  ## List of vendors that use per-credential TTS streaming control.
-  ## Vendors not listed fall back to global enableTtsStreaming behavior.
-  ## Use ["*"] for all vendors.
-  streamingTtsVendors: ["*"]
-  extraEnvVars: []
-  ports:
-    tcp: 3000
-    udp: 5060
-  resources:
-    requests:
-      cpu: "1"
-      memory: 500Mi
-    limits:
-      cpu: "1"
-      memory: 500Mi
-## This legacy feature server can scaled up on demand for customers facing issues with persistent-gather feature-server
-## PINNED: vg-feature-server-legacy is archived (read-only) and dropped from the
-## release lifecycle, so no newer image will ever be published. 2026.18.0 is the
-## last released tag. The release pipelines no longer write this key — do not bump it.
-featureServerLegacy:
-  enabled: false
-  image: cognigy.azurecr.io/vg-feature-server-legacy:2026.18.0
-  imagePullPolicy: Always
-  replicaCount: 2
-  logLevel:
-  sofiaLoglevel: "3"
-  trimTts: true
-  serviceName: feature-server-legacy
-  affinity:
-    podAntiAffinity:
-      preferredDuringSchedulingIgnoredDuringExecution:
-        - weight: 100
-          podAffinityTerm:
-            labelSelector:
-              matchExpressions:
-                - key: app
-                  operator: In
-                  values:
-                    - feature-server-legacy
-            topologyKey: kubernetes.io/hostname
-  nodeSelector: {}
-  priorityClassName: ""
-  podSecurityContext: {}
-  tolerations: []
-  sigtermForceCloseTimeoutMs: ""
-  terminationGracePeriodSeconds: 300
-  useStatefulSet: true
-  headlessServiceName: feature-server-headless-legacy
-  freeswitchConnection: "127.0.0.1:8021:JambonzR0ck$"
-  nodeOptions: "--max-old-space-size=450"
-  preCacheAudio: false
-  anchorMediaAlways: false
-  disableDialPaiHeader: false
-  preCacheIgnoreList: "deepgram"
+  ## See featureServer.httpConnectTimeoutMs / httpConnectRetries (CGY-43437)
+  httpConnectTimeoutMs: ""
+  httpConnectRetries: ""
   mediaProcessor:
     enabled: false
     sttVendors: []
@@ -1626,7 +2095,7 @@ featureServerLegacy:
       cpu: "1"
       memory: 500Mi
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch:2026.20.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.23.0
   imagePullPolicy: IfNotPresent
   ## FreeSWITCH log level. Valid choices (case-insensitive) are the FreeSWITCH log
   ## levels, from least to most verbose:
@@ -1650,17 +2119,35 @@ freeswitch:
     sip: 5080
     tls: 5081
     eventSocket: 8021
-  ## Argument "--codec-answer-generous" is commented because we are looking into a DTMF recognition issue using Firefox, in the Interaction Panel Call,
-  ## and until we don't have a solution we will force a specific codec for it. Once we have defintive solution, we uncomment this.
-  args:
-    - --codec-answer-generous
-    # - --g711-only OR
-    # - --g711-only-alaw-preferred (this is recommended for clusters running in EU)
-    # - --rtp-range-start the starting UDP port for RTP traffic
-    # - --rtp-range-end the ending UDP port for RTP traffic
+  ## SDP answer codec negotiation on the mrf profile:
+  ##   generous - answer with the caller's preferred codec (e.g. opus for WebRTC)
+  ##   greedy   - answer with FreeSWITCH's own preferred codec (PCMU first by default)
+  ##   ""       - auto: greedy when args restricts FreeSWITCH to G.711
+  ##              (-g, --g711-only, --g711-only-alaw-preferred), generous otherwise
+  ## Rendered as "--codec-answer-generous" by the feature-server templates rather than
+  ## carried in freeswitch.args, so it survives a freeswitch.args override (Helm replaces
+  ## list values wholesale). An in-args --codec-answer-generous is still honoured, but
+  ## combining it with codecNegotiation: greedy fails the render.
+  ## Generous is the default since 2025-02; historically a Firefox DTMF issue in the
+  ## Interaction Panel was worked around by forcing a codec (greedy / --g711-only).
+  codecNegotiation: ""
+  ## Extra FreeSWITCH arguments, e.g.:
+  ##   args:
+  ##     - --g711-only                   (or --g711-only-alaw-preferred, recommended for EU clusters)
+  ##     - --rtp-range-start             the starting UDP port for RTP traffic
+  ##     - "20000"
+  ##     - --rtp-range-end               the ending UDP port for RTP traffic
+  ##     - "30000"
+  args: []
   ## Enable core dump creation on crash. Requires the host/node kernel core_pattern
   ## to be set to a path inside /coredumps (e.g., /coredumps/core.%e.%p.%t).
   createCoreFile: true
+  ## Mount FreeSWITCH's DTLS-SRTP and WSS certs from a chart-generated Secret
+  ## (freeswitch-certs, 4096-bit RSA, kept across upgrades). Without it FreeSWITCH
+  ## generates two 4096-bit RSA keys on every container start, which costs seconds
+  ## of startup, and much more on a CPU-throttled pod.
+  pregeneratedCerts:
+    enabled: true
   tmpCacheAudioFolder: "/tmp/"
   serviceThreads: 1
   bufferSecs: 5
@@ -1694,21 +2181,20 @@ freeswitch:
     failureThreshold: 3
   ## Startup probe gives FreeSWITCH time to boot before liveness kicks in.
   ## With defaults, allows up to periodSeconds * failureThreshold = 150s.
+  ## Probed every second: FreeSWITCH is up in ~2s, and the pod cannot turn Ready
+  ## before this probe passes, so a 5s period cost up to 5s per pod start.
+  ## timeoutSeconds stays at the period: probes run one after another, so a 5s
+  ## timeout would stretch 150 failing attempts to ~750s.
   startupProbe:
     enabled: true
-    periodSeconds: 5
-    timeoutSeconds: 5
-    failureThreshold: 30
+    periodSeconds: 1
+    timeoutSeconds: 1
+    failureThreshold: 150
 freeswitchNightly:
   ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
   ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
   ## @see featureServerNightly
-  image: cognigy.azurecr.io/vg-freeswitch:2026.20.0
-freeswitchLegacy:
-  ## You can specify a custom image for the FreeSWITCH in the legacy FeatureServer here
-  ## To enable a "legacy FreeSWITCH", you have to enable a legacy FeatureServer.
-  ## @see featureServerLegacy
-  image: cognigy.azurecr.io/vg-freeswitch:2026.20.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.23.0
 rtpEngine:
   image: cognigy.azurecr.io/vg-rtpengine:0.2.0
   imagePullPolicy: IfNotPresent
@@ -1721,8 +2207,9 @@ rtpEngine:
   homerId: 11
   # Enables rtpengine's --measure-rtp (RTP-stream-observed jitter/loss/MOS,
   # no RTCP from either call leg required) and --mos (CQ=conversational,
-  # LQ=listening quality) flags. Off by default -- opt in per environment.
-  measureRtp: false
+  # LQ=listening quality) flags. On by default -- set to false to opt out
+  # per environment.
+  measureRtp: true
   mos: CQ
   ## Core dumps from the rtpengine daemon. Needs an image built with debug
   ## symbols (Cognigy/vg-rtpengine ships those unstripped, plus gdb).
@@ -1754,7 +2241,7 @@ rtpEngine:
 mediaProcessor:
   ## Enable Media Processor for decoupled STT/TTS processing
   enabled: false
-  image: cognigy.azurecr.io/vg-media-processor:2026.20.0
+  image: cognigy.azurecr.io/vg-media-processor:2026.23.0
   imagePullPolicy: Always
   replicaCount: 2
   serviceName: media-processor
@@ -1800,8 +2287,24 @@ mediaProcessor:
     limits:
       cpu: "1"
       memory: 512Mi
+  ## Default-deny ingress+egress (NEW-VMEDIAP-SC7-001, SC-7/AC-4, stage 2). Forced on
+  ## under the FedRAMP profile. Ingress: feature-server/feature-server-nightly (grpc) and
+  ## the metrics port from any source (kubelet's /health probes share it with Prometheus
+  ## scraping, so it cannot be restricted to the monitoring namespace the way a dedicated
+  ## health port would be). Egress: Redis, only when cache.type is "redis".
+  ##
+  ## Deliberately NOT covered: media-processor's own STT/TTS vendor egress. Decoupled
+  ## processing is this workload's whole purpose, so it calls the same speech vendors
+  ## (Azure, Google, Deepgram, ElevenLabs, ...) feature-server would otherwise call itself,
+  ## using tenant credentials pulled from MySQL/Redis at request time — no chart-known URL
+  ## or CIDR to derive a rule from. Same "needs a bigger architectural call" bucket as
+  ## feature-server's own deferred vendor egress (docs/014-network-policy.md).
+  networkPolicy:
+    enabled: false
+    extraIngress: []
+    egressTo: []
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.20.1
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.23.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -1820,7 +2323,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/vg-sbc-call-router:2026.20.1
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.23.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1850,6 +2353,25 @@ sbcCallRouter:
     limits:
       cpu: "0.100"
       memory: 150Mi
+  ## Default-deny ingress+egress (NEW-VSBCROUTER-SC7-001, SC-7/AC-4, stage 3). Forced on
+  ## under the FedRAMP profile. Ingress: the health port (any source, kubelet probes) and
+  ## the metrics port (monitoring namespace).
+  ##
+  ## KNOWN GAP: the app port (sbcCallRouter.port) has no default ingress rule. Nothing in
+  ## this chart's templates wires a caller to it (no other workload's env vars reference
+  ## sbcCallRouter), and it has no ingress.yaml of its own — unlike every other workload in
+  ## this file, its real caller could not be confirmed from the chart alone. It egresses to
+  ## both sbc-inbound and sbc-outbound (K8S_SBC_INBOUND_SERVICE_NAME /
+  ## K8S_SBC_OUTBOUND_SERVICE_NAME), which suggests it sits in front of them in the call
+  ## path and is itself reached the same way they are (sbc-sip's drachtio dispatch, or
+  ## direct carrier SIP) — but that is inference, not confirmed. Add the real caller to
+  ## extraIngress before relying on this policy to admit production call traffic.
+  networkPolicy:
+    enabled: false
+    allowMonitoringScrape: true
+    monitoringNamespaceSelector: {}
+    extraIngress: []
+    egressTo: []
 ## MySQL-backed resource resolution gateway, and the acting decision path in
 ## production: every vg-* service on the call-setup path resolves its tenant data
 ## here, vg-sbc-inbound's resolveCallAdmission included. It is a critical
@@ -1858,7 +2380,7 @@ sbcCallRouter:
 ## Background: vg-resources/docs/tdd/06-vg-in-ai/002-runtime-gateway-migration-plan.md.
 resourceResolver:
   enabled: true
-  image: cognigy.azurecr.io/vg-resource-resolver:2026.20.1
+  image: cognigy.azurecr.io/vg-resource-resolver:2026.23.0
   imagePullPolicy: IfNotPresent
   ## Two replicas for availability, matching sbcInbound/sbcOutbound. Capacity is
   ## not the reason: a single replica served 600 concurrent calls at 21% of a 250m
@@ -1909,6 +2431,11 @@ resourceResolver:
   ##   runtimeApiTargets:
   ##     - name: ibilousov-test
   ##       url: https://api-ibilousov-test.cognigy.dev/vg/runtime
+  ##       ## Optional. Where that AI cluster publishes the keys its vg-runtime-api
+  ##       ## signs feature-server /v2 calls with. Default: <url without a
+  ##       ## trailing /v1>/.well-known/jwks.json. Only read when
+  ##       ## featureServer.v2Api.enabled is on.
+  ##       jwksUrl: https://api-ibilousov-test.cognigy.dev/vg/runtime/.well-known/jwks.json
   ##
   ## MIGRATION: this replaces RUNTIME_API_BASE_URL (and RUNTIME_API_SERVICE_TOKEN),
   ## which this chart never set — the one place it lives today is a fleet repo,
@@ -1928,12 +2455,203 @@ resourceResolver:
       memory: 256Mi
   nodeSelector: {}
   tolerations: []
-  priorityClassName: ""
-  podSecurityContext: {}
+  priorityClassName: critical
+  ## Run as the Node image's unprivileged `node` user (uid/gid 1000), never root
+  ## (CM-2 / AC-6, CSA-109610). Works with any resolver image: it overrides the
+  ## image's user, and the application tree in the image is root-owned but
+  ## world-readable, so uid 1000 can run it and cannot rewrite it.
+  ##
+  ## runAsUser is what makes runAsNonRoot checkable: with only a named image
+  ## user (`USER node`) the kubelet cannot prove it is non-root and refuses to
+  ## start the container.
+  ##
+  ## fsGroup is what keeps the cluster signing key readable. That Secret is
+  ## mounted 0400 (see templates/resource-resolver/deployment.yaml); with
+  ## fsGroup set, kubelet makes it root:1000 0440, so this user reads it through
+  ## its group and no other user can. Every container in this pod shares that
+  ## group, so a sidecar that mounted the volume could read it too.
+  ##
+  ## Overrides are MERGED into these defaults: `{}` keeps them, and a key is
+  ## only dropped by setting it to null. Keep fsGroup: the chart refuses to
+  ## render a non-root runAsUser with runtimeApiTargets set and no fsGroup,
+  ## because the resolver could not read its key. `runAsUser: 0` alone keeps
+  ## runAsNonRoot: true, and kubelet then refuses to start the container.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  ## Opt-in NetworkPolicy, default-deny ingress+egress (forced on under the FedRAMP
+  ## profile — global.fedramp.networkPolicyEnabled, CSA-110265/CSA-110267). Ingress
+  ## allows only this resolver's real callers; egress allows DNS, MySQL, Redis and each
+  ## runtimeApiTargets URL above.
+  networkPolicy:
+    enabled: false
+    ## Pods allowed to call the API port: every workload the chart wires RESOURCE_RESOLVER_URL
+    ## into. feature-server-nightly calls it too (templates/feature-server/workload-nightly.yaml
+    ## sets RESOURCE_RESOLVER_URL the same as mainline) — feature-server-legacy does not.
+    ## Pod selectors only: a hostNetwork caller is not matched by one, see ingressFromHostNetwork.
+    ingressFrom:
+      - podSelector:
+          matchLabels:
+            app: sbc-inbound
+      - podSelector:
+          matchLabels:
+            app: sbc-outbound
+      - podSelector:
+          matchLabels:
+            app: feature-server
+      - podSelector:
+          matchLabels:
+            app: feature-server-nightly
+    ## Peers for callers that run with hostNetwork, whose traffic a policy sees from the node
+    ## address, not a pod: the sbc-sip sidecar's runtime regbots (sbcSipSidecar.runtimeRegbots,
+    ## CGY-44772) call the resolver from the SIP (VoIP) nodes. List the nodes' CIDR, e.g.
+    ##   - ipBlock:
+    ##       cidr: 10.20.0.0/24
+    ## Empty (default) renders no rule for them, so with the regbots on those calls are denied
+    ## until this is set. The FedRAMP profile turns the regbots off
+    ## (global.fedramp.sbcSipRuntimeRegbots). Merged into the API port rule together with
+    ## ingressFrom.
+    ingressFromHostNetwork: []
+    ## Extra ingress rules, appended after the built-in ingressFrom/health/monitoring rules.
+    ## Each entry is a raw NetworkPolicyIngressRule (for example Istio ambient's HBONE port
+    ## 15008).
+    extraIngress: []
+    ## Also allow Prometheus scraping of the metrics port from the monitoring namespace
+    ## (same convention as sileroVad.networkPolicy) — the PodMonitor targets metrics.port,
+    ## a different listener than the ingressFrom rule above (resourceResolver.port).
+    allowMonitoringScrape: true
+    ## Empty means the namespace the PodMonitor is created in (podMonitors.namespace,
+    ## "monitoring" by default) — set it only to point Prometheus scraping at a different
+    ## namespace than the rest of this environment's monitoring stack.
+    monitoringNamespaceSelector: {}
+    ## Where cluster DNS runs. Empty uses the standard kube-system/k8s-app:kube-dns rule
+    ## every workload in this chart shares (vg.networkPolicy.dnsEgress); set this only for
+    ## a non-standard DNS location. A NodeLocal DNSCache resolves through a per-node
+    ## listener instead (typically 169.254.20.10), which neither this nor the default rule
+    ## can express — add an ipBlock entry to egressTo below for that address instead.
+    dnsNamespaceSelector: {}
+    ## Extra egress rules, appended after the built-in DNS/MySQL/Redis/runtimeApiTargets
+    ## allow rules. Each entry is a raw NetworkPolicyEgressRule, for an external dependency
+    ## this chart cannot resolve to an in-cluster podSelector on its own (for example an
+    ## external MySQL/Redis when mysql.enabled/redisHa.enabled is false, or a NodeLocal
+    ## DNSCache address).
+    egressTo: []
+## Read API for per-call operational data (CDRs from InfluxDB, SIP pcaps from
+## Homer), called by a linked Cognigy.AI cluster's vg-resources-api -- never by a
+## browser. Design: vg-resources docs/tdd/06-vg-in-ai/025-vg-events-api.md;
+## chart side: docs/015-vg-events-api.md.
+##
+## Requires at least one linked AI cluster (vgInAi.clusters or
+## resourceResolver.runtimeApiTargets):
+## every request carries an ES256 JWT from one of them, verified against the same
+## AI_CLUSTER_TRUST_LIST feature-server /v2 uses. Enabling this with no target
+## fails the render -- the service refuses to start without a trust list. Also
+## requires homer.enabled (pcap export, HOMER_PASSWORD from vg-homer-password).
+vgEventsApi:
+  enabled: false
+  ## Overwritten by vg-events-api's preview-release workflow
+  ## (helm_values_key: vgEventsApi), which requires this key to exist.
+  image: cognigy.azurecr.io/vg-events-api:2026.23.0
+  imagePullPolicy: IfNotPresent
+  ## Not on the call path: a read API for the AI side's call history and pcap
+  ## download. Two replicas for availability during a roll, not capacity.
+  replicaCount: 2
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                    - vg-events-api
+            topologyKey: kubernetes.io/hostname
+  port: 4000
+  ## valid choices are debug, info, error, warn
+  logLevel:
+  ## Per InfluxDB query (JAMBONES_TIME_SERIES_QUERY_TIMEOUT_MS). Empty: the
+  ## service default (5000).
+  queryTimeoutMs:
+  ## Per Homer request, covering the whole pcap download (HOMER_TIMEOUT_MS).
+  ## Empty: the service default (10000).
+  homerTimeoutMs:
+  ## Public route for the linked AI clusters: <host>/events-api/v1/..., with the
+  ## /events-api prefix stripped by a Traefik middleware so the service sees
+  ## /v1/... (api-server already owns /v1 on the API host). Also needs
+  ## ingress.enabled and a Traefik ingress class, like featureServer.v2Api.
+  ## NOTE: the JWT `rqh` claim binds the path the SERVICE receives, so the
+  ## AI-side signer hashes /v1/..., not /events-api/v1/....
+  ingress:
+    enabled: false
+    ## Empty: ingress.api.host.
+    host: ""
+    ## Per source IP; the ingress cannot read the JWT. Same defaults as /v2.
+    rateLimit:
+      average: 50
+      burst: 100
+    ## Every route is a GET; this only stops a large body reaching a pod.
+    maxRequestBodyBytes: 16384
+  extraEnvVars: []
+  resources:
+    requests:
+      cpu: "0.100"
+      memory: 128Mi
+    limits:
+      cpu: "0.250"
+      memory: 256Mi
+  nodeSelector: {}
+  tolerations: []
+  ## Off the call path, but not best-effort: a pcap/CDR read the AI side waits on.
+  priorityClassName: medium
+  ## Run as the Node image's unprivileged `node` user (uid/gid 1000), never root (CM-2 / AC-6,
+  ## CSA-109610; same fix as vg-feature-server#755). The image sets `USER node` since
+  ## vg-events-api#3 and its app tree is root-owned, so uid 1000 runs the code but cannot rewrite
+  ## it. runAsUser is what lets kubelet verify runAsNonRoot (a named image user cannot be checked).
+  ## No fsGroup, unlike resourceResolver: this pod mounts no volume -- the Homer password and
+  ## Redis settings arrive as env vars -- so there is no file for a group to make readable.
+  ## Overrides are MERGED into these defaults: a key is dropped by setting it to null.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+  ## Default-deny ingress+egress (CSA-110265 / VHC-SC7-001; templates/events-api/networkpolicy.yaml,
+  ## docs/014-network-policy.md). Forced on by the FedRAMP profile. Ingress: the app port from
+  ## this chart's Traefik plus ingressFrom, the health port from anywhere (kubelet probes), the
+  ## metrics port from the monitoring namespace. Egress: DNS, Redis, InfluxDB, Homer and each
+  ## AI cluster's JWKS URL (port derived automatically).
+  networkPolicy:
+    enabled: false
+    ## Extra callers of the app port that do not come through Traefik (e.g. an in-cluster
+    ## AI cluster's vg-resources-api). Empty renders no rule rather than `from: []`.
+    ingressFrom: []
+    allowMonitoringScrape: true
+    monitoringNamespaceSelector: {}
+    extraIngress: []
+    egressTo: []
 ####################################
 # Cross-cluster identity (VG -> AI) #
 ####################################
 
+## C26 (VG in AI): the ONE place to link Cognigy.AI clusters (CGY-44772). Each entry derives
+##   resourceResolver.runtimeApiTargets   -> <apiUrl>/vg/runtime
+##   vgAudioManager.resourcesApiTargets   -> <apiUrl>/vg/resources
+## which drives call resolution, recording reports, carrier REGISTER and its status in the UI.
+## The two lists cannot disagree, so there is no second list to forget. Requires vgCluster.name.
+##
+##   vgInAi:
+##     clusters:
+##       - name: cognigy-beta-v4            # AI cluster name = JWT `aud` = vgRuntimeApi.clusterName there
+##         apiUrl: https://api-trial.cognigy.ai
+##         ## Optional: runtimeApiUrl, resourcesApiUrl (override the derived URL), jwksUrl
+##
+## The explicit lists above still work and are merged with this one; the same `name` in both
+## fails the render. docs/008-vg-cluster-signing-key.md.
+vgInAi:
+  clusters: []
 ## This VG cluster's identity when it calls a linked Cognigy.AI cluster.
 ##
 ## vg-resource-resolver signs a short-lived ES256 JWT per outbound call with the
@@ -1989,11 +2707,23 @@ vgCluster:
     ## anyone who can read Secrets in this namespace reads both regardless.
     privateKeyFile: "signing-key.pem"
     publicKeyFile: "signing-key.pub.pem"
-    ## Needs bash, openssl and kubectl. This is the same image cognigy-ai-app's
-    ## keypair generator uses.
-    generatorImage: cognigy.azurecr.io/kubectl:latest
+    ## Needs bash, openssl and kubectl. Pinned to an exact tag rather than :latest
+    ## (CSA-110270 / VHC-CM2-001, CM-2): a mutable tag can change what gets pulled
+    ## on the next install with no corresponding change in this chart's history.
+    ##
+    ## cognigy.azurecr.io/vg-k8s-tools is the same pinned image family already used
+    ## by this chart's other hook Jobs (jobs.image, currently 3.23.3;
+    ## github.com/Cognigy/vg-k8s-tools). 3.24.2 is the latest tag there and the
+    ## first to add openssl, which this generator's script needs; jobs.image itself
+    ## stays on 3.23.3 (no openssl) and is out of scope here. No Renovate/Dependabot
+    ## rule tracks this tag yet, so bump it by hand to an exact tag, never :latest.
+    generatorImage: cognigy.azurecr.io/vg-k8s-tools:3.24.2
 sbcInbound:
-  image: cognigy.azurecr.io/vg-sbc-inbound:2026.20.1
+  ## DTMF source validation of vg-rtpengine-utils: enforce | warn | off. null: not rendered, so the
+  ## library default ("warn") applies. Ignored while global.fedramp.enabled is true; then
+  ## global.fedramp.dtmfSourceValidation applies.
+  dtmfSourceValidation: null
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.23.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -2032,8 +2762,30 @@ sbcInbound:
     limits:
       cpu: "0.200"
       memory: 250Mi
+  ## Default-deny ingress+egress (NEW-VSBCIN-SC7-001, SC-7/AC-4, stage 2). Forced on
+  ## under the FedRAMP profile. Ingress: the health port (any source, kubelet probes),
+  ## the metrics port (monitoring namespace), the dtmf port (udp) from sbc-rtp (the DTMF
+  ## datagram source vg.fedramp.dtmfSourceValidation validates against), and the
+  ## drachtio/tcp port from sbc-sip. sbc-sip runs hostNetwork: true, so it is admitted
+  ## through ingressFromHostNetwork instead of a podSelector, same limitation as
+  ## vg-resource-resolver's sbc-sip regbots — ingressFromHostNetwork also covers sbc-rtp's
+  ## dtmf UDP traffic when sbc.rtp.useStatefulSet is false (a hostNetwork DaemonSet then,
+  ## instead of the recommended StatefulSet). egressToHostNetwork is the mirror for sbc-rtp
+  ## on the egress side (its NG control port, sbc.rtp.port, UDP), same shape.
+  networkPolicy:
+    enabled: false
+    ingressFromHostNetwork: []
+    egressToHostNetwork: []
+    allowMonitoringScrape: true
+    monitoringNamespaceSelector: {}
+    extraIngress: []
+    egressTo: []
 sbcOutbound:
-  image: cognigy.azurecr.io/vg-sbc-outbound:2026.20.1
+  ## DTMF source validation of vg-rtpengine-utils: enforce | warn | off. null: not rendered, so the
+  ## library default ("warn") applies. Ignored while global.fedramp.enabled is true; then
+  ## global.fedramp.dtmfSourceValidation applies.
+  dtmfSourceValidation: null
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.23.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -2070,12 +2822,60 @@ sbcOutbound:
   padCrypto: false
   supportBestEffortTls: false
   registerRfc3261: false
+  ## Default-deny ingress+egress (NEW-VSBCOUT-SC7-001, SC-7/AC-4, stage 2). Forced on
+  ## under the FedRAMP profile. Ingress: the health port (any source, kubelet probes),
+  ## the metrics port (monitoring namespace), the dtmf port (udp) from sbc-rtp, and the
+  ## drachtio/tcp port from sbc-sip — same drachtio app-dispatch mechanism as
+  ## sbc-inbound, which also runs through sbc-sip's drachtio-server. sbc-sip runs
+  ## hostNetwork: true, so it is admitted through ingressFromHostNetwork instead of a
+  ## podSelector — ingressFromHostNetwork also covers sbc-rtp's dtmf UDP traffic when
+  ## sbc.rtp.useStatefulSet is false (a hostNetwork DaemonSet then). egressToHostNetwork
+  ## is the mirror for sbc-rtp on the egress side (its NG control port, sbc.rtp.port,
+  ## UDP), same shape. Unlike sbc-inbound, nothing in this chart calls sbc-outbound on
+  ## behalf of feature-server or api-server.
+  networkPolicy:
+    enabled: false
+    ingressFromHostNetwork: []
+    egressToHostNetwork: []
+    allowMonitoringScrape: true
+    monitoringNamespaceSelector: {}
+    extraIngress: []
+    egressTo: []
 sbcSipSidecar:
-  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.20.1
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.23.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
   registerRfc3261: false
+  ## Regbots for carriers configured in Cognigy.AI (CGY-44772, vg-resources
+  ## docs/tdd/06-vg-in-ai/031). On by default. On, the sidecar also registers
+  ## every AI-side carrier that requires REGISTER, read from vg-resource-resolver
+  ## every 60 s (needs resourceResolver.enabled). Its register password is
+  ## decrypted with voicegateway-jwt (JWT_SECRET), which must equal the AI
+  ## cluster's vg-encryption-secret.
+  ##
+  ## With vgAudioManager.resourcesApiTargets also set, each REGISTER attempt is
+  ## reported to the owning AI cluster's vg-resources-api, signed with this
+  ## cluster's key and name (vgCluster) -- the same list and identity as
+  ## vg-audio-manager, so the cluster keeps one list of linked AI clusters. The
+  ## UI shows the carrier's register status and history from those reports.
+  ## Without it, the results are only logged. Reporting does not depend on
+  ## vgAudioManager.enabled: only the shared target list matters.
+  ##
+  ## Needs a vg-sbc-sip-sidecar image with runtime regbot support (sidecar#74);
+  ## with an older image the flag rolls the pods and nothing else happens.
+  ## If extraEnvVars already sets REGBOT_RUNTIME_TARGETS_ENABLED,
+  ## RESOURCE_RESOLVER_URL or VG_CLUSTER_NAME, remove those entries before
+  ## upgrading: the chart renders them too, so the name would appear twice.
+  ## Set enabled: false to opt out. Ignored while the FedRAMP profile is on:
+  ## global.fedramp.sbcSipRuntimeRegbots (false) applies.
+  ##
+  ## The signing key is mounted 0400, readable by root only. IF YOU SET
+  ## podSecurityContext.runAsUser (or the image runs non-root), SET
+  ## podSecurityContext.fsGroup too, or the sidecar cannot read the key and
+  ## reporting fails at runtime. sbc.sip.podSecurityContext defaults to {}.
+  runtimeRegbots:
+    enabled: true
   extraEnvVars: []
   resources:
     requests:
@@ -2086,7 +2886,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.20.1
+  image: cognigy.azurecr.io/vg-tcm:2026.23.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -2130,11 +2930,36 @@ testCallManager:
     limits:
       cpu: "0.200"
       memory: 400Mi
+  ## Default-deny ingress+egress (NEW-VTCM-SC7-001, SC-7/AC-4, stage 2). Forced on under
+  ## the FedRAMP profile. Ingress: the health port (kubelet probes), the metrics port from
+  ## the monitoring namespace, and this chart's own Traefik (test-call-manager has no
+  ## in-cluster podSelector caller — its own ingress.yaml, CSA-110266, is the real
+  ## traffic path). Egress: Redis, and api-server via its own public ingress hostname
+  ## (VG_ENDPOINT) — no chart-known in-cluster CIDR for that, same treatment as
+  ## vg-resource-resolver's runtimeApiTargets. The clean-up CronJob gets its own policy:
+  ## egress to that same api-server hostname, nothing else.
+  networkPolicy:
+    enabled: false
+    allowMonitoringScrape: true
+    monitoringNamespaceSelector: {}
+    extraIngress: []
+    egressTo: []
 vgConnector:
   enabled: true
-  image: cognigy.azurecr.io/vg-connector:2026.20.1
+  image: cognigy.azurecr.io/vg-connector:2026.23.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
+  ## Amazon Connect A2A vendor adapter master switch for vg-connector. Unlike
+  ## global.enableGenesysAudioHook/enableMsTeams, this is scoped to
+  ## vgConnector rather than global: vg-feature-server's involvement is
+  ## gated by a SIP capability header, not this flag, and this flag alone
+  ## does not expose api-server's vendor_integrations CRUD or webapp's UI —
+  ## that's global.enableAmazonConnect above, added once Config Plane gave
+  ## api-server/webapp Amazon Connect awareness (this comment previously said
+  ## they had none; that's no longer true). The two flags are independently
+  ## togglable by design — set both for the common case of wanting the whole
+  ## vendor on. Default false.
+  enableAmazonConnect: false
   affinity:
     podAntiAffinity:
       preferredDuringSchedulingIgnoredDuringExecution:
@@ -2148,7 +2973,7 @@ vgConnector:
                     - vg-connector
             topologyKey: kubernetes.io/hostname
   nodeSelector: {}
-  priorityClassName: ""
+  priorityClassName: high
   podSecurityContext: {}
   tolerations: []
   pdb:
@@ -2168,13 +2993,29 @@ vgConnector:
     limits:
       cpu: "0.100"
       memory: 150Mi
+  ## Default-deny ingress+egress (NEW-VCONN-SC7-001, SC-7/AC-4, stage 2). Forced on under
+  ## the FedRAMP profile. Ingress: the health port (kubelet probes) and this chart's own
+  ## Traefik (vg-connector has no podSelector-based in-cluster caller — its real traffic is
+  ## external Genesys AudioHook/MS Teams via templates/vg-connector/ingressroute.yaml).
+  networkPolicy:
+    enabled: false
+    extraIngress: []
+    ## sbc-sip (SBC_BASE_URL, SIP signaling) and sbc-rtp (RTP_MIN_PORT/MAX_PORT, media,
+    ## through the drachtio sidecar) both run hostNetwork: true, so a podSelector cannot
+    ## reach either — same limitation as vg-resource-resolver's sbc-sip regbots. List this
+    ## environment's SIP/RTP node CIDR here, e.g.
+    ##   - ipBlock:
+    ##       cidr: 10.20.0.0/24
+    ## Empty (default) renders no rule for them, so calls are denied until this is set.
+    egressToHostNetwork: []
+    egressTo: []
 vgTrafficSniffer:
   ## On-demand packet-capture service (see github.com/Cognigy/vg-traffic-sniffer).
   ## Dormant by default: nothing (deployment, service, PVC, RBAC) is created
   ## unless enabled, and even then it idles at 0 replicas until scaled up for a
   ## capture session (via vg-console / flux edit). Scale back to 0 after use.
   enabled: false
-  image: cognigy.azurecr.io/vg-traffic-sniffer:2.0.1
+  image: cognigy.azurecr.io/vg-traffic-sniffer:2.0.0
   imagePullPolicy: IfNotPresent
   replicaCount: 0
   port: 8080
@@ -2200,6 +3041,31 @@ vgTrafficSniffer:
     limits:
       cpu: "0.250"
       memory: 256Mi
+  ## Default-deny ingress+egress (NEW-VSNIFFER-SC7-001, SC-7/AC-4, stage 3). Forced on
+  ## under the FedRAMP profile. Ingress: the http port, any source — it also serves
+  ## /healthz (no separate health port), same "cannot restrict without breaking
+  ## readiness" trade-off as vg-audio-manager's http port.
+  ##
+  ## KNOWN GAP: the real caller of the http port's capture-trigger API could not be
+  ## confirmed from the chart — nothing here references vgTrafficSniffer.port or its
+  ## Service; "scaled up on demand (vg-console / flux edit)" (this file's own comment
+  ## above) describes an out-of-band operational action (a Flux commit or a direct
+  ## kubectl scale), not a wired chart-level call from vg-console's pod. Add the real
+  ## caller to extraIngress before relying on this policy to admit a production
+  ## capture session.
+  ##
+  ## Egress: this workload's whole purpose is calling the Kubernetes API directly
+  ## (pods/exec, pods/ephemeralcontainers — templates/vg-traffic-sniffer/rbac.yaml) to
+  ## attach a tcpdump sidecar to other pods and stream pcaps out, so — same as
+  ## api-server — forcing Egress without a safe default for that call would be worse
+  ## than no policy at all. This workload's NetworkPolicy degrades the same way
+  ## api-server's does: without global.fedramp.networkPolicyKubernetesApiCidr, it stays
+  ## ingress-only (no Egress policyType, no egress: key); with it set, the full
+  ## Ingress+Egress policy applies.
+  networkPolicy:
+    enabled: false
+    extraIngress: []
+    egressTo: []
 ####################
 # VG Audio Manager #
 ####################
@@ -2209,8 +3075,17 @@ vgAudioManager:
   enabled: false
   ## When true (and enabled), feature-server sends audio forks here instead of api-server
   useForRecording: false
+  ## Secret holding the key that decrypts bucket credentials: MySQL `accounts.bucket_credential` rows
+  ## and, for AI-native calls, the inline `vgRecordBucket` blob feature-server sends with the stream
+  ## (written by the paired AI cluster's vg-resources-api). Must be the key feature-server decrypts
+  ## with (its ENCRYPTION_SECRET, else JWT_SECRET). Default unchanged: voicegateway-jwt/jwt.
+  ## Point it elsewhere only where feature-server also gets a different ENCRYPTION_SECRET, e.g. a dev
+  ## namespace paired with an AI cluster whose vg-encryption-secret is not this cluster's JWT secret.
+  encryptionSecret:
+    name: voicegateway-jwt
+    key: jwt
   serviceName: vg-audio-manager
-  image: cognigy.azurecr.io/vg-audio-manager:2026.16.0-rc1
+  image: cognigy.azurecr.io/vg-audio-manager:2026.23.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -2244,6 +3119,31 @@ vgAudioManager:
     port: 3000
   ## valid choices are debug, info, warn, error
   logLevel:
+  ## Linked Cognigy.AI clusters' vg-resources-api that vg-audio-manager reports
+  ## each uploaded AI-native recording to (CGY-43293), so it appears in that AI
+  ## cluster's recording index. Tried in this order: 2xx is done, 401/403/404
+  ## means "not this AI cluster's call" and the next one is tried, 5xx/timeouts
+  ## are retried. Legacy (VG-account) recordings are never reported.
+  ##
+  ## sbc-sip-sidecar reports carrier REGISTER attempts to the same list when
+  ## sbcSipSidecar.runtimeRegbots.enabled (CGY-44772), each to the AI cluster
+  ## that owns the carrier.
+  ##
+  ## `name` is the AI cluster's name -- the same name that cluster has in
+  ## resourceResolver.runtimeApiTargets. It becomes the JWT `aud`, so it must
+  ## match the key this VG cluster is filed under in that AI cluster's trust
+  ## list. `url` is `https://<ai api host>/vg/resources`, no /v1 suffix.
+  ##
+  ## Empty (default) disables reporting and renders nothing new. Non-empty
+  ## mounts this cluster's private signing key and identity exactly as for
+  ## vg-resource-resolver (vgCluster below, docs/008-vg-cluster-signing-key.md)
+  ## and adds podSecurityContext.fsGroup: 1000 unless fsGroup is already set,
+  ## so the uid-1000 process can read the 0400 key.
+  ##
+  ##   resourcesApiTargets:
+  ##     - name: ibilousov-test
+  ##       url: https://api-ibilousov-test.cognigy.dev/vg/resources
+  resourcesApiTargets: []
   extraEnvVars: []
   resources:
     requests:
@@ -2252,8 +3152,21 @@ vgAudioManager:
     limits:
       cpu: "0.500"
       memory: 512Mi
+  ## Default-deny ingress+egress (NEW-VAUDMGR-SC7-001, SC-7/AC-4, stage 2). Forced on
+  ## under the FedRAMP profile. Ingress: the http port (vgAudioManager.port) from any
+  ## source — kubelet's liveness/readiness/startup probes all target it (there is no
+  ## separate health port on this workload), the same "cannot restrict without breaking
+  ## readiness" trade-off as resource-resolver's health port — and the metrics port from
+  ## the monitoring namespace. Egress: MySQL, plus resourcesApiTargets when set (no
+  ## chart-known CIDR, same treatment as vg-resource-resolver's runtimeApiTargets).
+  networkPolicy:
+    enabled: false
+    allowMonitoringScrape: true
+    monitoringNamespaceSelector: {}
+    extraIngress: []
+    egressTo: []
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.20.1
+  image: cognigy.azurecr.io/vg-webapp:2026.23.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## hot-reload property
@@ -2288,7 +3201,6 @@ webapp:
   enableCognigyLogin: false
   enableForgotPassword: false
   enableMsTeamsRouting: false
-  enableSms: false
   enableTtsElevenlabs: true
   enableTtsElevenlabsOptions: false
   enableDeepgram: true
@@ -2307,6 +3219,19 @@ webapp:
     limits:
       cpu: "0.2"
       memory: 400Mi
+  ## Default-deny ingress+egress (NEW-VWEBAPP-SC7-001, SC-7/AC-4, stage 3). Forced on
+  ## under the FedRAMP profile. Ingress: this chart's own Traefik only — webapp has no
+  ## in-cluster podSelector caller, its real traffic is external via its own ingress.yaml
+  ## (CSA-110266), and it has no probes of its own (no separate health port to leave
+  ## unconditionally open). Egress: api-server (API_BASE_URL) and tracing (tracing.baseUrl)
+  ## via auto-derived ports (no chart-known in-cluster CIDR for either, same treatment as
+  ## vg-resource-resolver's runtimeApiTargets); cognigyUrl too, if set — webapp is a
+  ## frontend whose backend process mostly just serves static assets, so this may be wider
+  ## than strictly needed, but erring toward not blocking real traffic.
+  networkPolicy:
+    enabled: false
+    extraIngress: []
+    egressTo: []
 ###########
 # Traefik #
 ###########
@@ -2348,8 +3273,10 @@ traefik:
           defaultmode: drop
           names: {}
   api:
-    # -- Enable the insecure API (HTTP)
-    insecure: true
+    # -- Enable the insecure API (HTTP). Disabled: the dashboard/API is unauthenticated, and
+    # ingressRoute.dashboard is already off, so there is no supported way to reach it anyway
+    # (VHC-SC7-002, SC-7).
+    insecure: false
   ingressClass:
     enabled: true
     isDefaultClass: true
@@ -2378,7 +3305,15 @@ traefik:
           entryPoint:
             to: websecure
             scheme: https
-      # Trust forwarded headers information (X-Forwarded-*).
+      # insecure: true (trusting forwarded headers / a PROXY-protocol preamble from any caller, not
+      # only the real upstream proxy/load balancer) is this chart's default for every environment,
+      # FedRAMP or not — a chart-wide default cannot know each environment's load-balancer topology,
+      # and flipping it for everyone risked an outage for any environment whose load balancer sends
+      # a PROXY preamble or relies on X-Forwarded-For (VHC-SC7-002, SC-7). While
+      # global.fedramp.enabled is true, the render fails unless this environment's own values/Flux
+      # overlay sets insecure: false here (both ports, both settings) with the matching trustedIPs
+      # for its real topology — see docs/009-fedramp-profile.md for which setting depends on which
+      # topology, and the ipWhiteListMiddleware ipStrategy.depth it requires.
       forwardedHeaders:
         trustedIPs: []
         insecure: true
@@ -2392,7 +3327,7 @@ traefik:
         default: true
       exposedPort: 443
       protocol: TCP
-      # Trust forwarded  headers information (X-Forwarded-*).
+      # See the web entry point above (VHC-SC7-002, SC-7).
       forwardedHeaders:
         trustedIPs: []
         insecure: true
@@ -2453,6 +3388,10 @@ traefik:
       maxUnavailable: 1
       maxSurge: 0
 ## Optionally create priorityClass
+## Workloads reference a tier by key (priorityClassName: critical|high|medium|low) and the chart
+## resolves it to the tier's `name` below, independent of `enabled`. With priorityClass.enabled=false
+## (e.g. a second release in a shared cluster) the classes are not created here and must already
+## exist in the cluster, otherwise set the priorityClassName values to "".
 ## ref: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#priorityclass
 ##
 priorityClass:
@@ -2555,25 +3494,50 @@ hpa:
       ## KEDA-managed autoscaling (opt-in). Requires hpa.keda.enabled=true.
       ## When enabled, a ScaledObject REPLACES the native HPA above and the triggers
       ## here drive scaling; the behavior above is reused via advanced HPA config.
-      ## Example: CPU + calls-per-pod via the existing kube-prometheus-stack.
+      ## CPU is measured per container against its own request: a pod-level average over
+      ## freeswitch + feature-server + drachtio hides a saturated freeswitch behind the idle
+      ## containers. freeswitch is CFS-throttled from ~60% of its CPU limit on, which is
+      ## reached at ~110-130 call sessions per pod; 75 sessions keeps it well below that.
+      ## The 50% targets assume CPU request == limit (true for the defaults). Per-container
+      ## CPU (KEDA containerName / ContainerResource) needs Kubernetes >= 1.27 (GA in 1.30).
+      ## The call-session query leaves out terminating pods, as the native HPA does for
+      ## Pods metrics: their calls drain in place and are no load for the remaining pods.
+      ## Without kube-state-metrics the query falls back to the plain sum.
       keda:
         enabled: true
         triggers:
           - type: cpu
+            name: freeswitch-cpu
             metricType: Utilization
             metadata:
+              containerName: freeswitch
+              value: "50"
+          - type: cpu
+            name: feature-server-cpu
+            metricType: Utilization
+            metadata:
+              containerName: feature-server
               value: "50"
           - type: prometheus
+            name: call-sessions
             metricType: AverageValue
             metadata:
               serverAddress: http://monitoring-stack-kubeproms-prometheus.monitoring.svc.cluster.local:9090
-              query: sum(vg_feature_server_call_session_count{namespace="{{ .Release.Namespace }}",pod!~".*nightly.*"})
-              threshold: "120"
+              query: sum(vg_feature_server_call_session_count{namespace="{{ .Release.Namespace }}",pod!~".*nightly.*"} unless on(namespace, pod) kube_pod_deletion_timestamp{namespace="{{ .Release.Namespace }}"})
+              threshold: "75"
       ## Native HPA fallback if keda.enabled is set to false for this service.
       metrics:
-        - type: Resource
-          resource:
+        - type: ContainerResource
+          containerResource:
             name: cpu
+            container: freeswitch
+            target:
+              type: Utilization
+              averageUtilization: 50
+        - type: ContainerResource
+          containerResource:
+            name: cpu
+            container: feature-server
             target:
               type: Utilization
               averageUtilization: 50
@@ -2583,14 +3547,16 @@ hpa:
               name: vg_feature_server_call_session_count
             target:
               type: AverageValue
-              averageValue: "120"
+              averageValue: "75"
       ## Fast scale-up (spikes need capacity now); slow, rate-limited scale-down so a
       ## call-bearing pod drains one at a time (pairs with the graceful pre-stop hooks)
-      ## and node churn stays low (~1 feature-server pod ≈ 1 node).
+      ## and node churn stays low (~1 feature-server pod ≈ 1 node). The long window keeps
+      ## a short dip in calls from removing a pod and pushing the remaining ones back
+      ## into the throttling range.
       behavior:
         scaleUp: {}
         scaleDown:
-          stabilizationWindowSeconds: 300
+          stabilizationWindowSeconds: 1800
           policies:
             - type: Pods
               value: 1
@@ -2607,24 +3573,42 @@ hpa:
         kind: StatefulSet
       minReplicas: 2
       maxReplicas: 10
+      ## Same per-container CPU and call-session triggers as feature-server (same pod).
       keda:
         enabled: true
         triggers:
           - type: cpu
+            name: freeswitch-cpu
             metricType: Utilization
             metadata:
+              containerName: freeswitch
+              value: "50"
+          - type: cpu
+            name: feature-server-cpu
+            metricType: Utilization
+            metadata:
+              containerName: feature-server
               value: "50"
           - type: prometheus
+            name: call-sessions
             metricType: AverageValue
             metadata:
               serverAddress: http://monitoring-stack-kubeproms-prometheus.monitoring.svc.cluster.local:9090
-              query: sum(vg_feature_server_call_session_count{namespace="{{ .Release.Namespace }}",pod=~".*nightly.*"})
-              threshold: "120"
+              query: sum(vg_feature_server_call_session_count{namespace="{{ .Release.Namespace }}",pod=~".*nightly.*"} unless on(namespace, pod) kube_pod_deletion_timestamp{namespace="{{ .Release.Namespace }}"})
+              threshold: "75"
       ## Native HPA fallback if keda.enabled is set to false for this service.
       metrics:
-        - type: Resource
-          resource:
+        - type: ContainerResource
+          containerResource:
             name: cpu
+            container: freeswitch
+            target:
+              type: Utilization
+              averageUtilization: 50
+        - type: ContainerResource
+          containerResource:
+            name: cpu
+            container: feature-server
             target:
               type: Utilization
               averageUtilization: 50
@@ -2634,12 +3618,12 @@ hpa:
               name: vg_feature_server_call_session_count
             target:
               type: AverageValue
-              averageValue: "120"
+              averageValue: "75"
       ## Same drain-aware scale-down as feature-server — nightly pods carry live calls too.
       behavior:
         scaleUp: {}
         scaleDown:
-          stabilizationWindowSeconds: 300
+          stabilizationWindowSeconds: 1800
           policies:
             - type: Pods
               value: 1
@@ -2782,7 +3766,7 @@ hpa:
             metadata:
               serverAddress: http://monitoring-stack-kubeproms-prometheus.monitoring.svc.cluster.local:9090
               metricName: silero-vad-active-sessions
-              query: sum(silero_vad_active_sessions{namespace="{{ .Release.Namespace }}"})
+              query: sum(silero_vad_active_sessions{namespace="{{ .Release.Namespace }}"} unless on(namespace, pod) kube_pod_deletion_timestamp{namespace="{{ .Release.Namespace }}"})
               threshold: "120"
       ## Native HPA fallback if keda.enabled is set to false for this service.
       metrics:
@@ -2893,11 +3877,162 @@ hpa:
             target:
               type: Utilization
               averageUtilization: 70
+    vgEventsApi:
+      ## On with the chart-wide hpa.enabled; the HPA/ScaledObject renders only when
+      ## vgEventsApi.enabled too (templates/hpa/hpa-template.yaml).
+      enabled: true
+      name: vg-events-api
+      keda:
+        enabled: true
+        triggers:
+          ## CPU-primary, like api-server and vg-audio-manager.
+          - type: cpu
+            metricType: Utilization
+            metadata:
+              value: "70"
+      ## Native HPA fallback if keda.enabled is set to false for this service.
+      scaleTargetRef:
+        apiVersion: apps/v1
+        kind: Deployment
+      minReplicas: 2
+      maxReplicas: 4
+      metrics:
+        - type: Resource
+          resource:
+            name: cpu
+            target:
+              type: Utilization
+              averageUtilization: 70
 #######################
 # VG Console #
 #######################
 ## Internal console for Voice Gateway clusters
 ## Provides cluster configuration, DevConfig management, and audit logging
+####################
+# VG Realtime Bridge #
+####################
+## V2V (voice-to-voice) realtime bridge: relays a VG media WebSocket (mod_audio_fork) to a vendor
+## realtime voice API (OpenAI/Google) and posts tool calls, transcripts and segment-ended events
+## back to the runtime. Source: Cognigy/vg-realtime-bridge.
+##
+## ⚠ Session state lives in an in-memory Map (src/store.ts, "Redis when >1 replica"). With more than
+## one replica a call's Session API POST and its media WebSocket (routed by mediaToken through the
+## Service) can land on different pods and the WebSocket is rejected, so keep replicaCount at 1 (with
+## the Recreate strategy: a rolling surge would briefly run two pods) until sessions move to Redis.
+## No HPA/KEDA: the replica count is fixed.
+realtimeBridge:
+  enabled: false
+  image: cognigy.azurecr.io/vg-realtime-bridge:2026.23.0
+  imagePullPolicy: IfNotPresent
+  ## Keep at 1 (see the warning above)
+  replicaCount: 1
+  ## Recreate, not RollingUpdate: a surge pod would have its own session store
+  strategy:
+    type: Recreate
+  ## Only useful with more than one replica: minAvailable 1 on a single pod blocks node drains
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+  port: 8080
+  service:
+    port: 8080
+    annotations: {}
+  ## Non-secret bridge env. Optional ones render only when non-empty; otherwise the app default applies.
+  env:
+    ## URL FreeSWITCH's mod_audio_fork dials. Empty => the in-cluster Service,
+    ## ws://vg-realtime-bridge.<release namespace>.svc.cluster.local:<service.port>: no TLS, never
+    ## traverses the ingress. Set it only for a public media leg (`wss://`, public-CA certificate).
+    publicMediaUrl: ""
+    ## uses global.logLevel if empty
+    logLevel: ""
+    toolTimeoutMs: ""
+    callbackTimeoutMs: ""
+    guardrailsEnabled: ""
+    sessionTtlMs: ""
+    ## openai-live only
+    liveDelegationModel: ""
+    liveAssistantSilenceMs: ""
+    liveUserSilenceMs: ""
+    ## Do not set for Cognigy: it sends the agent's own greeting per session.
+    liveOpeningInstruction: ""
+  ## Pre-existing Secret holding BRIDGE_API_KEY (provisioned out of band, e.g. SealedSecret). It must
+  ## equal V2V_BRIDGE_API_KEY on service-endpoint / bridge-api-key on vg-agentic-endpoint.
+  secret:
+    name: vg-realtime-bridge-secrets
+    bridgeApiKeyKey: BRIDGE_API_KEY
+  extraEnvVars: []
+  ## Probes, rendered verbatim. /healthz is liveness only; /readyz turns 503 while draining on SIGTERM.
+  probes:
+    startup:
+      httpGet:
+        path: /healthz
+        port: http
+      periodSeconds: 2
+      failureThreshold: 15
+    liveness:
+      httpGet:
+        path: /healthz
+        port: http
+      periodSeconds: 15
+      timeoutSeconds: 3
+      failureThreshold: 3
+    readiness:
+      httpGet:
+        path: /readyz
+        port: http
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 3
+  ## Shutdown budget: preStopSleepSeconds + the app's 5s drain, with headroom
+  terminationGracePeriodSeconds: 30
+  preStopSleepSeconds: 10
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  ## Tier key of the priorityClass section (critical/high/medium/low) or a literal class name.
+  ## `high`: the single pod holds every live V2V call in memory, so it must not be preempted
+  ## by lower tiers (same tier as feature-server).
+  priorityClassName: "high"
+  podSecurityContext: {}
+  ## The image runs as the non-root `node` user (uid 1000)
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: false
+    runAsNonRoot: true
+    runAsUser: 1000
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 400m
+      memory: 512Mi
+  networkPolicy:
+    enabled: false
+    ingress:
+      ## Namespace the VG media pods (mod_audio_fork) run in; empty value = the release namespace.
+      ## Admits every pod in that namespace.
+      mediaPodsNamespaceLabel:
+        key: kubernetes.io/metadata.name
+        value: ""
+      ## Namespace of the ingress controller, needed when ingress.realtimeBridge is enabled and the
+      ## controller runs outside the release namespace (e.g. traefik). Empty = no extra peer.
+      ingressControllerNamespace: ""
+      ## Open the app port to any source so kubelet probes are never blocked (a blocked probe keeps
+      ## the only pod unready). This also admits any pod; set false where the CNI lets probes through.
+      allowProbes: true
+      ## Extra full ingress rules, rendered verbatim
+      extraIngress: []
+    egress:
+      ## REQUIRED when enabled: CIDR(s) reachable on `httpsPort` (vendor APIs, Cognigy callback host)
+      allowedCidrs: []
+      httpsPort: 443
+      dnsNamespace: kube-system
+      ## Extra egress rules rendered verbatim, e.g. an in-cluster runtime callback on another port
+      extraEgress: []
 vgConsole:
   ## Enable/disable the VG Console
   enabled: false
@@ -3054,6 +4189,26 @@ vgPagerdutyAgent:
     centralAgentUrl: ""
     ## This cluster's environment name as known to the agent (e.g. "vg-eu")
     localEnvironment: ""
+  ## Default-deny ingress+egress (NEW-VPDAGENT-SC7-001, SC-7/AC-4, stage 3). Forced on
+  ## under the FedRAMP profile. Ingress: the app port, any source — kubelet's
+  ## liveness/readiness/startup probes all target it (no separate health port, no metrics
+  ## port either), same "cannot restrict without breaking readiness" trade-off as
+  ## vg-audio-manager's http port — and this chart's own Traefik (own ingress.yaml,
+  ## CSA-110266). Egress: vg-console (VG_CONSOLE_API_INTERNAL, in-cluster),
+  ## VG_CONSOLE_API_PUBLIC / the hypercare activate-remote Job's
+  ## centralConsoleUrl-or-centralAgentUrl (auto-derived port, no chart-known CIDR).
+  ##
+  ## Deliberately NOT covered: ELASTICSEARCH_API_KEY_*, PAGERDUTY_API_KEY, ANTHROPIC_API_KEY
+  ## and PROM_GRAFANA_API_URL_* (Elasticsearch, PagerDuty, Anthropic, Grafana — hardcoded
+  ## SDK/API endpoints, not a chart-held URL to derive a port from) and the always-present
+  ## ADO_FLUX_FLEET_* credentials (Azure DevOps, same situation as vg-console's own ADO
+  ## egress). Same "needs a bigger architectural call" bucket as vg-console's
+  ## changelogEnrichment and otel-collector's extraOtlpExporters
+  ## (docs/014-network-policy.md) — use egressTo for each of these until that design exists.
+  networkPolicy:
+    enabled: false
+    extraIngress: []
+    egressTo: []
 #######################
 # Audit Logging #
 #######################
@@ -3067,7 +4222,20 @@ auditLogging:
     schedule: "0 2 * * *"
     ## Time in seconds after finished job to keep for debugging
     ttlSecondsAfterFinished: 180
-    ttlDays: 30 #default is 30
+    ## Days vg-api-server keeps audit records (AUDIT_LOG_TTL_DAYS). 90 is the FedRAMP Moderate
+    ## minimum (AU-11); a lower value is allowed outside the profile and logged as a warning on
+    ## every cleanup. A whole number from 1 to 99999 (the schema refuses anything else).
+    ## null renders nothing, so the service keeps its own default (90 since vg-api-server#255).
+    ## Ignored while global.fedramp.enabled is true (global.fedramp.apiAuditLogTtlDays applies).
+    ttlDays: 90
+    ## Default-deny egress for the audit-logs-cleanup CronJob (NEW-VAUDIT-AC4-001, SC-7/AC-4,
+    ## stage 2). Forced on under the FedRAMP profile. Nothing calls this pod, so there is no
+    ## ingress side. The cleanup job's only dependency is api-server's own public ingress
+    ## hostname (ingress.api.host) — no chart-known in-cluster CIDR for that, same treatment
+    ## as vg-resource-resolver's runtimeApiTargets.
+    networkPolicy:
+      enabled: false
+      egressTo: []
 ###########
 # VMD #
 ###########
@@ -3324,6 +4492,39 @@ vgTestHarness:
   # values: they are large, generated, and owned by the suite that generates
   # them.
   fixturesConfigMap: ""
+  # Mock vg-runtime-api — the Cognigy.AI-side resource service
+  # vg-resource-resolver asks when a call belongs to an organisation whose voice
+  # configuration lives in AI rather than in VG MySQL (CGY-38776).
+  #
+  # Off even when vgTestHarness.enabled is true, because deploying it is only
+  # half the setup and the other half is not safe to imply: the resolver has to
+  # be pointed at it via resourceResolver.runtimeApiTargets, which changes
+  # tenancy routing NAMESPACE-WIDE. See ci/kind/values-kind-vgai.yaml for the
+  # complete, self-consistent configuration.
+  mockRuntimeApi:
+    enabled: false
+    image: cognigydevelopment.azurecr.io/vg-mock-runtime-api:main
+    logLevel: info
+    # The organisations that exist ONLY in the AI cluster.
+    #
+    #   organisations:
+    #     - name: ai-only              # labels it; derives the default ids
+    #       number: "+15005550101"     # the DID
+    #       organisationId: org-x      # optional; defaults to org-<name>
+    #       projectId: proj-x          # optional; defaults to proj-<name>
+    #       endpointId: endpoint-x     # optional; defaults to endpoint-<name>
+    #       webhookUrl: ws://...       # optional; defaults to the shared hook
+    #       applicationSid: app-x      # optional; also claims it for webrtc
+    #
+    # These numbers must NOT also appear in vgTestHarness.numbers or in
+    # autoProvision.phoneNumber. A number in BOTH stores is matched on the
+    # resolver's legacy (MySQL) path and never reaches the fallback under test,
+    # so the suite would pass while proving nothing — the template refuses the
+    # overlap rather than letting it render.
+    organisations: []
+    resources:
+      requests: {cpu: "0.050", memory: 64Mi}
+      limits: {cpu: "0.100", memory: 128Mi}
   mockCognigy:
     image: cognigydevelopment.azurecr.io/vg-mock-cognigy:main
     # 0 keeps the Deployment but runs no pod. For a namespace that enables the
@@ -3596,6 +4797,21 @@ vgTestHarness:
     # 10.104.0.0/16 pod CIDR). Defaults to 127.0.0.1/32 which fails closed.
     carrierSourceIPv4: ""
     carrierSourceNetmask: 16
+    # Whether the test carrier keeps a FALLBACK APPLICATION, so that a DID with
+    # no PhoneNumbers row still lands somewhere deterministic. True is the
+    # long-standing behaviour and what every other suite relies on.
+    #
+    # Set false ONLY for the kindvgai suite (CGY-38776). That suite tests
+    # vg-resource-resolver's fallback to vg-runtime-api on a MySQL miss, and the
+    # fallback hangs off exactly the no_gateway rejection this pin prevents:
+    # with a fallback application in place every unknown DID resolves to it, no
+    # miss ever happens, and the code under test is unreachable.
+    #
+    # Only effective on a namespace where the carrier is CREATED by this run.
+    # The provisioner does not clear the pin on an existing carrier, so flipping
+    # this on a namespace that already has one is a no-op — see
+    # NoCarrierDefaultApplication in vg-test-harness's provisioner.
+    carrierDefaultApplication: true
     # CGY-34769: provision the labelled mip-in / mip-out deepgram credentials the
     # Deepgram Model Improvement Program tests need. They are identical except for
     # deepgram_improvement_program_opt_in (true / false), and both carry
@@ -3618,6 +4834,23 @@ vgTestHarness:
     # the field under test, so a stale row would make the tests pass or fail for
     # the wrong reason.
     mipTest:
+      enabled: false
+    # CGY-41943: when enabled, the provision Job passes
+    # --tts-failover-same-vendor-test-enabled, creating two labelled "microsoft"
+    # on-prem speech credentials for vg-test-harness's
+    # TestTTSFailoverSameVendorVoice (ttsengine suite): "broken" (unresolvable
+    # custom_tts_endpoint_url, so the primary fails) and "fallback" (pointed at
+    # mock-speech's /cognitiveservices/v1, which records every <voice name>).
+    # Both have tts_streaming_enabled: false, because the Azure SDK route cannot
+    # be mocked; only the on-prem HTTP route reaches mock-speech.
+    #
+    # Like mipTest it needs no infrastructure counterpart: the endpoint is on
+    # the credential. Unlike mipTest the rows are checked for presence only.
+    #
+    # REQUIRES a mock-cognigy image (it runs the provisioner) that knows the
+    # flag (vg-test-harness#150 or later); an older image fails the Job on an
+    # unknown flag.
+    ttsFailoverSameVendorTest:
       enabled: false
     recording:
       # When enabled, the provision Job also creates the MinIO bucket, sets

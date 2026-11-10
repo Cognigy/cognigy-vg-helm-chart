@@ -1,0 +1,104 @@
+{{- /*
+Public route to vg-events-api for linked AI clusters (vg-resources
+docs/tdd/06-vg-in-ai/025), modelled on templates/feature-server/v2-api-ingress.yaml.
+
+Served under /events-api/ on the API host: api-server already owns /v1 there,
+so the service's own /v1/... routes cannot be published as-is. A StripPrefix
+middleware removes /events-api before the request reaches the pod, which
+therefore receives /v1/....
+
+The JWT `rqh` claim binds the request path AS THE SERVICE RECEIVES IT (after
+the strip): the AI-side signer must hash `GET /v1/calls?...`, not
+`GET /events-api/v1/calls?...`, or every request is a 401 request_mismatch.
+
+Authentication is NOT the ingress's job: vg-events-api verifies a per-request
+ES256 JWT from a linked AI cluster. The middlewares only bound abuse.
+*/ -}}
+{{- if and .Values.ingress.enabled .Values.vgEventsApi.ingress.enabled (include "vg.eventsApi.active" .) }}
+{{- $cfg := .Values.vgEventsApi.ingress }}
+{{- $host := $cfg.host | default .Values.ingress.api.host }}
+{{- if not $host }}
+{{- fail "vgEventsApi.ingress.enabled is set but there is no host: set vgEventsApi.ingress.host, or ingress.api.host to share the API host." }}
+{{- end }}
+{{- if ne .Values.ingress.ingressClassName "traefik" }}
+{{- fail "vgEventsApi.ingress requires ingress.ingressClassName=traefik: its prefix strip, body-size and rate limits are Traefik Middlewares." }}
+{{- end }}
+{{/*
+Same host as api-server (by default) but its own Ingress, so api-server's
+router.middlewares annotation never applies here. Reuses ingress.api's IP
+allow-list (the ipwhitelistapiserver Middleware), exactly as
+templates/feature-server/v2-api-ingress.yaml does, and puts it FIRST so a
+disallowed source is rejected before anything else runs.
+*/}}
+{{- $middlewares := list }}
+{{- if include "vg.fedramp.ingressIpAllowListEnabled" (dict "service" "api" "override" .Values.ingress.api.ipWhiteListMiddleware.enabled "sourceRange" .Values.ingress.api.ipWhiteListMiddleware.ipWhiteList.sourceRange "extraAnnotations" .Values.ingress.api.extraAnnotations "root" $) }}
+{{- $middlewares = append $middlewares (printf "%s-ipwhitelistapiserver@kubernetescrd" $.Release.Namespace) }}
+{{- end }}
+{{- $middlewares = concat $middlewares (list (printf "%s-vg-events-api-body-limit@kubernetescrd" $.Release.Namespace) (printf "%s-vg-events-api-rate-limit@kubernetescrd" $.Release.Namespace) (printf "%s-vg-events-api-strip-prefix@kubernetescrd" $.Release.Namespace)) }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: vg-events-api-strip-prefix
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+spec:
+  stripPrefix:
+    prefixes:
+      - /events-api
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: vg-events-api-body-limit
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+spec:
+  buffering:
+    maxRequestBodyBytes: {{ $cfg.maxRequestBodyBytes | int }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: vg-events-api-rate-limit
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+spec:
+  rateLimit:
+    average: {{ $cfg.rateLimit.average | int }}
+    burst: {{ $cfg.rateLimit.burst | int }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vg-events-api
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+  annotations:
+    {{- if .Values.tls.enabled }}
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    {{- else }}
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    {{- end }}
+    ## IP allow-list (when on) first, then rate and body limits, strip last,
+    ## so a rejected request is rejected before anything is rewritten.
+    traefik.ingress.kubernetes.io/router.middlewares: {{ join "," $middlewares }}
+spec:
+  ingressClassName: {{ .Values.ingress.ingressClassName }}
+  {{- include "vg.tlsCertificate.secretName.render" $ | nindent 2 }}
+  rules:
+    - host: {{ $host }}
+      http:
+        paths:
+          - path: /events-api/
+            pathType: Prefix
+            backend:
+              service:
+                name: vg-events-api
+                port:
+                  number: {{ .Values.vgEventsApi.port | default 4000 }}
+{{- end }}

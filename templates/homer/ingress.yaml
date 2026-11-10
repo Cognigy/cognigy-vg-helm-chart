@@ -13,6 +13,9 @@ metadata:
     {{- else }}
     traefik.ingress.kubernetes.io/router.entrypoints: web
     {{- end }}
+    {{- if include "vg.fedramp.ingressIpAllowListEnabled" (dict "service" "homer" "override" .Values.ingress.homer.ipWhiteListMiddleware.enabled "sourceRange" .Values.ingress.homer.ipWhiteListMiddleware.ipWhiteList.sourceRange "extraAnnotations" .Values.ingress.homer.extraAnnotations "root" $) }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ $.Release.Namespace }}-ipwhitelisthomer@kubernetescrd
+    {{- end }}
   {{- end }}
   {{- if .Values.ingress.homer.extraAnnotations }}
     {{- include "vg.common.tplvalues.render" (dict "value" .Values.ingress.homer.extraAnnotations "context" $) | nindent 4 }}

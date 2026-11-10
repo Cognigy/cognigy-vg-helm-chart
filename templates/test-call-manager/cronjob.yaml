@@ -18,6 +18,9 @@ spec:
       backoffLimit: 0
       ttlSecondsAfterFinished: {{ .Values.testCallManager.cronjobTtlSecondsAfterFinished }}
       template:
+        metadata:
+          labels:
+            app: test-call-manager-cleanup
         spec:
           {{- include "image.pullSecrets" $ | nindent 10 }}
           containers:
@@ -41,4 +44,5 @@ spec:
               - -c
               - "curl -X DELETE $URL -H 'x-api-key: '$API_KEY'' -H 'Content-Type: application/json' -d '{\"timestamp\": '$(date +%s000)'}'"
           restartPolicy: Never
+          priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.jobs.priorityClassName "context" $) }}
 {{- end }}

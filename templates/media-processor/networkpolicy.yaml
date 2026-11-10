@@ -1,0 +1,53 @@
+{{- /*
+Default-deny ingress+egress for media-processor (CSA-110265/CSA-110267, stage 2; see
+docs/014-network-policy.md). Ingress: feature-server/feature-server-nightly on the grpc
+port, and the metrics port from any source — kubelet's /health probes share it with
+Prometheus scraping (templates/media-processor/pod-monitor.yaml), so it cannot be
+restricted to the monitoring namespace the way a dedicated health port would be. Egress:
+Redis, only when mediaProcessor.cache.type is "redis" (the default, "filesystem", needs
+none). Deliberately NOT covered: media-processor's own STT/TTS vendor egress — see the
+values.yaml doc comment for why.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.mediaProcessor.networkPolicy.enabled "root" $) }}
+{{- if and .Values.mediaProcessor.enabled $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: media-processor
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: media-processor
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: media-processor
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: feature-server
+        - podSelector:
+            matchLabels:
+              app: feature-server-nightly
+      ports:
+        - protocol: TCP
+          port: {{ .Values.mediaProcessor.ports.grpc }}
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.mediaProcessor.ports.metrics }}
+    {{- with .Values.mediaProcessor.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+    {{- if eq .Values.mediaProcessor.cache.type "redis" }}
+{{ include "vg.networkPolicy.redisEgress" $ | indent 4 }}
+    {{- end }}
+    {{- with .Values.mediaProcessor.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

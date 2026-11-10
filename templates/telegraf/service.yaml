@@ -1,3 +1,4 @@
+{{- if include "vg.fedramp.statsEnabled" $ }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -14,3 +15,4 @@ spec:
       port: {{ .Values.telegraf.port }}
       targetPort: {{ .Values.telegraf.port }}
       protocol: TCP
+{{- end }}

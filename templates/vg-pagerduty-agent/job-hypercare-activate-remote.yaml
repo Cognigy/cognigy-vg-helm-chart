@@ -32,6 +32,7 @@ spec:
       tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgPagerdutyAgent.tolerations "context" $) | nindent 8 }}
       {{- end }}
       restartPolicy: Never
+      priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.jobs.hookPriorityClassName "context" $) }}
       containers:
         - name: vg-pagerduty-agent-hypercare-activate-remote
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.jobs.image) }}

@@ -1,7 +1,9 @@
-{{- if and (.Values.ingress.enabled) (.Values.ingress.webapp.ipWhiteListMiddleware.enabled) }}
+{{- if and (.Values.ingress.enabled) (include "vg.fedramp.ingressIpAllowListEnabled" (dict "service" "webapp" "override" .Values.ingress.webapp.ipWhiteListMiddleware.enabled "sourceRange" .Values.ingress.webapp.ipWhiteListMiddleware.ipWhiteList.sourceRange "extraAnnotations" .Values.ingress.webapp.extraAnnotations "root" $)) }}
 {{- with .Values.ingress.webapp.ipWhiteListMiddleware }}
 ---
-# Whitelisting Based on `X-Forwarded-For` with `depth=0`
+# By default (ipStrategy.depth: 0, or unset) this checks the connection's own remote address, not
+# X-Forwarded-For. See docs/009-fedramp-profile.md for when raising depth to read X-Forwarded-For
+# is (and isn't) safe.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:

@@ -1,0 +1,54 @@
+{{- /*
+Default-deny ingress+egress for otel-collector (CSA-110265/CSA-110267, stage 2; see
+docs/014-network-policy.md). Ingress: feature-server/feature-server-nightly, on both the
+OTLP gRPC and HTTP ports — no probes on this workload, so neither needs to be open to any
+source. Egress: this chart's own jaeger (jaegerEndpoint, host:port only, no URL scheme to
+derive from — the literal default is jaeger:4317). extraOtlpExporters (arbitrary external
+host:port) is deliberately not covered; see the values.yaml doc comment.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.otelCollector.networkPolicy.enabled "root" $) }}
+{{- if and .Values.otelCollector.enabled $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: otel-collector
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: otel-collector
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: otel-collector
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: feature-server
+        - podSelector:
+            matchLabels:
+              app: feature-server-nightly
+      ports:
+        - protocol: TCP
+          port: 4317
+        - protocol: TCP
+          port: 4318
+    {{- with .Values.otelCollector.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: jaeger
+      ports:
+        - protocol: TCP
+          port: 4317
+    {{- with .Values.otelCollector.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

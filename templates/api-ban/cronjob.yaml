@@ -1,4 +1,6 @@
 {{- if .Values.apiBan.enabled }}
+{{- /* A read-only root filesystem gets a writable emptyDir at /tmp (Node and its libraries may need a temp path). */}}
+{{- $readOnlyRoot := dig "readOnlyRootFilesystem" false (.Values.apiBan.containerSecurityContext | default dict) }}
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -24,10 +26,21 @@ spec:
           annotations:
             checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
         spec:
+          {{- with .Values.apiBan.podSecurityContext }}
+          securityContext: {{- include "vg.common.tplvalues.render" (dict "value" . "context" $) | nindent 12 }}
+          {{- end }}
           containers:
             - name: api-ban
               image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.apiBan.image) }}
               imagePullPolicy: {{ .Values.apiBan.imagePullPolicy }}
+              {{- with .Values.apiBan.containerSecurityContext }}
+              securityContext: {{- include "vg.common.tplvalues.render" (dict "value" . "context" $) | nindent 16 }}
+              {{- end }}
+              {{- if $readOnlyRoot }}
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+              {{- end }}
               env:
                 - name: API_BAN_API_KEY
                   valueFrom:
@@ -42,12 +55,20 @@ spec:
                   value: {{ .Values.redis.host }}
                 - name: REDIS_PORT
                   value: {{ .Values.redis.port | quote }}
+                {{- include "vg.fedramp.apiBanEnv" $ | nindent 16 }}
+                {{- with include "vg.redisAuth.apiBanEnv" $ }}{{ . | nindent 16 }}{{ end }}
                 {{- if .Values.apiBan.extraEnvVars }}
                 {{- include "vg.common.tplvalues.render" (dict "value" .Values.apiBan.extraEnvVars "context" $) | nindent 12 }}
                 {{- end }}
               envFrom:
                 - configMapRef:
                     name: cognigy-env
+          {{- if $readOnlyRoot }}
+          volumes:
+            - name: tmp
+              emptyDir: {}
+          {{- end }}
           restartPolicy: Never
+          priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.jobs.priorityClassName "context" $) }}
           {{- include "image.pullSecrets" $ | nindent 10 }}
 {{- end }}

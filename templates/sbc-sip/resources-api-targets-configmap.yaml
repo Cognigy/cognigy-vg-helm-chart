@@ -1,0 +1,18 @@
+{{- /* The guards live here because this template always renders, whichever sbc-sip workload is on. */}}
+{{- include "vg.sbcSip.runtimeRegbots.validate" . }}
+{{- if include "vg.sbcSip.runtimeRegbots.reporting" . }}
+# Linked Cognigy.AI clusters' vg-resources-api that sbc-sip-sidecar reports runtime regbots'
+# REGISTER attempts to (CGY-44772, vg-resources TDD 031 §2.4). The same list as vg-audio-manager's
+# (vgAudioManager.resourcesApiTargets), rendered as JSON, which the sidecar reads without a YAML
+# parser. Read once at start; the pod carries a checksum of this template.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sbc-sip-resources-api-targets
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: sbc-sip
+    owner-team: echo
+data:
+  targets.json: {{ include "vg.resourcesApiTargets.effective" . | quote }}
+{{- end }}

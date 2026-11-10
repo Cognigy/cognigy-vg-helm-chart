@@ -1,0 +1,166 @@
+{{/*
+Creates, or updates the duration of, the non-default retention policy that
+VG-in-AI call data is written to (influxdb.aiRetention). Docs:
+docs/015-vg-events-api.md, "Retention of AI-path call data".
+
+Ordering. The writers (sbc-inbound, sbc-outbound, feature-server) only use the
+policy once JAMBONES_TIME_SERIES_RUNTIME_RETENTION_POLICY is in their env, and
+the policy must exist by then or their AI-path writes fail.
+  - pre-upgrade: Helm runs this to completion BEFORE it applies the release's
+    manifests, so pods carrying the new env (or a changed policy name) only roll
+    out once the policy exists on both databases. InfluxDB is already running
+    from the previous revision.
+  - post-install (not pre-install): on a fresh install the InfluxDB StatefulSet
+    is an ordinary release resource that does not exist until every pre-install
+    hook has finished, so a pre-install hook could never reach it. The writers
+    start alongside it instead; a brand-new cluster has no linked AI tenants
+    yet, so no AI-path call can be written before the wait loop below completes.
+The same pairing as apiMigrator.hook (post-install,pre-upgrade).
+
+Idempotent: CREATE DATABASE is a no-op on an existing database; an existing
+policy is ALTERed to the configured duration, so changing the value takes effect
+on the next upgrade. It never DROPs anything and never sets DEFAULT; it fails if
+the policy is (somehow) the database's default rather than flipping autogen.
+
+Best-effort wait: if InfluxDB does not answer /ping within waitTimeoutSeconds,
+the Job warns and exits 0 so an InfluxDB outage cannot block every upgrade.
+Writers on @jambonz/time-series with the runtime-policy fallback
+(Cognigy/vg-time-series#32) keep writing to the default policy until a later
+upgrade creates it. Errors once InfluxDB answers still fail the Job.
+*/}}
+{{- if and .Values.influxdb.aiRetention .Values.influxdb.aiRetention.enabled }}
+{{- include "vg.influxdb.aiRetention.validate" $ }}
+{{- $r := .Values.influxdb.aiRetention }}
+{{- $hook := $r.hook | default dict }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: influxdb-ai-retention
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: influxdb-ai-retention
+    owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-helm-chart.git"
+    {{- /* influxdb.aiRetention.hook.*: keep post-install,pre-upgrade (ordering note above). */}}
+    "helm.sh/hook": {{ $hook.hook | default "post-install,pre-upgrade" }}
+    "helm.sh/hook-weight": {{ $hook.weight | default "0" | toString | quote }}
+    "helm.sh/hook-delete-policy": {{ $hook.deletePolicy | default "before-hook-creation,hook-succeeded" }}
+spec:
+  {{- /* hasKey, not default: an explicit 0 must render as 0. */}}
+  backoffLimit: {{ ternary $hook.backoffLimit 3 (hasKey $hook "backoffLimit") }}
+  ttlSecondsAfterFinished: {{ ternary $hook.ttlSecondsAfterFinished 86400 (hasKey $hook "ttlSecondsAfterFinished") }}
+  template:
+    metadata:
+      name: influxdb-ai-retention
+      labels:
+        app: influxdb-ai-retention
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      restartPolicy: OnFailure
+      priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.jobs.hookPriorityClassName "context" $) }}
+      {{- /* Autoscaler node pool: set from the fleet (run-on-auto-scaler-ng-values). */}}
+      {{- with $r.nodeSelector }}
+      nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" . "context" $) | nindent 8 }}
+      {{- end }}
+      {{- with $r.tolerations }}
+      tolerations: {{- include "vg.common.tplvalues.render" (dict "value" . "context" $) | nindent 8 }}
+      {{- end }}
+      {{- with $r.affinity }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" . "context" $) | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+      containers:
+        - name: ai-retention
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.jobs.image) }}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          {{- with $r.resources }}
+          resources: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: INFLUX_HOST
+              value: {{ .Values.influxdb.host | quote }}
+            - name: INFLUX_PORT
+              value: {{ .Values.influxdb.port | quote }}
+            - name: POLICY
+              value: {{ .Values.influxdb.aiRetention.policyName | quote }}
+            - name: DURATION
+              value: {{ .Values.influxdb.aiRetention.duration | quote }}
+            - name: SHARD_DURATION
+              value: {{ include "vg.influxdb.aiRetention.shardDuration" . | quote }}
+            - name: WAIT_TIMEOUT_SECONDS
+              value: {{ ternary $r.waitTimeoutSeconds 120 (hasKey $r "waitTimeoutSeconds") | quote }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              BASE="http://${INFLUX_HOST}:${INFLUX_PORT}"
+
+              echo "Waiting up to ${WAIT_TIMEOUT_SECONDS}s for InfluxDB at ${BASE}..."
+              deadline=$(( $(date +%s) + WAIT_TIMEOUT_SECONDS ))
+              until curl -sf -o /dev/null --max-time 5 "${BASE}/ping"; do
+                if [ "$(date +%s)" -ge "$deadline" ]; then
+                  # Best-effort: an InfluxDB that is down must not block the
+                  # release. The policy is created on the next upgrade.
+                  echo "WARNING: InfluxDB at ${BASE} not reachable after ${WAIT_TIMEOUT_SECONDS}s; skipping retention policy ${POLICY}." >&2
+                  exit 0
+                fi
+                sleep 5
+              done
+
+              # POST one InfluxQL statement to /query. Fails on a transport error,
+              # a non-200, or a statement error (Influx returns those as 200 with an
+              # "error" key in the body; matched with its colon so a policy named
+              # error, which SHOW RETENTION POLICIES lists as a value, does not trip it).
+              # Prints the JSON body.
+              q() {
+                out=$(curl -sS --max-time 30 -w '\n%{http_code}' -X POST "${BASE}/query" --data-urlencode "q=$1") || {
+                  echo "ERROR: request failed: $1" >&2; return 1; }
+                code=$(printf '%s\n' "$out" | tail -n 1)
+                body=$(printf '%s\n' "$out" | sed '$d')
+                if [ "$code" != "200" ] || printf '%s' "$body" | grep -q '"error":'; then
+                  echo "ERROR: '$1' -> HTTP ${code}: ${body}" >&2; return 1
+                fi
+                printf '%s' "$body"
+              }
+
+              # The policy's row from SHOW RETENTION POLICIES, e.g.
+              # ["vg_ai","720h0m0s","24h0m0s",1,"0s","0s",false] — "default" is the last column.
+              row() {
+                rps=$(q "SHOW RETENTION POLICIES ON \"$1\"") || return 1
+                printf '%s' "$rps" | grep -o "\[\"${POLICY}\",[^]]*\]" || true
+              }
+
+              for db in cdrs alerts; do
+                q "CREATE DATABASE \"${db}\"" >/dev/null
+                r=$(row "$db")
+                if [ -z "$r" ]; then
+                  echo "${db}: creating retention policy ${POLICY} (${DURATION})"
+                  q "CREATE RETENTION POLICY \"${POLICY}\" ON \"${db}\" DURATION ${DURATION} REPLICATION 1 SHARD DURATION ${SHARD_DURATION}" >/dev/null
+                else
+                  case "$r" in *,true\])
+                    echo "ERROR: ${POLICY} is the DEFAULT retention policy of ${db}. It must be non-default (legacy data belongs in autogen); refusing to touch it — fix by hand with ALTER RETENTION POLICY \"autogen\" ON \"${db}\" DEFAULT." >&2
+                    exit 1;;
+                  esac
+                  echo "${db}: setting retention policy ${POLICY} duration to ${DURATION}"
+                  q "ALTER RETENTION POLICY \"${POLICY}\" ON \"${db}\" DURATION ${DURATION} SHARD DURATION ${SHARD_DURATION}" >/dev/null
+                fi
+                r=$(row "$db")
+                case "$r" in
+                  "") echo "ERROR: ${POLICY} missing on ${db} after create." >&2; exit 1;;
+                  *,true\]) echo "ERROR: ${POLICY} is the default policy of ${db}." >&2; exit 1;;
+                esac
+                echo "${db}: ${r}"
+              done
+              echo "AI retention policy ${POLICY} ready on cdrs and alerts."
+{{- end }}

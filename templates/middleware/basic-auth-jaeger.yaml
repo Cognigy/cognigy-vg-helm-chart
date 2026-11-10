@@ -1,4 +1,14 @@
-{{- if and (.Values.ingress.enabled) (.Values.traefik.enabled) (.Values.ingress.jaeger.basicAuthMiddleware.enabled) }}
+{{/*
+No .Values.traefik.enabled condition here, to match every other Middleware CRD this chart renders
+(templates/middleware/ipwhitelist-*.yaml): the Middleware CRD is consumed by whichever Traefik
+controller watches the cluster, not only this chart's own Traefik subchart, so it must exist
+whenever an external/shared Traefik serves the install too. Previously gating this one Middleware
+on traefik.enabled left templates/jaeger/ingress.yaml's router.middlewares annotation referencing
+a Middleware that was never created whenever traefik.enabled was false (basicAuthMiddleware.enabled
+defaults to true), which a real Traefik fails closed on — jaeger becomes unreachable rather than
+unprotected, but silently so.
+*/}}
+{{- if and (.Values.ingress.enabled) (.Values.ingress.jaeger.basicAuthMiddleware.enabled) }}
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware

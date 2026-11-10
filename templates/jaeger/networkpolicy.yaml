@@ -1,0 +1,63 @@
+{{- /*
+Default-deny ingress+egress for jaeger (CSA-110265/CSA-110267, stage 2; see
+docs/014-network-policy.md). jaeger's StatefulSet renders unconditionally (only its public
+ingress.yaml is opt-in, ingress.jaeger.enabled), so this policy gates only on the
+profile/opt-in switch. Ingress: feature-server/feature-server-nightly (the UDP compact
+port, OTEL_EXPORTER_JAEGER_AGENT_HOST), otel-collector (otlp-grpc/4317), api-server (the
+UI/query API, ports.tcp) and this chart's own Traefik (jaeger has its own ingress.yaml,
+CSA-110266). No egress beyond DNS: jaeger here is all-in-one, with no external store.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.jaeger.networkPolicy.enabled "root" $) }}
+{{- if $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: jaeger
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: jaeger
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: jaeger
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: feature-server
+        - podSelector:
+            matchLabels:
+              app: feature-server-nightly
+      ports:
+        - protocol: UDP
+          port: {{ .Values.jaeger.ports.udp.compact }}
+        - protocol: UDP
+          port: {{ .Values.jaeger.ports.udp.collector }}
+    - from:
+        - podSelector:
+            matchLabels:
+              app: otel-collector
+      ports:
+        - protocol: TCP
+          port: 4317
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api-server
+      ports:
+        - protocol: TCP
+          port: {{ .Values.jaeger.ports.tcp }}
+{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.jaeger.ports.tcp "root" $) | indent 4 }}
+    {{- with .Values.jaeger.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+    {{- with .Values.jaeger.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

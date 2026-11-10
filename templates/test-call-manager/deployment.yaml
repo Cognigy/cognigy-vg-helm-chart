@@ -87,6 +87,7 @@ spec:
               value: {{ .Values.redis.host }}
             - name: REDIS_PORT
               value: {{ .Values.redis.port | quote }}
+            {{- with include "vg.redisAuth.clientEnv" $ }}{{ . | nindent 12 }}{{ end }}
             - name: VG_ENDPOINT
               value: {{ .Values.api.protocol }}://{{ .Values.ingress.api.host }}/v1
             - name: VG_API_KEY

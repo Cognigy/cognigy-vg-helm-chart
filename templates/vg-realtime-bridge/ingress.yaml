@@ -1,0 +1,86 @@
+{{- /*
+Public route to the bridge Session API: either on its own host
+(ingress.realtimeBridge.host, needs a DNS record) or, with that empty, on the
+shared api host (ingress.api.host) under ingress.realtimeBridge.routePrefix —
+path-based routing, no new DNS record or certificate.
+
+routePrefix is stripped at the edge by a Traefik stripPrefix Middleware, so the
+bridge still receives the paths it mounts (/v1/..., /media/...). It runs LAST in
+the router chain, after the IP allow-list. On the api host this is still its own
+Ingress, so api-server's router.middlewares never apply to it; the bridge's own
+allow-list does.
+*/ -}}
+{{- if and .Values.realtimeBridge.enabled .Values.ingress.enabled .Values.ingress.realtimeBridge.enabled }}
+{{- $cfg := .Values.ingress.realtimeBridge }}
+{{- $host := $cfg.host | default .Values.ingress.api.host }}
+{{- if not $host }}
+{{- fail "ingress.realtimeBridge.enabled is set but there is no host: set ingress.realtimeBridge.host, or ingress.api.host (with ingress.realtimeBridge.routePrefix) to share the API host." }}
+{{- end }}
+{{- $prefix := $cfg.routePrefix | default "" | trimSuffix "/" }}
+{{- if and $prefix (not (hasPrefix "/" $prefix)) }}
+{{- fail "ingress.realtimeBridge.routePrefix must start with \"/\", e.g. /bridge." }}
+{{- end }}
+{{- if and (not $cfg.host) (not $prefix) }}
+{{- fail "ingress.realtimeBridge.routePrefix must not be empty on the shared api host (ingress.realtimeBridge.host unset): api-server already owns /v1 there. Keep the default /bridge, or set an own host." }}
+{{- end }}
+{{- if and $prefix (ne .Values.ingress.ingressClassName "traefik") }}
+{{- fail "ingress.realtimeBridge.routePrefix requires ingress.ingressClassName=traefik: the prefix is stripped by a Traefik Middleware." }}
+{{- end }}
+{{- $middlewares := list }}
+{{- if include "vg.fedramp.ingressIpAllowListEnabled" (dict "service" "realtimeBridge" "override" $cfg.ipWhiteListMiddleware.enabled "sourceRange" $cfg.ipWhiteListMiddleware.ipWhiteList.sourceRange "extraAnnotations" $cfg.extraAnnotations "root" $) }}
+{{- $middlewares = append $middlewares (printf "%s-ipwhitelistrealtimebridge@kubernetescrd" $.Release.Namespace) }}
+{{- end }}
+{{- if $prefix }}
+{{- $middlewares = append $middlewares (printf "%s-vg-realtime-bridge-strip-prefix@kubernetescrd" $.Release.Namespace) }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: vg-realtime-bridge-strip-prefix
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+spec:
+  stripPrefix:
+    prefixes:
+      - {{ $prefix | quote }}
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vg-realtime-bridge
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+  annotations:
+  {{- if eq .Values.ingress.ingressClassName "traefik" }}
+    {{- if .Values.tls.enabled }}
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    {{- else }}
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    {{- end }}
+    {{- if $middlewares }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ join "," $middlewares }}
+    {{- end }}
+  {{- end }}
+  {{- if $cfg.extraAnnotations }}
+    {{- include "vg.common.tplvalues.render" (dict "value" $cfg.extraAnnotations "context" $) | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.ingressClassName }}
+  {{- include "vg.tlsCertificate.secretName.render" $ | nindent 2 }}
+  rules:
+    - host: {{ $host }}
+      http:
+        paths:
+          {{- range $cfg.paths }}
+          - backend:
+              service:
+                name: vg-realtime-bridge
+                port:
+                  name: http
+            path: {{ printf "%s%s" $prefix . }}
+            pathType: Prefix
+          {{- end }}
+{{- end }}

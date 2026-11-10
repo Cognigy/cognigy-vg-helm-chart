@@ -1,0 +1,165 @@
+{{- /*
+vg-events-api: read API for per-call operational data (vg-resources
+docs/tdd/06-vg-in-ai/025, chart docs/015-vg-events-api.md). Modelled on
+templates/resource-resolver/deployment.yaml.
+
+Both guards fail the render rather than ship a pod that cannot start: outside
+STANDALONE the service exits without AI_CLUSTER_TRUST_LIST (at least one AI
+cluster) and without HOMER_PASSWORD, which only exists with the bundled Homer.
+*/ -}}
+{{- if .Values.vgEventsApi.enabled }}
+{{- if not (include "vg.eventsApi.active" .) }}
+{{- fail "vgEventsApi.enabled is set but no AI cluster is linked (resourceResolver.runtimeApiTargets and vgInAi.clusters are both empty). vg-events-api only answers JWTs from linked AI clusters and refuses to start with an empty AI_CLUSTER_TRUST_LIST, so with no target it would crash-loop. Link at least one AI cluster (vgInAi.clusters or resourceResolver.runtimeApiTargets), or leave vgEventsApi disabled." }}
+{{- end }}
+{{- if not .Values.homer.enabled }}
+{{- fail "vgEventsApi.enabled requires homer.enabled: vg-events-api exports SIP pcaps from the bundled Homer and refuses to start without HOMER_PASSWORD, which comes from the vg-homer-password Secret the chart only creates with Homer on." }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vg-events-api
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-events-api
+    owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-events-api.git"
+spec:
+  selector:
+    matchLabels:
+      app: vg-events-api
+  {{- /* Drop the static replica count ONLY when this service is actually
+         autoscaled -- see templates/resource-resolver/deployment.yaml. */}}
+  {{- if not (and ($.Values.hpa.enabled) ($.Values.hpa.removeReplicas) (dig "vgEventsApi" "enabled" false $.Values.hpa.services)) }}
+  replicas: {{ .Values.vgEventsApi.replicaCount | default 1 }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        app: vg-events-api
+      annotations:
+        checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
+        {{- if .Values.homer.enabled }}
+        {{- /* HOMER_PASSWORD comes from vg-homer-password: roll on change, as api-server does. */}}
+        checksum/secret: {{ include (print $.Template.BasePath "/common-secrets/vg-homer-password.yaml") $ | sha256sum }}
+        {{- end }}
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      {{- if .Values.vgEventsApi.affinity }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgEventsApi.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if or (.Values.vgEventsApi.nodeSelector) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) (dig "vgEventsApi" "enabled" false $.Values.hpa.services)) }}
+      nodeSelector:
+        {{- if .Values.vgEventsApi.nodeSelector }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgEventsApi.nodeSelector "context" $) | nindent 8 }}
+        {{- end }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaNodeSelector) (dig "vgEventsApi" "enabled" false $.Values.hpa.services) }}
+          {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- if or (.Values.vgEventsApi.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) (dig "vgEventsApi" "enabled" false $.Values.hpa.services)) }}
+      tolerations:
+        {{- if .Values.vgEventsApi.tolerations }}
+          {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgEventsApi.tolerations "context" $) | nindent 8 }}
+        {{- end }}
+        {{- if and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations) (dig "vgEventsApi" "enabled" false $.Values.hpa.services) }}
+          {{- include "vg.common.tplvalues.render" (dict "value" $.Values.hpa.hpaTolerations "context" $) | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.vgEventsApi.priorityClassName }}
+      priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.vgEventsApi.priorityClassName "context" $) }}
+      {{- end }}
+      {{- if .Values.vgEventsApi.podSecurityContext }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgEventsApi.podSecurityContext "context" $) | nindent 8 }}
+      {{- end }}
+      restartPolicy: Always
+      containers:
+        - name: vg-events-api
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.vgEventsApi.image) }}
+          imagePullPolicy: {{ .Values.vgEventsApi.imagePullPolicy | default "IfNotPresent" }}
+          resources: {{- toYaml .Values.vgEventsApi.resources | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.vgEventsApi.port | default 4000 }}
+              protocol: TCP
+            - name: health
+              containerPort: {{ .Values.health.port }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+          # Health checks on their own listener (@cognigy-internal/health), as for
+          # the rest of the vg-* fleet. /health/readiness answers 503 while the
+          # jti replay store (Redis) is unreachable.
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: {{ .Values.health.port }}
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: {{ .Values.health.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /health/startup
+              port: {{ .Values.health.port }}
+            failureThreshold: 30
+            periodSeconds: 10
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.global.nodeEnv | quote }}
+            - name: HTTP_PORT
+              value: {{ .Values.vgEventsApi.port | default 4000 | quote }}
+            - name: HEALTH_CHECK_PORT
+              value: {{ .Values.health.port | quote }}
+            - name: METRICS_PORT
+              value: {{ .Values.metrics.port | quote }}
+            - name: LOGLEVEL
+              value: {{ .Values.vgEventsApi.logLevel | default .Values.global.logLevel | quote }}
+            ## CDRs. Same host value sbc-inbound / feature-server / api-server get.
+            - name: JAMBONES_TIME_SERIES_HOST
+              value: {{ .Values.influxdb.host | quote }}
+            - name: JAMBONES_TIME_SERIES_PORT
+              value: {{ .Values.influxdb.port | quote }}
+            {{- with include "vg.influxdb.aiRetention.env" $ }}{{ . | nindent 12 }}{{ end }}
+            {{- with .Values.vgEventsApi.queryTimeoutMs }}
+            - name: JAMBONES_TIME_SERIES_QUERY_TIMEOUT_MS
+              value: {{ . | quote }}
+            {{- end }}
+            ## SIP pcaps. Same wiring as api-server's recent-calls download.
+            - name: HOMER_BASE_URL
+              value: {{ printf "%s%s" .Values.homer.urlPrefixServiceConnection .Values.homer.serviceName | quote }}
+            - name: HOMER_USERNAME
+              value: {{ .Values.homer.auth.username | quote }}
+            - name: HOMER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vg-homer-password
+                  key: homer-password
+            {{- with .Values.vgEventsApi.homerTimeoutMs }}
+            - name: HOMER_TIMEOUT_MS
+              value: {{ . | quote }}
+            {{- end }}
+            ## Single-use jti store. Same env vg-resource-resolver gets.
+            - name: JAMBONES_REDIS_HOST
+              value: {{ .Values.redis.host | quote }}
+            - name: JAMBONES_REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+            {{- with include "vg.redisAuth.clientEnv" $ }}{{ . | nindent 12 }}{{ end }}
+            ## AI-cluster JWT verification: the same VG_CLUSTER_NAME /
+            ## AI_CLUSTER_TRUST_LIST feature-server /v2 gets.
+            {{- include "vg.aiClusterAuth.env" $ | trim | nindent 12 }}
+            {{- if .Values.vgEventsApi.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgEventsApi.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: cognigy-env
+{{- end }}

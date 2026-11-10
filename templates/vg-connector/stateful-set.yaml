@@ -31,7 +31,7 @@ spec:
       nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgConnector.nodeSelector "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.vgConnector.priorityClassName }}
-      priorityClassName: {{ .Values.vgConnector.priorityClassName }}
+      priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.vgConnector.priorityClassName "context" $) }}
       {{- end }}
       {{- if .Values.vgConnector.podSecurityContext }}
       securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgConnector.podSecurityContext "context" $) | nindent 8 }}
@@ -143,6 +143,16 @@ spec:
             ## connector reads ENABLE_MICROSOFT_TEAMS to mount the Teams module.
             - name: ENABLE_MICROSOFT_TEAMS
               value: {{ .Values.global.enableMsTeams | quote }}
+            ## Amazon Connect master switch -- intentionally vgConnector-scoped,
+            ## unlike ENABLE_GENESYS_AUDIOHOOK/ENABLE_MICROSOFT_TEAMS above
+            ## which fan a single global.* flag out to three services. Amazon
+            ## Connect involvement is limited to this connector service
+            ## (vg-feature-server's involvement is via a SIP capability
+            ## header, not this flag), and api-server/webapp have no Amazon
+            ## Connect awareness at all. See vgConnector.enableAmazonConnect
+            ## in values.yaml.
+            - name: ENABLE_AMAZON_CONNECT
+              value: {{ .Values.vgConnector.enableAmazonConnect | quote }}
             - name: POD_NAME
               valueFrom:
                 fieldRef:
@@ -164,6 +174,7 @@ spec:
               value: {{ .Values.rtpEngine.endPort | quote }}
             - name: SIGTERM_FORCE_CLOSE_TIMEOUT_MS
               value: {{ .Values.vgConnector.sigtermForceCloseTimeoutMs | quote }}
+            {{- with include "vg.redisAuth.clientEnv" $ }}{{ . | nindent 12 }}{{ end }}
             {{- if .Values.vgConnector.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.vgConnector.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

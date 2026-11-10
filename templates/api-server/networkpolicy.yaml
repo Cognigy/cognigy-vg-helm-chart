@@ -1,0 +1,119 @@
+{{- /*
+Default-deny ingress+egress for api-server (CSA-110265/CSA-110267, stage 2/3; see
+docs/014-network-policy.md). Ingress: the health port (any source, kubelet probes), the
+metrics port (monitoring namespace), and the app port from this chart's own Traefik only —
+NOT a podSelector list of application services. Almost every real caller (sbc-inbound,
+webapp, test-call-manager, audit-cleanup, feature-server/nightly) reaches api-server
+through its own public ingress hostname, which Traefik proxies to the Service; from
+api-server's own pod's point of view, Traefik is the only direct network peer that
+traffic ever has, same reasoning as every other chart-fronted-by-Traefik workload (see
+vg.networkPolicy.fromTraefik).
+
+Egress: MySQL, Redis, homer (HOMER_BASE_URL), jaeger (JAEGER_BASE_URL), InfluxDB
+(JAMBONES_TIME_SERIES_HOST), tracing (tracing.baseUrl), vgTeam's SMTP relay
+(api.vgTeam.emailNotification, when api.vgTeam.enabled) and Cognigy login
+(cognigyLogin.baseUrl, when cognigyLogin.enabled) and each linked AI cluster's JWKS URL
+(vg.aiClusterTrustList; the handover gate fetches the keys at boot and on a
+timer, CGY-45398) — the last four via auto-derived ports (no chart-known CIDR).
+
+api-server's own direct Kubernetes API need (templates/api-server/rbac-credential-secrets.yaml
+— its ServiceAccount's secrets get/create/update/patch RBAC, used by
+api.enablePrepareCognigyData, true by default, to create its own credential Secrets, plausibly
+at startup) is real, and an unwired Egress-only policy would silently block that Secret
+creation instead of deferring the restriction — worse than not having the policy at all. Unlike
+every other consumer of vg.networkPolicy.apiServerEgress, this one can't just let the helper
+fail the render on a missing global.fedramp.networkPolicyKubernetesApiCidr: that helper runs on
+every full-chart render once the FedRAMP profile is on, and every existing render-test file
+that turns the profile on for an unrelated reason would then need the CIDR too — a much wider
+blast radius than this one workload's gap deserves.
+
+Instead, this policy checks for the CIDR itself ($canEnforceEgress below) and degrades
+gracefully: with it unset, policyTypes drops Egress entirely and no egress: key is emitted at
+all, which Kubernetes reads as "this policy does not govern egress" — api-server's egress
+stays exactly as unrestricted as it would be with no policy, the same "stays ingress-only"
+shape docs/014-network-policy.md already uses for feature-server's own deferred egress. With
+the CIDR supplied, the full Ingress+Egress policy below applies, API-server egress included.
+
+Deliberately NOT covered even once the CIDR is supplied: recording uploads to bucket storage
+when vg-audio-manager offloading is disabled (api-server handles the upload itself then) —
+same runtime-derived, no-chart-known-CIDR situation as vg-audio-manager's own bucket egress;
+see that workload's networkpolicy.yaml.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.api.networkPolicy.enabled "root" $) }}
+{{- if $npEnabled }}
+{{- $canEnforceEgress := or (not (include "vg.fedramp.enabled" $)) (dig "fedramp" "networkPolicyKubernetesApiCidr" "" .Values.global) }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-server
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: api-server
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: api-server
+  policyTypes:
+    - Ingress
+    {{- if $canEnforceEgress }}
+    - Egress
+    {{- end }}
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.health.port }}
+    {{- if .Values.api.networkPolicy.allowMonitoringScrape }}
+    - from:
+        - namespaceSelector:
+            {{- if .Values.api.networkPolicy.monitoringNamespaceSelector }}
+{{ toYaml .Values.api.networkPolicy.monitoringNamespaceSelector | indent 12 }}
+            {{- else }}
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.podMonitors.namespace | default "monitoring" | quote }}
+            {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.metrics.port }}
+    {{- end }}
+{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.api.port "root" $) | indent 4 }}
+    {{- with .Values.api.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  {{- if $canEnforceEgress }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.mysqlEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.redisEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.influxdbEgress" $ | indent 4 }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: homer
+      ports:
+        - protocol: TCP
+          port: {{ .Values.homer.port }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: jaeger
+      ports:
+        - protocol: TCP
+          port: {{ .Values.jaeger.ports.tcp }}
+    {{- $apiServerUrls := list .Values.tracing.baseUrl }}
+    {{- if .Values.api.vgTeam.enabled }}
+    {{- $apiServerUrls = append $apiServerUrls (printf "smtp://%s:%s" .Values.api.vgTeam.emailNotification.smtpHost (.Values.api.vgTeam.emailNotification.smtpPort | toString)) }}
+    {{- end }}
+    {{- if .Values.cognigyLogin.enabled }}
+    {{- $apiServerUrls = append $apiServerUrls .Values.cognigyLogin.baseUrl }}
+    {{- end }}
+    {{- range $_, $trusted := (include "vg.aiClusterTrustList" $ | fromJson) }}
+    {{- $apiServerUrls = append $apiServerUrls $trusted.jwksUrl }}
+    {{- end }}
+{{ include "vg.networkPolicy.externalUrlEgress" (dict "urls" $apiServerUrls "root" $) | indent 4 }}
+{{ include "vg.networkPolicy.apiServerEgress" (dict "root" $ "needed" true) | indent 4 }}
+    {{- with .Values.api.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  {{- end }}
+{{- end }}

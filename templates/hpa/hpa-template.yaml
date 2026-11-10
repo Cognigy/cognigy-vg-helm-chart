@@ -2,11 +2,15 @@
   {{- range $hpa_key, $hpa_val := .Values.hpa.services }}
     {{- if kindIs "map" $hpa_val }}
       {{- $keda := $hpa_val.keda | default (dict) }}
-      {{- if and ($hpa_val.enabled) ($keda.enabled) (not $.Values.hpa.keda.enabled) }}
+      {{- /* vg-events-api is an opt-in component: its autoscaler follows it, so the
+             entry can stay enabled in values without an HPA for a missing Deployment. */}}
+      {{- $component := true }}
+      {{- if eq $hpa_key "vgEventsApi" }}{{- $component = $.Values.vgEventsApi.enabled }}{{- end }}
+      {{- if and ($component) ($hpa_val.enabled) ($keda.enabled) (not $.Values.hpa.keda.enabled) }}
       {{- fail (printf "hpa.services.%s.keda.enabled=true requires hpa.keda.enabled=true (KEDA subchart)" $hpa_key) }}
       {{- end }}
       {{- /* Native HPA — rendered unless KEDA manages this service. */}}
-      {{- if and ($hpa_val.enabled) (not $keda.enabled) }}
+      {{- if and ($component) ($hpa_val.enabled) (not $keda.enabled) }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -38,7 +42,7 @@ spec:
       {{- /* KEDA-managed autoscaling — mirrors the Cognigy.AI chart convention.
              KEDA creates and owns the HPA; triggers query their sources directly
              (Prometheus, Redis streams, …). Requires hpa.keda.enabled=true (subchart). */}}
-      {{- if and ($hpa_val.enabled) ($keda.enabled) }}
+      {{- if and ($component) ($hpa_val.enabled) ($keda.enabled) }}
 ---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject

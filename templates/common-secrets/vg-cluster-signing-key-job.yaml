@@ -8,8 +8,8 @@
 # upgrade, so no operator has to mint and seal one by hand on ~82 clusters.
 #
 # Modelled on cognigy-ai-app's own service-auth-gateway keypair generator, which
-# does exactly this for the platform's internal JWT and runs openssl on this same
-# image. The chart cannot generate the key in a template: Helm's randAlphaNum
+# does exactly this for the platform's internal JWT. This Job runs openssl on
+# vgCluster.signingKey.generatorImage (vg-k8s-tools). The chart cannot generate the key in a template: Helm's randAlphaNum
 # produces a string, not an EC keypair, and Sprig has no EC generator.
 #
 # IDEMPOTENT, AND THAT IS THE LOAD-BEARING PROPERTY. If the secret exists, the
@@ -138,6 +138,7 @@ spec:
         owner-team: echo
     spec:
       restartPolicy: OnFailure
+      priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.jobs.hookPriorityClassName "context" $) }}
       serviceAccountName: vg-cluster-signing-key-generator
       {{- if $ownPullSecret }}
       ## The hook-scoped copy above, not `cognigy-registry-token` — see the
@@ -156,7 +157,7 @@ spec:
         - name: generate
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.vgCluster.signingKey.generatorImage) }}
           imagePullPolicy: IfNotPresent
-          command: ["/usr/bin/bash", "-c"]
+          command: ["bash", "-c"]
           args:
             - |
               set -euo pipefail

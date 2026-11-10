@@ -1,0 +1,67 @@
+{{- /*
+Default-deny ingress+egress for vg-connector (CSA-110265/CSA-110267, stage 2; see
+docs/014-network-policy.md). Ingress: the health port (kubelet probes, any source), this
+chart's own Traefik — vg-connector has no in-cluster podSelector caller at all; its real
+traffic (Genesys AudioHook, MS Teams) arrives externally through its own ingressroute.yaml,
+so Traefik is the only direct network peer this policy can name — and the UDP media range
+(rtpEngine.startPort–endPort) from the same hostNetwork peers as egressToHostNetwork below:
+RTP is bidirectional, and sbc-rtp can open the media stream toward vg-connector's drachtio
+sidecar before a matching outbound flow exists on vg-connector's side, which a
+podSelector-based rule (or egress-only CIDR admission) would not cover.
+Egress: MySQL, Redis, and sbc-sip/sbc-rtp through egressToHostNetwork (both hostNetwork,
+same limitation as vg-resource-resolver's ingressFromHostNetwork — see values.yaml;
+sbc.rtp.port, the rtpengine NG control port, is UDP, not TCP).
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.vgConnector.networkPolicy.enabled "root" $) }}
+{{- if and .Values.vgConnector.enabled $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vg-connector
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: vg-connector
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: vg-connector
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.health.port }}
+{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.vgConnector.port "root" $) | indent 4 }}
+    {{- with .Values.vgConnector.networkPolicy.egressToHostNetwork }}
+    - from:
+{{ toYaml . | indent 8 }}
+      ports:
+        - protocol: UDP
+          port: {{ $.Values.rtpEngine.startPort }}
+          endPort: {{ $.Values.rtpEngine.endPort }}
+    {{- end }}
+    {{- with .Values.vgConnector.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.mysqlEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.redisEgress" $ | indent 4 }}
+    {{- with .Values.vgConnector.networkPolicy.egressToHostNetwork }}
+    - to:
+{{ toYaml . | indent 8 }}
+      ports:
+        - protocol: UDP
+          port: {{ $.Values.sbc.sip.ports.udp }}
+        - protocol: TCP
+          port: {{ $.Values.sbc.sip.ports.tcp }}
+        - protocol: UDP
+          port: {{ $.Values.rtpEngine.startPort }}
+          endPort: {{ $.Values.rtpEngine.endPort }}
+    {{- end }}
+    {{- with .Values.vgConnector.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

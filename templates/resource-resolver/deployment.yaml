@@ -1,5 +1,5 @@
 {{- $vgClusterSigningKeySecret := include "vg.clusterSigningKey.secretName" $ }}
-{{- $runtimeApiTargets := $.Values.resourceResolver.runtimeApiTargets }}
+{{- $runtimeApiTargets := include "vg.runtimeApiTargets.effective" $ | fromJsonArray }}
 ## The three guards below sit OUTSIDE the `resourceResolver.enabled` gate on
 ## purpose. Gated on it, a config with the resolver switched off and
 ## runtimeApiTargets still populated -- a plausible mid-migration state, and the
@@ -12,6 +12,10 @@
 {{- if $runtimeApiTargets }}
 {{- include "vg.runtimeApiTargets.validate" $ }}
 {{- include "vg.clusterName.validate" $ }}
+{{- $rrPodSecurityContext := $.Values.resourceResolver.podSecurityContext | default dict }}
+{{- if and $rrPodSecurityContext.runAsUser (not $rrPodSecurityContext.fsGroup) }}
+{{- fail "resourceResolver.podSecurityContext sets a non-root runAsUser but no fsGroup while runtimeApiTargets is set -- the cluster signing key is mounted 0400 and owned by root, so without fsGroup the resolver cannot read it and fails at boot. Keep fsGroup (default 1000) when you override resourceResolver.podSecurityContext." }}
+{{- end }}
 {{- end }}
 {{- if .Values.resourceResolver.enabled }}
 ---
@@ -87,7 +91,7 @@ spec:
         {{- end }}
       {{- end }}
       {{- if .Values.resourceResolver.priorityClassName }}
-      priorityClassName: {{ .Values.resourceResolver.priorityClassName }}
+      priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.resourceResolver.priorityClassName "context" $) }}
       {{- end }}
       {{- if .Values.resourceResolver.podSecurityContext }}
       securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.resourceResolver.podSecurityContext "context" $) | nindent 8 }}
@@ -162,6 +166,7 @@ spec:
               value: {{ .Values.redis.host }}
             - name: JAMBONES_REDIS_PORT
               value: {{ .Values.redis.port | quote }}
+            {{- with include "vg.redisAuth.clientEnv" $ }}{{ . | nindent 12 }}{{ end }}
             - name: CACHE_ENABLED
               value: {{ .Values.resourceResolver.cacheEnabled | quote }}
             - name: CACHE_TTL_SECONDS
@@ -250,12 +255,13 @@ spec:
             ## an ephemeral debug container, an injected sidecar or a second user
             ## in a future image would all be able to read it at 0644.
             ##
-            ## Owner-read works because the resolver image declares no USER and
-            ## resourceResolver.podSecurityContext is empty, so the process is uid
-            ## 0 and owns the mount. IF YOU SET resourceResolver.podSecurityContext
-            ## .runAsUser, SET fsGroup TO MATCH -- kubelet owns Secret volumes
-            ## root:fsGroup, and without one a non-root process cannot read this
-            ## file at any mode tighter than 0644.
+            ## The resolver runs as uid 1000, not root (resourceResolver
+            ## .podSecurityContext, CSA-109610). It reads this file only because
+            ## that podSecurityContext also sets fsGroup: kubelet then makes the
+            ## file root:<fsGroup> and adds group-read (0440). IF YOU OVERRIDE
+            ## resourceResolver.podSecurityContext, KEEP fsGroup -- without it a
+            ## non-root process cannot read this file at any mode tighter than
+            ## 0644, and the resolver fails at boot once runtimeApiTargets is set.
             defaultMode: 256
       {{- end }}
 {{- end }}

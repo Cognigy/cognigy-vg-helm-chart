@@ -1,0 +1,44 @@
+{{- /*
+Default-deny ingress+egress for influxdb (CSA-110265/CSA-110267, stage 2; see
+docs/014-network-policy.md). The app port serves both every direct writer and kubelet's
+own liveness/readiness probes (no separate health port on this workload) — restricting it
+to podSelector-only callers would risk the pod going unready on a CNI that polices
+node-sourced traffic, so it is open to any source, same trade-off as vg-audio-manager's
+http port and resource-resolver's health port. sbc-sip writes through
+ingressFromHostNetwork (hostNetwork, same limitation as vg-resource-resolver's sbc-sip
+regbots). influxdb calls nothing of its own, so there is no egress beyond DNS.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.influxdb.networkPolicy.enabled "root" $) }}
+{{- if $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: influxdb
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: influxdb
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: influxdb
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.influxdb.port }}
+    {{- with .Values.influxdb.networkPolicy.ingressFromHostNetwork }}
+    - from:
+{{ toYaml . | indent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.influxdb.port }}
+    {{- end }}
+    {{- with .Values.influxdb.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{- end }}

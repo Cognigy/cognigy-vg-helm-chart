@@ -26,6 +26,5 @@ spec:
         values:
           - feature-server
           - feature-server-nightly
-          - feature-server-legacy
 {{- end }}
 {{- end }}

@@ -124,6 +124,7 @@ spec:
           {{- end }}
           env:
             {{- with (include "vg.testHarness.apiServerEnv" .) }}{{- . | nindent 12 }}{{- end }}
+            {{- with (include "vg.apiServer.aiClusterTrust.env" .) }}{{- . | nindent 12 }}{{- end }}
             - name: NODE_ENV
               value: {{ .Values.global.nodeEnv | quote }}
             - name: HTTP_PORT
@@ -136,6 +137,11 @@ spec:
             ## CRUD route also mounts when only MS Teams (not Genesys) is on.
             - name: ENABLE_MICROSOFT_TEAMS
               value: {{ .Values.global.enableMsTeams | quote }}
+            ## Amazon Connect master switch — same gate, so the
+            ## vendor_integrations CRUD route also mounts when only Amazon
+            ## Connect (not Genesys or MS Teams) is on.
+            - name: ENABLE_AMAZON_CONNECT
+              value: {{ .Values.global.enableAmazonConnect | quote }}
             - name: K8S
               value: {{ .Values.global.k8s | quote }}
             - name: K8S_NAMESPACE
@@ -193,6 +199,7 @@ spec:
               value: {{ .Values.redis.host }}
             - name: JAMBONES_REDIS_PORT
               value: {{ .Values.redis.port | quote }}
+            {{- with include "vg.redisAuth.clientEnv" $ }}{{ . | nindent 12 }}{{ end }}
             - name: JAMBONES_TIME_SERIES_HOST
               value: {{ .Values.influxdb.host }}
             - name: JAMBONES_TRUST_PROXY
@@ -313,13 +320,27 @@ spec:
                   key: {{ .Values.api.vgTeam.teamMembers.managedEnvKey | quote }}
                   optional: true
             {{- end }}
+            {{- with include "vg.fedramp.sessionKeyDigest" (dict "override" .Values.api.sessionKeyDigest "root" $) }}
+            - name: SESSION_KEY_DIGEST
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with include "vg.fedramp.strictRegistrationHookValidation" (dict "override" .Values.api.strictRegistrationHookValidationEnabled "root" $) }}
+            - name: FEATURE_STRICT_REGISTRATION_HOOK_VALIDATION_ENABLED
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with include "vg.fedramp.auditLogTtlDays" (dict "override" .Values.auditLogging.cleanup.ttlDays "root" $) }}
+            - name: AUDIT_LOG_TTL_DAYS
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if include "vg.fedramp.tlsKeylogLocked" (dict "extraEnvVars" .Values.api.extraEnvVars "root" $) }}
+            - name: VG_TLS_KEYLOG_FEDRAMP_LOCKED
+              value: "true"
+            {{- end }}
             {{- if .Values.api.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.api.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
             - name: ENABLE_AUDIT_LOGGING
               value: {{ .Values.auditLogging.enabled | quote }}
-            - name: AUDIT_LOGGING_TTL_DAYS
-              value: {{ .Values.auditLogging.cleanup.ttlDays | quote }}
             - name: VG_CLUSTER_ID
               value: {{ .Values.billing.clusterId | default .Values.ingress.webapp.host | quote }}
             - name: VG_SPEECH_BILLING_ENABLED

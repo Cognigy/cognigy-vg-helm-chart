@@ -1,0 +1,129 @@
+{{- /*
+Default-deny ingress+egress (CSA-110265 / VHC-SC7-001, SC-7; CSA-110267 / VHC-AC4-001,
+AC-4; see docs/014-network-policy.md). vg-resource-resolver is on the call-setup critical
+path, so its callers are the services that actually resolve tenant data through it:
+api-server, feature-server (mainline and nightly — legacy does not call it), sbc-inbound
+and sbc-outbound. The health port is open to any source: kubelet probes come from the
+node, and the source address a policy sees for them differs by CNI and mesh — blocking
+them would keep the pod unready (startupProbe/readinessProbe/livenessProbe all use it). A
+separate ingress rule opens the metrics port (a different listener than the app port) to
+the monitoring namespace, matching sileroVad.networkPolicy's convention. Egress is DNS,
+MySQL, Redis and each runtimeApiTargets URL (ported review feedback from main's original
+CSA-109614 implementation, #1099/#1131): the target host has no chart-known CIDR, so —
+like main — this allows the derived port to any address except link-local, rather than
+guessing a podSelector that can't exist for an external host. Anything else goes through
+networkPolicy.egressTo.
+
+The application-port ingress rule only renders while ingressFrom/ingressFromHostNetwork are
+non-empty: an emitted `from: []` is read by Kubernetes as "match every source" (no restriction
+at all), the opposite of what clearing the list is meant to do. Unlike a workload with no
+unconditional rule, `ingress:` here is never actually empty even with both cleared and monitoring
+scrape off: the health-port rule always renders (see above), so there's no `ingress: []` case to
+special-case — same as main's original CSA-109614 implementation. ingressFromHostNetwork covers
+callers that run with hostNetwork (the sbc-sip sidecar's runtime regbots, CGY-44772): a pod
+selector never matches them, since their traffic arrives from the node address, so they are
+listed by CIDR instead and merged into the same rule as ingressFrom.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.resourceResolver.networkPolicy.enabled "root" $) }}
+{{- if and .Values.resourceResolver.enabled $npEnabled }}
+{{- /* Same port-derivation as main (#1099): explicit port in the URL, else 443/80 by scheme.
+Reads the *effective* target list (vg.runtimeApiTargets.effective, templates/_helpers.tpl) —
+the same one vg-resource-resolver's own app code reads — which also derives targets from
+vgInAi.clusters; reading .Values.resourceResolver.runtimeApiTargets directly would silently
+drop that derived set whenever the explicit list is empty (caught while fixing the identical
+bug in vg-audio-manager's networkpolicy.yaml, PR #1219 review). */}}
+{{- $runtimeApiPorts := list }}
+{{- range $i, $t := (include "vg.runtimeApiTargets.effective" $ | fromJsonArray) }}
+{{- $u := urlParse (dig "url" "" $t) }}
+{{- $port := regexFind ":[0-9]+$" $u.host | trimPrefix ":" }}
+{{- if not $port }}
+{{- $port = ternary "443" "80" (eq (lower $u.scheme) "https") }}
+{{- end }}
+{{- $runtimeApiPorts = append $runtimeApiPorts ($port | int) }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vg-resource-resolver
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-resource-resolver
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: vg-resource-resolver
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    {{- with concat (.Values.resourceResolver.networkPolicy.ingressFrom | default list) (.Values.resourceResolver.networkPolicy.ingressFromHostNetwork | default list) }}
+    - from:
+{{ toYaml . | indent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.resourceResolver.port | default 4000 }}
+    {{- end }}
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.health.port }}
+    {{- if .Values.resourceResolver.networkPolicy.allowMonitoringScrape }}
+    - from:
+        - namespaceSelector:
+            {{- if .Values.resourceResolver.networkPolicy.monitoringNamespaceSelector }}
+{{ toYaml .Values.resourceResolver.networkPolicy.monitoringNamespaceSelector | indent 12 }}
+            {{- else }}
+            {{- /* Default: the namespace the PodMonitor is created in, where Prometheus runs. */}}
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.podMonitors.namespace | default "monitoring" | quote }}
+            {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.metrics.port }}
+    {{- end }}
+    {{- with .Values.resourceResolver.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  egress:
+    {{- with .Values.resourceResolver.networkPolicy.dnsNamespaceSelector }}
+    - to:
+        - namespaceSelector:
+{{ toYaml . | indent 12 }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- else }}
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+    {{- end }}
+{{ include "vg.networkPolicy.mysqlEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.redisEgress" $ | indent 4 }}
+    ## The bundled mock runtime API (e.g. ci/kind/values-kind-vgai.yaml), unlike an external
+    ## runtimeApiTargets entry, has a chart-known selector and port.
+    {{- if and .Values.vgTestHarness.enabled .Values.vgTestHarness.mockRuntimeApi.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: mock-runtime-api
+      ports:
+        - protocol: TCP
+          port: 8080
+    {{- end }}
+    {{- with $runtimeApiPorts }}
+    - to:
+        - namespaceSelector: {}
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.0.0/16
+      ports:
+        {{- range (uniq .) }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+    {{- end }}
+    {{- with .Values.resourceResolver.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

@@ -1,0 +1,40 @@
+{{- if .Values.realtimeBridge.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vg-realtime-bridge
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-realtime-bridge
+    owner-team: echo
+data:
+  PORT: {{ .Values.realtimeBridge.port | quote }}
+  {{- /* Empty => the in-cluster Service URL: mod_audio_fork (feature-server, same namespace) dials it without TLS or ingress. */}}
+  PUBLIC_MEDIA_URL: {{ .Values.realtimeBridge.env.publicMediaUrl | default (printf "ws://vg-realtime-bridge.%s.svc.cluster.local:%v" .Release.Namespace .Values.realtimeBridge.service.port) | quote }}
+  LOG_LEVEL: {{ if .Values.realtimeBridge.env.logLevel }}{{ .Values.realtimeBridge.env.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
+  {{- /* Optional: rendered unless unset or "", so an explicit false / 0 is kept. Otherwise the app default (src/config.ts) applies. */}}
+  {{- if include "vg.realtimeBridge.envSet" .Values.realtimeBridge.env.toolTimeoutMs }}
+  TOOL_TIMEOUT_MS: {{ .Values.realtimeBridge.env.toolTimeoutMs | toString | quote }}
+  {{- end }}
+  {{- if include "vg.realtimeBridge.envSet" .Values.realtimeBridge.env.callbackTimeoutMs }}
+  CALLBACK_TIMEOUT_MS: {{ .Values.realtimeBridge.env.callbackTimeoutMs | toString | quote }}
+  {{- end }}
+  {{- if include "vg.realtimeBridge.envSet" .Values.realtimeBridge.env.guardrailsEnabled }}
+  GUARDRAILS_ENABLED: {{ .Values.realtimeBridge.env.guardrailsEnabled | toString | quote }}
+  {{- end }}
+  {{- if include "vg.realtimeBridge.envSet" .Values.realtimeBridge.env.sessionTtlMs }}
+  SESSION_TTL_MS: {{ .Values.realtimeBridge.env.sessionTtlMs | toString | quote }}
+  {{- end }}
+  {{- if include "vg.realtimeBridge.envSet" .Values.realtimeBridge.env.liveDelegationModel }}
+  LIVE_DELEGATION_MODEL: {{ .Values.realtimeBridge.env.liveDelegationModel | toString | quote }}
+  {{- end }}
+  {{- if include "vg.realtimeBridge.envSet" .Values.realtimeBridge.env.liveAssistantSilenceMs }}
+  LIVE_ASSISTANT_SILENCE_MS: {{ .Values.realtimeBridge.env.liveAssistantSilenceMs | toString | quote }}
+  {{- end }}
+  {{- if include "vg.realtimeBridge.envSet" .Values.realtimeBridge.env.liveUserSilenceMs }}
+  LIVE_USER_SILENCE_MS: {{ .Values.realtimeBridge.env.liveUserSilenceMs | toString | quote }}
+  {{- end }}
+  {{- if include "vg.realtimeBridge.envSet" .Values.realtimeBridge.env.liveOpeningInstruction }}
+  LIVE_OPENING_INSTRUCTION: {{ .Values.realtimeBridge.env.liveOpeningInstruction | toString | quote }}
+  {{- end }}
+{{- end }}

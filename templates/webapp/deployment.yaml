@@ -88,12 +88,15 @@ spec:
             ## ENABLE_MSTEAMS_ROUTING above, which gates a separate feature.
             - name: ENABLE_MICROSOFT_TEAMS
               value: {{ .Values.global.enableMsTeams | quote }}
+            ## Amazon Connect master switch — mirrors enableGenesysAudioHook,
+            ## surfaced via window.VG.ENABLE_AMAZON_CONNECT (entrypoint.sh
+            ## threads this into the runtime config script).
+            - name: ENABLE_AMAZON_CONNECT
+              value: {{ .Values.global.enableAmazonConnect | quote }}
             - name: DISABLE_CUSTOM_SPEECH
               value: {{ .Values.webapp.disableCustomSpeech | quote }}
             - name: ENABLE_ALL_SPEECH_PROVIDERS
               value: {{ .Values.webapp.enableAllSpeechProviders | quote }}
-            - name: ENABLE_ENABLE_SMS
-              value: {{ .Values.webapp.enableSms | quote }}
             - name: DISABLE_DEFAULT_TRUNK_ROUTING
               value: {{ .Values.webapp.disableDefaultTrunkRouting | quote }}
             - name: DISABLE_LCR

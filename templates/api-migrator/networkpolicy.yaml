@@ -1,0 +1,55 @@
+{{- /*
+Default-deny ingress+egress for the api-migrator and billing-grants Jobs (CSA-110265/
+CSA-110267, stage 2; see docs/014-network-policy.md). Both run to completion and exit;
+nothing calls them, so ingress is simply empty. api-migrator also reaches InfluxDB
+(JAMBONES_TIME_SERIES_HOST) in addition to MySQL; billing-grants is MySQL-only. These
+Jobs have no enable flag of their own — they run on every install/upgrade — so this
+policy is gated only by the profile/opt-in switch, same as every workload in this file.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.apiMigrator.networkPolicy.enabled "root" $) }}
+{{- if $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-migrator
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: api-migrator
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.mysqlEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.influxdbEgress" $ | indent 4 }}
+    {{- with .Values.apiMigrator.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: billing-grants
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: billing-grants
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.mysqlEgress" $ | indent 4 }}
+    {{- with .Values.apiMigrator.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

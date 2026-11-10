@@ -1,0 +1,137 @@
+{{- /*
+Default-deny ingress+egress for sbc-inbound (CSA-110265/CSA-110267, stage 2; see
+docs/014-network-policy.md). Ingress: the health port (any source, kubelet probes), the
+metrics port (monitoring namespace), the dtmf port (udp) from sbc-rtp (the DTMF datagram
+source vg.fedramp.dtmfSourceValidation validates against) — both by podSelector (the
+recommended sbc.rtp.useStatefulSet: true shape) and through ingressFromHostNetwork
+(sbc.rtp.useStatefulSet: false runs sbc-rtp as a hostNetwork DaemonSet instead, same
+limitation as sbc-sip below) — and the drachtio/tcp port from sbc-sip, which always runs
+hostNetwork: true, admitted through ingressFromHostNetwork instead of a podSelector, same
+limitation as vg-resource-resolver's sbc-sip regbots.
+
+Egress: feature-server AND feature-server-nightly on port 5060 (hardcoded in both
+templates/feature-server/workload.yaml and workload-nightly.yaml's drachtio --contact
+argument — featureServer.ports.udp shares that default value but is not actually wired to
+it, so this reads the literal port instead of a value an environment could change without
+effect; see the comment below), udp always and tcp additionally when
+sbcInbound.featureServerSignalingTransportTcp is set (K8S_FEATURE_SERVER_TRANSPORT=tcp) —
+NOT freeswitch.ports.sip/tls, which are a different, unrelated SIP listener entirely.
+sbc-rtp's NG control port (sbc.rtp.port) is UDP, not TCP — by podSelector for the
+recommended StatefulSet shape, and through egressToHostNetwork for the DaemonSet/hostNetwork
+one. MySQL, Redis, InfluxDB, telegraf (when stats.telegraf), tracing (tracing.baseUrl, when
+set), resource-resolver (when enabled), and api-server via its own public ingress hostname
+(VG_API_BASE_URL) — no chart-known in-cluster CIDR for that, same treatment as
+vg-resource-resolver's runtimeApiTargets.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.sbcInbound.networkPolicy.enabled "root" $) }}
+{{- if $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sbc-inbound
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: sbc-inbound
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: sbc-inbound
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.health.port }}
+    {{- if .Values.sbcInbound.networkPolicy.allowMonitoringScrape }}
+    - from:
+        - namespaceSelector:
+            {{- if .Values.sbcInbound.networkPolicy.monitoringNamespaceSelector }}
+{{ toYaml .Values.sbcInbound.networkPolicy.monitoringNamespaceSelector | indent 12 }}
+            {{- else }}
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.podMonitors.namespace | default "monitoring" | quote }}
+            {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.metrics.port }}
+    {{- end }}
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sbc-rtp
+      ports:
+        - protocol: UDP
+          port: {{ .Values.sbcInbound.ports.dtmf }}
+    {{- with .Values.sbcInbound.networkPolicy.ingressFromHostNetwork }}
+    - from:
+{{ toYaml . | indent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.sbcInbound.ports.tcp }}
+        - protocol: UDP
+          port: {{ $.Values.sbcInbound.ports.dtmf }}
+    {{- end }}
+    {{- with .Values.sbcInbound.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.mysqlEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.redisEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.influxdbEgress" $ | indent 4 }}
+    {{- /* featureServer.ports.udp (values.yaml) shares the literal 5060 drachtio binds to
+    below, but nothing actually templates that value into the --contact argument — so this
+    reads the literal port rather than a value an environment could change without effect. */}}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: feature-server
+        - podSelector:
+            matchLabels:
+              app: feature-server-nightly
+      ports:
+        - protocol: UDP
+          port: 5060
+        {{- if .Values.sbcInbound.featureServerSignalingTransportTcp }}
+        - protocol: TCP
+          port: 5060
+        {{- end }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: sbc-rtp
+      ports:
+        - protocol: UDP
+          port: {{ .Values.sbc.rtp.port }}
+    {{- with .Values.sbcInbound.networkPolicy.egressToHostNetwork }}
+    - to:
+{{ toYaml . | indent 8 }}
+      ports:
+        - protocol: UDP
+          port: {{ $.Values.sbc.rtp.port }}
+    {{- end }}
+    {{- if .Values.stats.telegraf }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: telegraf
+      ports:
+        - protocol: TCP
+          port: {{ .Values.telegraf.port }}
+    {{- end }}
+    {{- if .Values.resourceResolver.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vg-resource-resolver
+      ports:
+        - protocol: TCP
+          port: {{ .Values.resourceResolver.port | default 4000 }}
+    {{- end }}
+{{ include "vg.networkPolicy.externalUrlEgress" (dict "urls" (list .Values.tracing.baseUrl (printf "%s://%s" .Values.api.protocol .Values.ingress.api.host)) "root" $) | indent 4 }}
+    {{- with .Values.sbcInbound.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

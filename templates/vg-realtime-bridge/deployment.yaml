@@ -1,0 +1,96 @@
+{{- if .Values.realtimeBridge.enabled }}
+{{- $secret := lookup "v1" "Secret" $.Release.Namespace .Values.realtimeBridge.secret.name }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vg-realtime-bridge
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-realtime-bridge
+    owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-realtime-bridge.git"
+spec:
+  replicas: {{ .Values.realtimeBridge.replicaCount }}
+  strategy:
+    {{- toYaml .Values.realtimeBridge.strategy | nindent 4 }}
+  selector:
+    matchLabels:
+      app: vg-realtime-bridge
+  template:
+    metadata:
+      labels:
+        app: vg-realtime-bridge
+        owner-team: echo
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/vg-realtime-bridge/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ if $secret }}{{ toYaml $secret.data | sha256sum }}{{ else }}{{ .Values.realtimeBridge.secret.name | sha256sum }}{{ end }}
+        # A pod holds its live calls in memory; never evict it for a node scale-down.
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      terminationGracePeriodSeconds: {{ .Values.realtimeBridge.terminationGracePeriodSeconds }}
+      {{- if .Values.realtimeBridge.affinity }}
+      affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.realtimeBridge.affinity "context" $) | nindent 8 }}
+      {{- end }}
+      {{- /* Stateful, fixed-count service: stays on the default pool, so no hpa.* node selector/toleration. */}}
+      {{- if .Values.realtimeBridge.nodeSelector }}
+      nodeSelector: {{- include "vg.common.tplvalues.render" (dict "value" .Values.realtimeBridge.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.realtimeBridge.tolerations }}
+      tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.realtimeBridge.tolerations "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.realtimeBridge.priorityClassName }}
+      priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.realtimeBridge.priorityClassName "context" $) }}
+      {{- end }}
+      {{- if .Values.realtimeBridge.podSecurityContext }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.realtimeBridge.podSecurityContext "context" $) | nindent 8 }}
+      {{- end }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: vg-realtime-bridge
+      containers:
+        - name: vg-realtime-bridge
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.realtimeBridge.image) }}
+          imagePullPolicy: {{ .Values.realtimeBridge.imagePullPolicy }}
+          {{- if .Values.realtimeBridge.containerSecurityContext }}
+          securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.realtimeBridge.containerSecurityContext "context" $) | nindent 12 }}
+          {{- end }}
+          resources: {{- toYaml .Values.realtimeBridge.resources | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.realtimeBridge.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: vg-realtime-bridge
+          env:
+            - name: BRIDGE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.realtimeBridge.secret.name }}
+                  key: {{ .Values.realtimeBridge.secret.bridgeApiKeyKey }}
+            {{- if .Values.realtimeBridge.extraEnvVars }}
+            {{- include "vg.common.tplvalues.render" (dict "value" .Values.realtimeBridge.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
+          {{- with .Values.realtimeBridge.preStopSleepSeconds }}
+          # Runs before SIGTERM: lets endpoint removal propagate so no new session lands here mid-drain.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sleep", {{ . | quote }}]
+          {{- end }}
+          {{- with .Values.realtimeBridge.probes.startup }}
+          startupProbe: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.realtimeBridge.probes.liveness }}
+          livenessProbe: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.realtimeBridge.probes.readiness }}
+          readinessProbe: {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

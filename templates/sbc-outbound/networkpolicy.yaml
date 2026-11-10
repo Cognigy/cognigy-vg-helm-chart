@@ -1,0 +1,108 @@
+{{- /*
+Default-deny ingress+egress for sbc-outbound (CSA-110265/CSA-110267, stage 2; see
+docs/014-network-policy.md). Ingress: the health port (any source, kubelet probes), the
+metrics port (monitoring namespace), the dtmf port (udp) from sbc-rtp, and the drachtio/tcp
+port from sbc-sip — same drachtio app-dispatch mechanism as sbc-inbound, hostNetwork,
+admitted through ingressFromHostNetwork instead of a podSelector (which also covers
+sbc-rtp's dtmf UDP traffic when sbc.rtp.useStatefulSet is false, a hostNetwork DaemonSet
+then). Egress: sbc-rtp's NG control port (sbc.rtp.port, UDP, not TCP — by podSelector for
+the recommended StatefulSet shape, egressToHostNetwork for the DaemonSet one), MySQL,
+Redis, InfluxDB, telegraf (when stats.telegraf), tracing (tracing.baseUrl, when set) and
+resource-resolver (when enabled). Unlike sbc-inbound, nothing in this chart calls
+sbc-outbound on behalf of feature-server or api-server.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.sbcOutbound.networkPolicy.enabled "root" $) }}
+{{- if $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sbc-outbound
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: sbc-outbound
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: sbc-outbound
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.health.port }}
+    {{- if .Values.sbcOutbound.networkPolicy.allowMonitoringScrape }}
+    - from:
+        - namespaceSelector:
+            {{- if .Values.sbcOutbound.networkPolicy.monitoringNamespaceSelector }}
+{{ toYaml .Values.sbcOutbound.networkPolicy.monitoringNamespaceSelector | indent 12 }}
+            {{- else }}
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.podMonitors.namespace | default "monitoring" | quote }}
+            {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.metrics.port }}
+    {{- end }}
+    - from:
+        - podSelector:
+            matchLabels:
+              app: sbc-rtp
+      ports:
+        - protocol: UDP
+          port: {{ .Values.sbcOutbound.ports.dtmf }}
+    {{- with .Values.sbcOutbound.networkPolicy.ingressFromHostNetwork }}
+    - from:
+{{ toYaml . | indent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.sbcOutbound.ports.tcp }}
+        - protocol: UDP
+          port: {{ $.Values.sbcOutbound.ports.dtmf }}
+    {{- end }}
+    {{- with .Values.sbcOutbound.networkPolicy.extraIngress }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.mysqlEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.redisEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.influxdbEgress" $ | indent 4 }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: sbc-rtp
+      ports:
+        - protocol: UDP
+          port: {{ .Values.sbc.rtp.port }}
+    {{- with .Values.sbcOutbound.networkPolicy.egressToHostNetwork }}
+    - to:
+{{ toYaml . | indent 8 }}
+      ports:
+        - protocol: UDP
+          port: {{ $.Values.sbc.rtp.port }}
+    {{- end }}
+    {{- if .Values.stats.telegraf }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: telegraf
+      ports:
+        - protocol: TCP
+          port: {{ .Values.telegraf.port }}
+    {{- end }}
+    {{- if .Values.resourceResolver.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vg-resource-resolver
+      ports:
+        - protocol: TCP
+          port: {{ .Values.resourceResolver.port | default 4000 }}
+    {{- end }}
+{{ include "vg.networkPolicy.externalUrlEgress" (dict "urls" (list .Values.tracing.baseUrl) "root" $) | indent 4 }}
+    {{- with .Values.sbcOutbound.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}

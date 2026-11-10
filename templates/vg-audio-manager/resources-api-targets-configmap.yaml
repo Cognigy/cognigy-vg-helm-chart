@@ -1,0 +1,21 @@
+{{- $resourcesApiTargets := include "vg.resourcesApiTargets.effective" . | fromJsonArray }}
+{{- if and .Values.vgAudioManager.enabled $resourcesApiTargets }}
+# Linked Cognigy.AI clusters' vg-resources-api that vg-audio-manager reports
+# AI-native recordings to (CGY-43293), in the order it tries them. Same file shape
+# as vg-runtime-api-targets (resource-resolver), mounted as a file for the same
+# reason: cognigy-env cannot carry a nested list.
+#
+# Read once at process start. The Deployment carries a checksum annotation over
+# this template, so editing the list rolls the pod.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vg-audio-manager-resources-api-targets
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-audio-manager
+    owner-team: echo
+data:
+  targets.yaml: |
+    {{- toYaml $resourcesApiTargets | nindent 4 }}
+{{- end }}

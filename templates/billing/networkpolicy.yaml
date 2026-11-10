@@ -1,0 +1,89 @@
+{{- /*
+Default-deny ingress+egress for the three billing CronJobs (CSA-110265/CSA-110267, stage 2;
+see docs/014-network-policy.md). Nothing calls these pods — they run on a schedule, reach
+their own dependencies, then exit — so ingress is simply empty (default-deny with no
+exceptions) rather than the ingressFrom/health/metrics shape the long-running workloads use.
+Each CronJob gets its own NetworkPolicy, matching its own podSelector and its own
+enable-condition, since their egress needs differ.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.billing.networkPolicy.enabled "root" $) }}
+{{- if $npEnabled }}
+{{- if and .Values.billing.enabled .Values.billing.sendToCentral.enabled .Values.billing.sendToCentral.serverUrl }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vg-billing-daily-billing-reporting
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: vg-billing
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: vg-billing
+      component: daily-billing-reporting
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.mysqlEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.externalUrlEgress" (dict "urls" (list .Values.billing.sendToCentral.serverUrl) "root" $) | indent 4 }}
+    {{- with .Values.billing.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}
+{{- if and .Values.billing.enabled .Values.billing.preAggregation.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vg-billing-pre-aggregate
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: vg-billing
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: vg-billing
+      component: pre-aggregate
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.mysqlEgress" $ | indent 4 }}
+    {{- with .Values.billing.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}
+{{- if and .Values.billing.enabled .Values.billing.refreshOrganisations.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vg-billing-refresh-organisations
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: vg-billing
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: vg-billing
+      component: refresh-organisations
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+{{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
+{{ include "vg.networkPolicy.mysqlEgress" $ | indent 4 }}
+    {{- with .Values.billing.networkPolicy.egressTo }}
+{{ toYaml . | indent 4 }}
+    {{- end }}
+{{- end }}
+{{- end }}
