@@ -758,7 +758,7 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.23.0-rc3
+  image: cognigy.azurecr.io/vg-api-migrator:2026.23.0
   imagePullPolicy: Always
   logCollectorEnabled: false
   ## Deploy to latest of a specific release '2025.15.0'
@@ -1386,7 +1386,7 @@ jobs:
   priorityClassName: low
   hookPriorityClassName: medium
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.23.0-rc3
+  image: cognigy.azurecr.io/vg-api-server:2026.23.0
   imagePullPolicy: Always
   replicaCount: 2
   ## Digest used to derive session-revocation Redis keys: sha256 | md5.
@@ -1667,7 +1667,7 @@ featureServer:
   # Must be 2026.19.0 or newer: the pod gets no JAMBONES_MYSQL_* env and no MySQL
   # wait, and older images assert those vars at start (CGY-41894). Add them back
   # through extraEnvVars only to run an older image.
-  image: cognigy.azurecr.io/vg-feature-server:2026.23.0-rc10
+  image: cognigy.azurecr.io/vg-feature-server:2026.23.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -2023,7 +2023,7 @@ vadAutotuner:
 featureServerNightly:
   enabled: false
   # Same minimum as featureServer.image: 2026.19.0 or newer (no MySQL env).
-  image: cognigy.azurecr.io/vg-feature-server:2026.23.0-rc10
+  image: cognigy.azurecr.io/vg-feature-server:2026.23.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -2389,7 +2389,7 @@ sbcCallRouter:
 ## Background: vg-resources/docs/tdd/06-vg-in-ai/002-runtime-gateway-migration-plan.md.
 resourceResolver:
   enabled: true
-  image: cognigy.azurecr.io/vg-resource-resolver:2026.23.0-rc6
+  image: cognigy.azurecr.io/vg-resource-resolver:2026.23.0
   imagePullPolicy: IfNotPresent
   ## Two replicas for availability, matching sbcInbound/sbcOutbound. Capacity is
   ## not the reason: a single replica served 600 concurrent calls at 21% of a 250m
@@ -3102,7 +3102,7 @@ vgAudioManager:
     name: voicegateway-jwt
     key: jwt
   serviceName: vg-audio-manager
-  image: cognigy.azurecr.io/vg-audio-manager:2026.23.0-rc2
+  image: cognigy.azurecr.io/vg-audio-manager:2026.23.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
