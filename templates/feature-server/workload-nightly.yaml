@@ -36,9 +36,7 @@ spec:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
-      {{- if .Values.featureServerNightly.terminationGracePeriodSeconds }}
-      terminationGracePeriodSeconds: {{ .Values.featureServerNightly.terminationGracePeriodSeconds }}
-      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.featureServerNightly.terminationGracePeriodSeconds | default (ternary 300 1800 (.Values.featureServerNightly.useStatefulSet | default false)) }}
       {{- if .Values.featureServerNightly.affinity }}
       affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.featureServerNightly.affinity "context" $) | nindent 8 }}
       {{- end }}
@@ -219,6 +217,11 @@ spec:
             - name: DISABLE_HTTP2_FOR_TTS_STREAMING
               value: {{ if .Values.freeswitch.disableHttp2ForTtsStreaming }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
             {{- include "vg.testHarness.freeswitchEnv" . | nindent 12 }}
+            {{- include "vg.fedramp.refuseEnvOverride" (dict "extraEnvVars" .Values.freeswitch.extraEnvVars "names" (list "INTERNAL_DTLS_ENABLED") "instead" "global.fedramp.internalDtls" "root" $) }}
+            {{- if include "vg.fedramp.internalDtls" $ }}
+            - name: INTERNAL_DTLS_ENABLED
+              value: "true"
+            {{- end }}
             {{- if .Values.freeswitch.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.freeswitch.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
@@ -232,6 +235,7 @@ spec:
             periodSeconds: {{ .Values.freeswitch.livenessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.freeswitch.livenessProbe.timeoutSeconds }}
             failureThreshold: {{ .Values.freeswitch.livenessProbe.failureThreshold }}
+            terminationGracePeriodSeconds: {{ .Values.freeswitch.livenessProbe.terminationGracePeriodSeconds }}
           {{- end }}
           {{- if .Values.freeswitch.startupProbe.enabled }}
           startupProbe:
@@ -283,6 +287,7 @@ spec:
             initialDelaySeconds: 90
             periodSeconds: 60
             timeoutSeconds: 10 
+            terminationGracePeriodSeconds: {{ .Values.featureServer.livenessProbe.terminationGracePeriodSeconds }}
           startupProbe:
             httpGet:
               path: /health/startup
@@ -309,6 +314,9 @@ spec:
               mountPath: /config/env
               readOnly: true
             {{- with (include "vg.testHarness.caVolumeMount" (dict "ctx" $ "mountPath" "/ca-overlay")) }}{{- . | nindent 12 }}{{- end }}
+            {{- /* Signed service-to-service auth (templates/_service-auth.tpl): caller key, /v1 trust. */}}
+            {{- include "vg.serviceAuth.callerVolumeMount" . | nindent 12 }}
+            {{- include "vg.serviceAuth.receiverVolumeMounts" (dict "receiver" "featureServerV1") | nindent 12 }}
           env:
             {{- with (include "vg.testHarness.featureServerEnv" .) }}{{- . | nindent 12 }}{{- end }}
             - name: NODE_ENV
@@ -541,8 +549,15 @@ spec:
               value: "http://vg-resource-resolver:{{ .Values.resourceResolver.port | default 4000 }}"
             {{- end }}
             {{- with (include "vg.featureServer.v2Api.env" .) }}{{- . | nindent 12 }}{{- end }}
+            {{- include "vg.serviceAuth.callerEnv" (dict "name" "feature-server" "extraEnvVars" .Values.featureServerNightly.extraEnvVars "root" $) | nindent 12 }}
+            {{- include "vg.serviceAuth.receiverEnv" (dict "receiver" "featureServerV1" "extraEnvVars" .Values.featureServerNightly.extraEnvVars "root" $) | nindent 12 }}
             {{- if include "vg.fedramp.tlsKeylogLocked" (dict "extraEnvVars" .Values.featureServerNightly.extraEnvVars "root" $) }}
             - name: VG_TLS_KEYLOG_FEDRAMP_LOCKED
+              value: "true"
+            {{- end }}
+            {{- include "vg.fedramp.refuseEnvOverride" (dict "extraEnvVars" .Values.featureServerNightly.extraEnvVars "names" (list "INTERNAL_DTLS_ENABLED") "instead" "global.fedramp.internalDtls" "root" $) }}
+            {{- if include "vg.fedramp.internalDtls" $ }}
+            - name: INTERNAL_DTLS_ENABLED
               value: "true"
             {{- end }}
             {{- if .Values.featureServerNightly.extraEnvVars }}
@@ -565,4 +580,6 @@ spec:
             items:
               - key: cognigy.yaml
                 path: cognigy.yaml
+        {{- include "vg.serviceAuth.callerVolume" (dict "name" "feature-server" "root" $) | nindent 8 }}
+        {{- include "vg.serviceAuth.receiverVolumes" (dict "receiver" "featureServerV1") | nindent 8 }}
 {{- end }}

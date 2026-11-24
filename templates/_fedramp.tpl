@@ -16,7 +16,8 @@ Rules for adding a feature to the profile:
      default) when it is off. Return an empty string to render nothing, so the service keeps its
      own default.
   3. Render it in the service template with `{{- with include ... }}`, before `extraEnvVars`.
-  4. Add a row to docs/009-fedramp-profile.md with the control ID.
+  4. Add a row to docs/009-fedramp-profile.md with the control ID, and follow the rest of its
+     "Adding a feature" steps (including what the feature requires of an environment).
 A flow that only the profile turns off, and that every other environment keeps, needs no per-service key: its
 helper returns "true" while the profile is off and gates the entry with `{{- if include ... }}`
 (vg.fedramp.sbcSipSidecarAlerts).
@@ -54,6 +55,32 @@ therefore fails to render "enforce" when sbc.rtp.useStatefulSet is false.
 {{- fail "DTMF source validation cannot be \"enforce\" when sbc.rtp.useStatefulSet is false: the sidecar replies from a node IP that never matches sbc.rtp, so every DTMF digit would be dropped. Enable the StatefulSet, or set the mode to \"warn\" or \"off\": global.fedramp.dtmfSourceValidation while the FedRAMP profile is on, sbcInbound.dtmfSourceValidation and sbcOutbound.dtmfSourceValidation otherwise." -}}
 {{- end -}}
 {{ $mode }}
+{{- end -}}
+
+{{/*
+VG_SIPREC_REQUIRE_TLS (vg-siprec-client-utils, VSCU-SC8-001 / CSA-109432, SC-8).
+Takes (dict "override" <per-service value or nil> "root" $).
+  - Profile on: global.fedramp.siprecRequireTls (true in values.yaml, and true if the key is
+    missing). The per-service override is ignored.
+  - Profile off: the per-service override. When it is null, nothing is rendered and the library
+    default (off: a non-TLS SRS URL logs a warning and is recorded anyway) applies.
+Always renders "true" or "false", never another spelling: the library treats an unrecognised value
+as on (fail closed), so a typo would refuse every recording.
+
+When on, a recording to an SRS URL that is not sips: or sip:...;transport=tls is refused before any
+INVITE: the SBC answers the feature-server's startCallRecording INFO with 503 and the call goes on
+unrecorded. Only images with the vg-siprec-client-utils release of
+Cognigy/vg-siprec-client-utils#20 read the variable; older ones ignore it. It renders before
+extraEnvVars and Kubernetes keeps the last of two equal names, so an extraEnvVars entry named
+VG_SIPREC_REQUIRE_TLS overrides the profile. Do not set one in a FedRAMP environment.
+Do not use `default` on this boolean: it treats false as empty. `dig` keeps an explicit false.
+*/}}
+{{- define "vg.fedramp.siprecRequireTls" -}}
+{{- $enabled := .override -}}
+{{- if include "vg.fedramp.enabled" .root -}}
+{{- $enabled = dig "fedramp" "siprecRequireTls" true .root.Values.global -}}
+{{- end -}}
+{{- if kindIs "bool" $enabled -}}{{ $enabled }}{{- end -}}
 {{- end -}}
 
 {{/*
@@ -102,7 +129,8 @@ sbc-sip-sidecar runtime regbots (sidecar -> vg-resource-resolver :4000; CGY-4477
 sidecar polls the resolver every 60 s for the carriers configured in Cognigy.AI that require REGISTER.
 sbc-sip runs on the host network, outside the mesh, so the poll is plain HTTP that STRICT mTLS refuses,
 and vg-resource-resolver's NetworkPolicy (vg.fedramp.networkPolicyEnabled) admits a
-host-networked caller only by node CIDR, which is empty by default. Takes the root context. Returns "true" when the
+host-networked caller only by node CIDR, and takes the shared networkPolicy.hostNetworkPeers only
+while the regbots run. Takes the root context. Returns "true" when the
 regbots run (vg.sbcSip.runtimeRegbots.enabled), empty when they do not.
   - Profile on: global.fedramp.sbcSipRuntimeRegbots (false in values.yaml, and false if the key is
     missing). sbcSipSidecar.runtimeRegbots.enabled is ignored.
@@ -110,7 +138,8 @@ regbots run (vg.sbcSip.runtimeRegbots.enabled), empty when they do not.
 With it off, AI-side carriers are not registered. A FedRAMP deployment is VG-in-AI only and has no
 carriers in MySQL, so no carrier is registered at all (TODO CGY-45358). Turning it
 back on under the profile also needs a resolver ingress rule that matches this cluster's node
-addresses (resourceResolver.networkPolicy.ingressFromHostNetwork), or the poll times out.
+addresses (networkPolicy.hostNetworkPeers, which the resolver's policy then admits, or
+resourceResolver.networkPolicy.ingressFromHostNetwork), or the poll times out.
 Do not use `default` on these booleans: it treats false as empty. `dig` keeps an explicit false.
 */}}
 {{- define "vg.fedramp.sbcSipRuntimeRegbots" -}}
@@ -155,6 +184,103 @@ Do not use `default` on these values: it treats false and 0 as empty. `dig` keep
   value: {{ $timeout | int | quote }}
 - name: API_BAN_MAX_BATCHES
   value: {{ $batches | int | quote }}
+{{- end -}}
+
+{{/*
+Redis TLS for host-network clients (CGY-42571, SC-8, SC-8(1); docs/011-redis-tls.md). The mesh cannot
+encrypt the Redis traffic of host-network pods, so redis-ha serves TLS listeners and those clients use
+them. One key covers both ends: a client on TLS needs the listener, and a listener nobody uses protects
+nothing.
+Takes (dict "vgTls" <redisHa.vgTls> "global" <global values>), so that the redis subchart can call it
+from its tpl-rendered values (see vg.redisTls.listener), where the root context is not available.
+Returns "true" when the feature is on, empty when it is off.
+  - Profile on: global.fedramp.redisTls (true in values.yaml, and true if the key is missing).
+    redisHa.vgTls.enabled and redisHa.vgTls.clients.* are ignored.
+  - Profile off: redisHa.vgTls.enabled for the listeners (vg.fedramp.redisTlsServer), and additionally
+    redisHa.vgTls.clients.<client> for a client (vg.fedramp.redisTlsClient).
+Do not use `default` on these booleans: it treats false as empty. `dig` keeps an explicit false.
+*/}}
+{{- define "vg.fedramp.redisTlsServer" -}}
+{{- $on := dig "enabled" false .vgTls -}}
+{{- if include "vg.fedramp.enabled" (dict "Values" (dict "global" .global)) -}}
+{{- $on = dig "fedramp" "redisTls" true .global -}}
+{{- end -}}
+{{- if $on -}}true{{- end -}}
+{{- end -}}
+
+{{/* As vg.fedramp.redisTlsServer, for one client. Takes (dict "vgTls" ... "global" ... "client" <name>). */}}
+{{- define "vg.fedramp.redisTlsClient" -}}
+{{- $on := and (dig "enabled" false .vgTls) (dig "clients" .client false .vgTls) -}}
+{{- if include "vg.fedramp.enabled" (dict "Values" (dict "global" .global)) -}}
+{{- $on = dig "fedramp" "redisTls" true .global -}}
+{{- end -}}
+{{- if $on -}}true{{- end -}}
+{{- end -}}
+
+{{/*
+MySQL TLS for host-network clients (CGY-47155, SC-8, SC-8(1); docs/012-mysql-tls.md). As Redis TLS:
+the mesh cannot encrypt the MySQL traffic of host-network pods, so MySQL serves a chart-minted
+certificate and those clients require TLS against it. One key covers both ends.
+Takes (dict "vgTls" <mysql.vgTls> "global" <global values>), so that the mysql subchart can call it
+from its tpl-rendered values (see vg.mysqlTls.listener), where the root context is not available.
+  - Profile on: global.fedramp.mysqlTls (true in values.yaml, and true if the key is missing).
+    mysql.vgTls.enabled and mysql.vgTls.clients.* are ignored.
+  - Profile off: mysql.vgTls.enabled for the certificate (vg.fedramp.mysqlTlsServer), and additionally
+    mysql.vgTls.clients.<client> for a client (vg.fedramp.mysqlTlsClient).
+*/}}
+{{- define "vg.fedramp.mysqlTlsServer" -}}
+{{- $on := dig "enabled" false .vgTls -}}
+{{- if include "vg.fedramp.enabled" (dict "Values" (dict "global" .global)) -}}
+{{- $on = dig "fedramp" "mysqlTls" true .global -}}
+{{- end -}}
+{{- if $on -}}true{{- end -}}
+{{- end -}}
+
+{{/* As vg.fedramp.mysqlTlsServer, for one client. Takes (dict "vgTls" ... "global" ... "client" <name>). */}}
+{{- define "vg.fedramp.mysqlTlsClient" -}}
+{{- $on := and (dig "enabled" false .vgTls) (dig "clients" .client false .vgTls) -}}
+{{- if include "vg.fedramp.enabled" (dict "Values" (dict "global" .global)) -}}
+{{- $on = dig "fedramp" "mysqlTls" true .global -}}
+{{- end -}}
+{{- if $on -}}true{{- end -}}
+{{- end -}}
+
+{{/*
+call-router TLS (CGY-47751, SC-8, SC-8(1); docs/016-call-router-tls.md). sbc-sip's drachtio runs on the
+host network, outside the mesh, so its POST of every inbound INVITE to sbc-call-router is plaintext; with
+this on, sbc-call-router serves HTTPS with a chart-minted certificate and drachtio verifies it against the
+chart's CA. One key covers both ends: the port serves HTTPS only, so they cannot switch separately.
+Takes the root context. Returns "true" when on, empty when off.
+  - Profile on: global.fedramp.callRouterTls (true in values.yaml, and true if the key is missing).
+    sbcCallRouter.tls.enabled is ignored.
+  - Profile off: sbcCallRouter.tls.enabled.
+Do not use `default` on these booleans: it treats false as empty. `dig` keeps an explicit false.
+*/}}
+{{- define "vg.fedramp.callRouterTls" -}}
+{{- $on := dig "tls" "enabled" false .Values.sbcCallRouter -}}
+{{- if include "vg.fedramp.enabled" . -}}
+{{- $on = dig "fedramp" "callRouterTls" true .Values.global -}}
+{{- end -}}
+{{- if $on -}}true{{- end -}}
+{{- end -}}
+
+{{/*
+TLS on the drachtio control hop: sbc-sip's drachtio to sbc-inbound / sbc-outbound (CGY-46071, SC-8 work
+map A10; docs/017-drachtio-control-tls.md). One key covers all four workloads (sbc-sip, sbc-inbound,
+sbc-outbound, sbc-call-router): a mix fails calls closed. Takes the root context. Returns "true" when
+the hop runs over TLS, empty otherwise. Use vg.drachtioControlTls.enabled in templates, which adds the
+render-time checks.
+  - Profile on: global.fedramp.drachtioControlTls (true in values.yaml, and true if the key is
+    missing). drachtioControlTls.enabled is ignored.
+  - Profile off: drachtioControlTls.enabled.
+Do not use `default` on these booleans: it treats false as empty. `dig` keeps an explicit false.
+*/}}
+{{- define "vg.fedramp.drachtioControlTls" -}}
+{{- $on := dig "enabled" false (.Values.drachtioControlTls | default dict) -}}
+{{- if include "vg.fedramp.enabled" . -}}
+{{- $on = dig "fedramp" "drachtioControlTls" true .Values.global -}}
+{{- end -}}
+{{- if $on -}}true{{- end -}}
 {{- end -}}
 
 {{/*
@@ -213,10 +339,35 @@ The dial-time check in vg-digest-utils (sbc-inbound / sbc-sip) is not wired by t
 {{- end -}}
 
 {{/*
+FEATURE_REGISTRATION_HOOK_BASIC_AUTH_HTTPS_ONLY_ENABLED (vg-digest-utils; CSA-102450 / DGUT-SC8-001, SC-8):
+whether sbc-inbound (device INVITE) and sbc-sip-sidecar (REGISTER) refuse to send a registration
+hook's Basic-Auth credentials to a non-HTTPS URL. Refused: the request fails with SIP 500. Not
+refused: the credentials are sent and every attempt logs a warning.
+Takes (dict "override" <per-service value or nil> "root" $). Returns "true", "false" or empty.
+  - Profile on: global.fedramp.registrationHookBasicAuthHttpsOnly (true in values.yaml, and true if
+    the key is missing). The per-service override is ignored.
+  - Profile off: the per-service override (sbcInbound / sbcSipSidecar .registrationHookBasicAuthHttpsOnly).
+    null renders nothing, and vg-digest-utils keeps its default (not refused).
+Only images with vg-digest-utils#45 or later read the variable. vg-digest-utils 1.0.20 and 1.0.21
+refuse without it, older versions send without a warning.
+`dig` keeps an explicit false, `default` would not.
+*/}}
+{{- define "vg.fedramp.registrationHookBasicAuthHttpsOnly" -}}
+{{- if include "vg.fedramp.enabled" .root -}}
+{{- dig "fedramp" "registrationHookBasicAuthHttpsOnly" true .root.Values.global -}}
+{{- else if kindIs "bool" .override -}}
+{{- .override -}}
+{{- else if not (kindIs "invalid" .override) -}}
+{{- fail (printf "%s.registrationHookBasicAuthHttpsOnly must be true, false or null, got %v (%s)" .service .override (kindOf .override)) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 AUDIT_LOG_TTL_DAYS (vg-api-server, CSA-101837 / APIS-AU11-001, AU-11): days audit records are kept
 before the nightly cleanup deletes them. Takes (dict "override" <auditLogging.cleanup.ttlDays> "root" $).
   - Profile on: global.fedramp.apiAuditLogTtlDays (90 in values.yaml, and 90 if the key is missing).
-    The schema refuses less than 90. Unlike the other profile features, an api.extraEnvVars entry
+    The schema refuses less than 90. Like the TLS keylog lock, the identity settings and the
+    service-auth variables, and unlike the rest of the profile, an api.extraEnvVars entry
     named AUDIT_LOG_TTL_DAYS fails the render instead of silently overriding the profile: it would
     render after this value, and Kubernetes keeps the last of two equal names, so it could shorten
     retention below the AU-11 minimum.
@@ -465,3 +616,138 @@ Returns "true", "false" or empty.
 {{- end -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+INTERNAL_DTLS_ENABLED on feature-server, sbc-inbound and the freeswitch container: DTLS-SRTP on the
+rtpengine <-> FreeSWITCH media leg
+(CGY-41197, REQ-FIPSTRANSPORT-010..020, SC-8 / SC-13). Takes the root context. Returns "true" when
+on, empty when off.
+  - Profile on: global.fedramp.internalDtls (true in values.yaml, and true if the key is missing).
+    internalDtls.enabled is ignored.
+  - Profile off: internalDtls.enabled (false by default).
+Do not use `default` on these booleans: it treats false as empty. `dig` keeps an explicit false.
+A sender offers DTLS only when this is on. A receiver accepts DTLS and plain RTP whatever it says
+(REQ-FIPSTRANSPORT-011, -013), so a rolling restart never breaks media. sbc-outbound has no
+setting: it answers FreeSWITCH in the form FreeSWITCH offered. FreeSWITCH gets an environment variable,
+not an argument: an older image passes an unknown argument to freeswitch, which exits on it.
+*/}}
+{{- define "vg.fedramp.internalDtls" -}}
+{{- $on := dig "enabled" false (.Values.internalDtls | default dict) -}}
+{{- if include "vg.fedramp.enabled" . -}}
+{{- $on = dig "fedramp" "internalDtls" true .Values.global -}}
+{{- end -}}
+{{- if $on -}}true{{- end -}}
+{{- end -}}
+
+{{/*
+rtpengine "--dtls-ciphers" (SC-13). Takes the root context. Returns the cipher list, or an empty
+string to render nothing, so rtpengine keeps its default (which allows ChaCha20-Poly1305).
+  - Profile on: global.fedramp.internalDtlsCiphers (ECDHE with AES-GCM, ECDSA and RSA, and that list if the
+    key is missing). rtpEngine.dtlsCiphers is ignored.
+  - Profile off: rtpEngine.dtlsCiphers (empty by default).
+The list covers every DTLS handshake of rtpengine, WebRTC browsers included, not only the FreeSWITCH
+leg: rtpengine has one list.
+*/}}
+{{- define "vg.fedramp.dtlsCiphers" -}}
+{{- if include "vg.fedramp.enabled" . -}}
+{{- dig "fedramp" "internalDtlsCiphers" "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384" .Values.global -}}
+{{- else -}}
+{{- .Values.rtpEngine.dtlsCiphers | default "" -}}
+{{- end -}}
+{{- end -}}
+
+{{- /* ---- Signed service-to-service auth and identity lockdown (ADR-001 §2.7, CGY-43682) ---- */ -}}
+
+{{/*
+Refuses, under the profile, an extraEnvVars entry that would override a variable the profile sets.
+Takes (dict "extraEnvVars" <the pod's own extraEnvVars> "names" <list of variable names> "instead"
+<the setting to use instead> "root" $). Renders nothing. extraEnvVars renders after the chart's own
+variables and Kubernetes keeps the last of two equal names, so such an entry would relax the control
+without any error. Matches on the name only, so a valueFrom entry is refused too. Profile off: nothing
+is checked, and extraEnvVars stays a way to set these variables by hand.
+*/}}
+{{- define "vg.fedramp.refuseEnvOverride" -}}
+{{- if include "vg.fedramp.enabled" .root -}}
+{{- with .extraEnvVars -}}
+{{- range include "vg.common.tplvalues.render" (dict "value" . "context" $.root) | fromYamlArray -}}
+{{- if and (kindIs "map" .) (has (toString (get . "name")) $.names) -}}
+{{- fail (printf "extraEnvVars cannot set %s while global.fedramp.enabled is true: it would override a FedRAMP control. Set %s instead (docs/009-fedramp-profile.md)." (get . "name") $.instead) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+SERVICE_AUTH_MODE of a receiver (CSA-102459 IA-9). Takes (dict "receiver" <featureServerV1|resolver|callRouter>
+"root" $); returns JSON {"mode", "reason"}. The receivers and their keys are listed in
+templates/_service-auth.tpl.
+  - Profile on: global.fedramp.serviceAuthFeatureServerV1Mode / serviceAuthResolverMode /
+    serviceAuthCallRouterMode ("enforce" in values.yaml, and "enforce" if the key is missing). The
+    per-service key is ignored. An incident may relax it to "report" (a deviation); "off" fails the render.
+  - Profile off: serviceAuth.featureServerV1.mode / serviceAuth.resolver.mode / serviceAuth.callRouter.mode
+    when set. When null, the default from vg.serviceAuth.defaultMode: "report" in this release.
+*/}}
+{{- define "vg.fedramp.serviceAuthMode" -}}
+{{- $r := get (include "vg.serviceAuth.receivers" . | fromYaml) .receiver -}}
+{{- if include "vg.fedramp.enabled" .root -}}
+{{- $mode := dig "fedramp" $r.fedrampKey "enforce" .root.Values.global | default "enforce" -}}
+{{- if eq $mode "off" -}}
+{{- fail (printf "global.fedramp.%s cannot be \"off\" while global.fedramp.enabled is true: %s would accept unsigned calls (CSA-102459, IA-9). During an incident set it to \"report\" (a deviation, see docs/009-fedramp-profile.md)." $r.fedrampKey $r.label) -}}
+{{- end -}}
+{{- dict "mode" $mode "reason" (printf "FedRAMP profile, global.fedramp.%s" $r.fedrampKey) | toJson -}}
+{{- else -}}
+{{- $mode := dig $r.modeKey "mode" "" (.root.Values.serviceAuth | default (dict)) -}}
+{{- if $mode -}}
+{{- dict "mode" $mode "reason" (printf "serviceAuth.%s.mode" $r.modeKey) | toJson -}}
+{{- else -}}
+{{- include "vg.serviceAuth.defaultMode" . -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+A FedRAMP identity setting (CSA-101834 IA-2(1)): password login, admin-scope API keys, privileged-user
+bootstrap and the migrator's FedRAMP mode. Takes (dict "key" <global.fedramp key> "fedramp" <FedRAMP
+value, bool> "override" <per-service value or nil> "overrideName" <its values path> "env" <variable
+name> "extraEnvVars" <the workload's extraEnvVars> "root" $). Returns "true", "false" or empty.
+Under the profile an extraEnvVars entry named "env" fails the render (vg.fedramp.refuseEnvOverride).
+  - Profile on: global.fedramp.<key>, falling back to the FedRAMP value when missing. The per-service
+    key is ignored. Unlike the rest of the profile, any other value fails the render: each of these
+    brings back a password or admin-key path, which the interim emergency procedure forbids, and the
+    bootstrap creates users and Secrets that outlive a reverted deviation (ADR-001 §2.7).
+  - Profile off: the per-service key; null renders nothing and the service keeps today's behaviour.
+vg-api-server reads these variables from the X1 / X5 releases (wave 3); older images ignore them.
+Do not use `default` on these booleans: it treats false as empty. `dig` keeps an explicit false; a key
+present but null (kindIs "invalid") falls back to the FedRAMP value, so null never relaxes a control.
+*/}}
+{{- define "vg.fedramp.identitySetting" -}}
+{{- include "vg.fedramp.refuseEnvOverride" (dict "extraEnvVars" .extraEnvVars "names" (list .env) "instead" (printf "global.fedramp.%s" .key) "root" .root) -}}
+{{- if include "vg.fedramp.enabled" .root -}}
+{{- $value := dig "fedramp" .key .fedramp .root.Values.global -}}
+{{- if kindIs "invalid" $value -}}{{- $value = .fedramp -}}{{- end -}}
+{{- if ne (toString $value) (toString .fedramp) -}}
+{{- fail (printf "global.fedramp.%s must be %v while global.fedramp.enabled is true: anything else brings back a password or admin-key path (CSA-101834, IA-2(1)). This setting cannot be relaxed as a deviation; see docs/009-fedramp-profile.md. (%s is ignored while the profile is on.)" .key .fedramp .overrideName) -}}
+{{- end -}}
+{{ $value }}
+{{- else if not (kindIs "invalid" .override) -}}
+{{ .override }}
+{{- end -}}
+{{- end -}}
+
+{{- define "vg.fedramp.passwordLogin" -}}
+{{- include "vg.fedramp.identitySetting" (dict "key" "passwordLogin" "fedramp" false "override" .Values.api.passwordLoginEnabled "overrideName" "api.passwordLoginEnabled" "env" "VG_PASSWORD_LOGIN_ENABLED" "extraEnvVars" .Values.api.extraEnvVars "root" .) -}}
+{{- end -}}
+
+{{- define "vg.fedramp.adminApiKeys" -}}
+{{- include "vg.fedramp.identitySetting" (dict "key" "adminApiKeys" "fedramp" false "override" .Values.api.adminApiKeysEnabled "overrideName" "api.adminApiKeysEnabled" "env" "VG_ADMIN_API_KEYS_ENABLED" "extraEnvVars" .Values.api.extraEnvVars "root" .) -}}
+{{- end -}}
+
+{{- define "vg.fedramp.bootstrapPrivilegedUsers" -}}
+{{- include "vg.fedramp.identitySetting" (dict "key" "bootstrapPrivilegedUsers" "fedramp" false "override" .Values.api.bootstrapPrivilegedUsers "overrideName" "api.bootstrapPrivilegedUsers" "env" "VG_BOOTSTRAP_PRIVILEGED_USERS" "extraEnvVars" .Values.api.extraEnvVars "root" .) -}}
+{{- end -}}
+
+{{- define "vg.fedramp.migratorFedrampMode" -}}
+{{- include "vg.fedramp.identitySetting" (dict "key" "migratorFedrampMode" "fedramp" true "override" .Values.apiMigrator.fedrampMode "overrideName" "apiMigrator.fedrampMode" "env" "VG_MIGRATOR_FEDRAMP_MODE" "extraEnvVars" .Values.apiMigrator.extraEnvVars "root" .) -}}
+{{- end -}}
+

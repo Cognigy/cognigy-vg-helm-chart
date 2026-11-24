@@ -19,6 +19,9 @@ spec:
         app: sbc-call-router 
       annotations:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
+        {{- if include "vg.fedramp.callRouterTls" $ }}
+        {{- include "vg.callRouterTls.serverChecksum" $ | nindent 8 }}
+        {{- end }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.sbcCallRouter.affinity }}
@@ -30,8 +33,8 @@ spec:
       {{- if .Values.sbcCallRouter.priorityClassName }}
       priorityClassName: {{ .Values.sbcCallRouter.priorityClassName }}
       {{- end }}
-      {{- if .Values.sbcCallRouter.podSecurityContext }}
-      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcCallRouter.podSecurityContext "context" $) | nindent 8 }}
+      {{- with include "vg.sbcCallRouter.podSecurityContext" $ }}
+      securityContext: {{- . | nindent 8 }}
       {{- end }}
       {{- if .Values.sbcCallRouter.tolerations }}
       tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcCallRouter.tolerations "context" $) | nindent 8 }}
@@ -93,12 +96,33 @@ spec:
             - name: COGNIGY_AI_VERSION
               value: {{ regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.Version | quote }}
             {{- end }}
+            {{- if include "vg.fedramp.callRouterTls" $ }}
+            {{- include "vg.callRouterTls.serverEnv" $ | nindent 12 }}
+            {{- end }}
+            {{- /* Routes to sbc-inbound / sbc-outbound get ;transport=tls, so drachtio dials them over TLS (docs/017-drachtio-control-tls.md). */}}
+            {{- if include "vg.drachtioControlTls.enabled" $ }}
+            - name: DRACHTIO_CONTROL_TRANSPORT
+              value: tls
+            {{- end }}
+            {{- /* drachtio's basic-auth credential (ADR-001 §2.8); vg.serviceAuth.receivers in _service-auth.tpl. Under FedRAMP an extraEnvVars entry cannot override it. */}}
+            {{- include "vg.fedramp.refuseEnvOverride" (dict "extraEnvVars" .Values.sbcCallRouter.extraEnvVars "names" (list "SERVICE_AUTH_MODE") "instead" "global.fedramp.serviceAuthCallRouterMode" "root" $) }}
+            {{- include "vg.fedramp.refuseEnvOverride" (dict "extraEnvVars" .Values.sbcCallRouter.extraEnvVars "names" (list "SERVICE_AUTH_BASIC_CREDENTIALS_PATH") "instead" (printf "serviceAuth.callRouter.autoGenerate=false and create Secret %s (key credentials) yourself; the path is fixed" (include "vg.callRouterAuth.secretName" $)) "root" $) }}
+            - name: SERVICE_AUTH_MODE
+              value: {{ (include "vg.fedramp.serviceAuthMode" (dict "receiver" "callRouter" "root" $) | fromJson).mode | quote }}
+            - name: SERVICE_AUTH_BASIC_CREDENTIALS_PATH
+              value: /etc/vg-service-auth/call-router/credentials
             {{- if .Values.sbcCallRouter.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcCallRouter.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
           volumeMounts:
             - name: cognigy-env-reloadable
               mountPath: /config/env
+              readOnly: true
+            {{- if include "vg.fedramp.callRouterTls" $ }}
+            {{- include "vg.callRouterTls.serverVolumeMount" $ | nindent 12 }}
+            {{- end }}
+            - name: call-router-credentials
+              mountPath: /etc/vg-service-auth/call-router
               readOnly: true
           envFrom:
             - configMapRef:
@@ -110,4 +134,8 @@ spec:
             items:
               - key: cognigy.yaml
                 path: cognigy.yaml
+        {{- if include "vg.fedramp.callRouterTls" $ }}
+        {{- include "vg.callRouterTls.serverVolume" $ | nindent 8 }}
+        {{- end }}
+        {{- include "vg.callRouterAuth.credentialsVolume" $ | nindent 8 }}
   

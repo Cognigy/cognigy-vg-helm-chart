@@ -99,8 +99,9 @@ services read `REDIS_PASSWORD`. drachtio sends the password to the Redis nodes o
   (`cognigy.azurecr.io/vg-api-ban:1.4.0`). The image is published as `vg-api-ban`; `api-ban` holds
   only the older builds. An environment that pins an older `apiBan.image` must raise it: the chart
   refuses the render rather than let that ship. `redisHa.vgAuth.apiBanMinVersion` is the version it checks against, and
-  only the tag is visible to the chart, so a non-semver tag is left alone and the choice is still
-  the operator's. Empty disables the check.
+  only the tag is visible to the chart. It judges release tags by their X.Y.Z core, also when
+  suffixed (`1.3.0-fips`) or pinned by digest (`1.3.0@sha256:…`); any other tag is left alone and the
+  choice is still the operator's. Empty disables the check.
 - Turning auth on restarts redis-ha, and its in-memory data is lost.
 - The blocklist refills on the next CronJob run. Temporary bans and call counters do not refill.
 - Every client must get the password in the same release. A client without it fails with

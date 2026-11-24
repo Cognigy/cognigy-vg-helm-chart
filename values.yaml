@@ -15,6 +15,10 @@ global:
     ## DTMF source validation of vg-rtpengine-utils on sbc-inbound and sbc-outbound:
     ## enforce | warn | off.
     dtmfSourceValidation: enforce
+    ## TLS for the SIPREC signalling hop of vg-siprec-client-utils on sbc-inbound and sbc-outbound
+    ## (VSCU-SC8-001, SC-8). true: a recording to an SRS URL that is not sips: or
+    ## sip:...;transport=tls is refused before any INVITE, and the call goes on unrecorded.
+    siprecRequireTls: true
     ## StatsD (vg-stats-collector -> telegraf :8125), which has no transport encryption
     ## (STAT-SC8-001, SC-8). false removes the whole flow. See `stats` below.
     statsEnabled: false
@@ -29,12 +33,26 @@ global:
     ## Feed batches of 250 addresses. Ranges plus feed must stay under 1,000,000 (the limit drachtio
     ## loads), so vg-api-ban derives the range limit from this and rejects a value that leaves no room.
     apiBanMaxBatches: 1000
+    ## DTLS-SRTP on the rtpengine <-> FreeSWITCH media leg (REQ-FIPSTRANSPORT-010..020, SC-8, SC-13).
+    ## Feature-server, sbc-inbound and FreeSWITCH offer DTLS instead of plain RTP. A
+    ## receiver accepts both whatever its own setting is, so a rolling restart keeps media.
+    internalDtls: true
+    ## OpenSSL cipher list of rtpengine's DTLS handshakes (--dtls-ciphers). rtpengine's default allows
+    ## ChaCha20-Poly1305, which is not FIPS-approved. The list applies to every DTLS peer of rtpengine,
+    ## WebRTC browsers included. ECDHE with AES-GCM for ECDSA and RSA certificates: rtpengine's own
+    ## certificate is ECDSA, FreeSWITCH's is RSA, so either side can be the DTLS server.
+    internalDtlsCiphers: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384"
     ## Digest vg-api-server derives session-revocation Redis keys with (APIS-SC13-001, SC-13):
     ## sha256 | md5. See `api.sessionKeyDigest` below.
     apiSessionKeyDigest: sha256
     ## Strict SSRF validation of registration_hook / queue_event_hook in vg-api-server
     ## (SSIP-AC4-001, AC-4). See `api.strictRegistrationHookValidationEnabled` below.
     apiStrictRegistrationHookValidation: true
+    ## Refuse to send a registration hook's Basic-Auth credentials to a non-HTTPS URL
+    ## (vg-digest-utils, CSA-102450 / DGUT-SC8-001, SC-8): sbc-inbound answers device INVITEs and
+    ## sbc-sip-sidecar answers REGISTERs from such an account with 500. Used instead of
+    ## sbcInbound.registrationHookBasicAuthHttpsOnly and sbcSipSidecar.registrationHookBasicAuthHttpsOnly.
+    registrationHookBasicAuthHttpsOnly: true
     ## Password on redis-ha and a dedicated ACL user for update-api-ban-list (APBN-SC28-001, SC-28 /
     ## AC-3). Used instead of redisHa.vgAuth.enabled; needs redisHa.enabled and redisHa.auth set as
     ## described there. See docs/013-redis-auth.md.
@@ -80,6 +98,46 @@ global:
     ## carriers that require REGISTER are not registered. Used instead of
     ## sbcSipSidecar.runtimeRegbots.enabled while the profile is on.
     sbcSipRuntimeRegbots: false
+    ## TLS listeners on redis-ha and TLS from the host-network clients (sbc-sip-sidecar and
+    ## drachtio in the sbc-sip pod), whose Redis traffic the mesh cannot encrypt (SC-8). The
+    ## listeners require a client certificate, which the chart signs for the sbc-sip pod: needs an
+    ## sbc-sip-sidecar image with vg-redis 2.0.34 or later, vg-drachtio 1.3.23 or later, redisHa
+    ## and Sentinel mode. See `redisHa.vgTls` and docs/011-redis-tls.md.
+    redisTls: true
+    ## ---- Signed service-to-service auth and identity lockdown (ADR-001 §2.7, CGY-43682) ----
+    ## Receiver modes (CSA-102459, IA-9): enforce | report. "off" fails the render; "report" is the
+    ## documented incident deviation. Used instead of serviceAuth.featureServerV1.mode,
+    ## serviceAuth.resolver.mode and serviceAuth.callRouter.mode while the profile is on.
+    serviceAuthFeatureServerV1Mode: enforce
+    serviceAuthResolverMode: enforce
+    ## sbc-call-router checks drachtio's basic-auth credential (ADR-001 §2.8). On an upgrade from a release
+    ## without the credential (before CGY-43876), set report for that one upgrade: old sbc-sip pods send none
+    ## until the DaemonSet has rolled.
+    serviceAuthCallRouterMode: enforce
+    ## Identity settings (CSA-101834, IA-2(1)). Any other value fails the render: each one brings back
+    ## a password or admin-key path. Used instead of api.passwordLoginEnabled, api.adminApiKeysEnabled,
+    ## api.bootstrapPrivilegedUsers and apiMigrator.fedrampMode while the profile is on.
+    passwordLogin: false
+    adminApiKeys: false
+    bootstrapPrivilegedUsers: false
+    migratorFedrampMode: true
+    ## MySQL serves a chart-minted certificate and the sbc-sip pod (sbc-sip-sidecar, the db-create-wait
+    ## init container) requires TLS to it, verifying CA and host name (SC-8). Needs the in-cluster MySQL
+    ## (mysql.enabled). See `mysql.vgTls` and docs/012-mysql-tls.md.
+    mysqlTls: true
+    ## sbc-call-router serves HTTPS with a chart-minted certificate, and sbc-sip's drachtio, whose INVITE
+    ## routing request the mesh cannot encrypt, verifies it against the chart's CA (SC-8). Needs a drachtio
+    ## image with the request-handler ca-file attribute and a call-router image that reads
+    ## HTTP_TLS_CERT_FILE (CGY-47751). See `sbcCallRouter.tls` and docs/016-call-router-tls.md.
+    callRouterTls: true
+    ## TLS on the drachtio control hop: sbc-sip's drachtio to sbc-inbound / sbc-outbound (DRACHTIO_PORT),
+    ## which carries every SIP message and SDP of a call from the host network (CGY-46071, SC-8). mTLS
+    ## with chart-minted certificates, on sbc-sip, sbc-inbound, sbc-outbound and sbc-call-router at
+    ## once. Needs vg-drachtio >= drachtioControlTls.drachtioMinVersion and SBC and call-router images
+    ## at or above drachtioControlTls.minImageVersions (the chart defaults meet them; the render fails
+    ## otherwise). Turning it on in a running environment is a cutover: docs/017, Rollout. Used instead
+    ## of drachtioControlTls.enabled. See `drachtioControlTls` and docs/017-drachtio-control-tls.md.
+    drachtioControlTls: true
   ## Node environment
   nodeEnv: ""
   ## Default local host IP
@@ -114,16 +172,13 @@ global:
   ## flag flipped per environment that the vg-connector reads as
   ## ENABLE_MICROSOFT_TEAMS to mount the Teams module. Default false.
   enableMsTeams: false
-  ## Amazon Connect vendor_integrations CRUD + Audio Connectors UI master
-  ## switch — gates vg-api-server's VendorIntegrations route mount
-  ## (lib/routes/api/accounts.ts) and vg-webapp's Amazon Connect vendor
-  ## option, mirroring enableGenesysAudioHook/enableMsTeams above. Distinct
-  ## from vgConnector.enableAmazonConnect below, which gates the connector's
-  ## own protocol adapter — that flag predates this one, from when
-  ## api-server/webapp had no Amazon Connect awareness at all. The two are
-  ## independently togglable by design (an operator can run the connector
-  ## without exposing the CRUD/UI, or vice versa); set both together for the
-  ## common case of wanting the whole vendor on. Default false.
+  ## Amazon Connect master switch — one flag flipped per environment, read by
+  ## vg-connector (the A2A protocol adapter), vg-api-server (vendor_integrations
+  ## CRUD route) and vg-webapp (the Audio Connectors UI's Amazon Connect option),
+  ## mirroring enableGenesysAudioHook/enableMsTeams above. vg-feature-server is
+  ## not gated by it (it follows a SIP capability header). Replaces the former
+  ## vgConnector.enableAmazonConnect, which only covered the connector. Default
+  ## false.
   enableAmazonConnect: false
   ## Reloadable config master switch (see docs/plans/012-reloadable-config-api-server-pilot.md
   ## in vg-resources). Delivers COGNIGY_AI_VERSION, COGNIGY_DISPLAY_VERSION, and
@@ -138,6 +193,42 @@ global:
   ## otherwise they run unlinked.
   reloadableConfig:
     enabled: true
+##################
+# NetworkPolicy  #
+##################
+## Shared, per-environment peers for the default-deny NetworkPolicies (CSA-110265 /
+## CSA-110267, docs/014-network-policy.md). Only read while a workload's policy renders:
+## under the FedRAMP profile (global.fedramp.networkPolicyEnabled), or where that workload's
+## own networkPolicy.enabled is set.
+networkPolicy:
+  ## NetworkPolicyPeer entries for the nodes sbc-sip and sbc-rtp run on. Both are
+  ## hostNetwork: true (sbc-rtp in its StatefulSet as well as its DaemonSet shape), so their
+  ## traffic has node addresses and no podSelector can match it. Appended to the own
+  ## ingressFromHostNetwork/egressToHostNetwork list of sbc-inbound, sbc-outbound,
+  ## sbc-call-router, vg-connector, heplify-server and telegraf, and of vg-resource-resolver
+  ## only while sbc-sip's runtime regbots run (influxdb's port is open to any source anyway).
+  ## The first four cannot carry a call without them, so their policies fail the render
+  ## while both this and their own list are empty. E.g.
+  ##   - ipBlock:
+  ##       cidr: 10.20.0.0/24
+  ## Whether an ipBlock matches node-sourced traffic depends on the CNI: Cilium needs
+  ## policy-cidr-match-mode=nodes, and Calico with IPIP/VXLAN sources it from the tunnel
+  ## address, so list the tunnel range too. A wrong CIDR passes the render and still drops
+  ## calls; see docs/014-network-policy.md.
+  hostNetworkPeers: []
+  ## NetworkPolicyPeer entries for the ingress controller in front of this chart when it is
+  ## not the bundled Traefik (traefik.enabled: false), e.g.
+  ##   - namespaceSelector:
+  ##       matchLabels:
+  ##         kubernetes.io/metadata.name: traefik
+  ##     podSelector:
+  ##       matchLabels:
+  ##         app.kubernetes.io/name: traefik
+  ## Admitted on the public port of every workload that is reached through an
+  ## ingress/ingressroute (api-server, homer, jaeger, vg-connector, test-call-manager,
+  ## webapp, vg-pagerduty-agent). With traefik.enabled: false and this empty, those
+  ## policies fail the render.
+  ingressControllerPeers: []
 ###############
 # Cognigy ENV #
 ###############
@@ -581,6 +672,9 @@ sbc:
     nodeSelector:
       voip-environment: "edge"
     priorityClassName: ""
+    ## With drachtio on Redis TLS (redisHa.vgTls.clients.drachtio or the FedRAMP profile) the chart
+    ## adds fsGroup: 1000 unless this sets one: drachtio runs as uid/gid 1000 and reads the 0440
+    ## root-owned client certificate through that group (docs/011-redis-tls.md).
     podSecurityContext: {}
     tolerations:
       - key: "voip-edge"
@@ -758,10 +852,11 @@ apiMigrator:
   hookEnabled: false
   hook: post-install,pre-upgrade
   hookDeletePolicy: before-hook-creation,hook-succeeded
-  image: cognigy.azurecr.io/vg-api-migrator:2026.23.0
+  image: cognigy.azurecr.io/vg-api-migrator:2026.24.0
   imagePullPolicy: Always
   logCollectorEnabled: false
-  ## Deploy to latest of a specific release '2025.15.0'
+  ## Deploy to latest of a specific release '2025.15.0'. A migration id also works, e.g. "000049"
+  ## (resolved by prefix) to roll back the migrations after it; with that release's migrator image.
   migrationTarget: "latest"
   ## Default-deny egress for the api-migrator and billing-grants Jobs (NEW-VAMIG-AC4-001,
   ## SC-7/AC-4, stage 2). Forced on under the FedRAMP profile. Nothing calls these pods,
@@ -769,6 +864,11 @@ apiMigrator:
   networkPolicy:
     enabled: false
     egressTo: []
+  ## VG_MIGRATOR_FEDRAMP_MODE: reference-data seed only, no admin user or admin/account key, and the
+  ## credential invariant check after every `migrate release` (X5, wave 3; older images ignore it).
+  ## null leaves it unset (today's behaviour). Ignored while the FedRAMP profile is on
+  ## (global.fedramp.migratorFedrampMode applies).
+  fedrampMode: null
 additionalDbParameters:
   postgresql:
     host: postgres
@@ -867,6 +967,20 @@ influxdb:
 ## Bitnami Chart, image info: bitnami/mysql:8.0.39-debian-12-r5
 mysql:
   enabled: true
+  ## TLS with a chart-minted certificate (docs/012-mysql-tls.md). MySQL negotiates TLS on 3306, so
+  ## the meshed clients, which do not ask for it, are unaffected. Clients on the host network, which
+  ## the mesh cannot encrypt, require TLS per client below. The chart mints the CA and server
+  ## certificate once (Secret `secretName`) and reuses them on every upgrade. Off by default: the
+  ## FedRAMP profile turns it on (global.fedramp.mysqlTls), and elsewhere the sidecar image must
+  ## support it first.
+  vgTls:
+    enabled: false
+    secretName: mysql-tls
+    certValidityDays: 3650
+    clients:
+      ## sbc-sip-sidecar and the sbc-sip db-create-wait init container. Needs an sbc-sip-sidecar
+      ## image with vg-db-helpers >= 2.1.0 (CGY-47155).
+      sbcSipSidecar: true
   createSecret: true
   global:
     imagePullSecrets:
@@ -885,6 +999,55 @@ mysql:
   primary:
     priorityClassName: ""
     extraFlags: "--max-connections=500"
+    ## The mysql subchart's default my.cnf, plus the certificate of vgTls. Rendered through tpl by the
+    ## subchart; keep it in step with the subchart's default when the subchart is upgraded. With vgTls
+    ## off it renders byte for byte as the default.
+    configuration: |-
+      [mysqld]
+      default_authentication_plugin={{- .Values.auth.defaultAuthenticationPlugin | default "mysql_native_password" }}
+      skip-name-resolve
+      explicit_defaults_for_timestamp
+      basedir=/opt/bitnami/mysql
+      plugin_dir=/opt/bitnami/mysql/lib/plugin
+      port=3306
+      socket=/opt/bitnami/mysql/tmp/mysql.sock
+      datadir=/bitnami/mysql/data
+      tmpdir=/opt/bitnami/mysql/tmp
+      max_allowed_packet=16M
+      bind-address=*
+      pid-file=/opt/bitnami/mysql/tmp/mysqld.pid
+      log-error=/opt/bitnami/mysql/logs/mysqld.log
+      character-set-server=UTF8
+      slow_query_log=0
+      long_query_time=10.0
+      {{- if include "vg.mysqlTls.listener" . }}
+      {{ include "vg.mysqlTls.serverConfig" . }}
+      {{- end }}
+
+      [client]
+      port=3306
+      socket=/opt/bitnami/mysql/tmp/mysql.sock
+      default-character-set=UTF8
+      plugin_dir=/opt/bitnami/mysql/lib/plugin
+
+      [manager]
+      port=3306
+      socket=/opt/bitnami/mysql/tmp/mysql.sock
+      pid-file=/opt/bitnami/mysql/tmp/mysqld.pid
+    ## Certificate for vgTls. Strings, so the subchart's tpl can drop them when vgTls is off.
+    extraVolumes: |-
+      {{- if include "vg.mysqlTls.listener" . }}
+      - name: mysql-tls
+        secret:
+          secretName: {{ .Values.vgTls.secretName }}
+          defaultMode: 0440
+      {{- end }}
+    extraVolumeMounts: |-
+      {{- if include "vg.mysqlTls.listener" . }}
+      - name: mysql-tls
+        mountPath: /opt/bitnami/mysql/certs-tls
+        readOnly: true
+      {{- end }}
     persistence:
       size: "10Gi"
     resources:
@@ -996,6 +1159,28 @@ redisHa:
   ## please also set the variables below on "cognigyEnv" section:
   ## "REDIS_SENTINEL_MASTER_NAME", "REDIS_SENTINEL_HOST", "REDIS_SENTINEL_PORT"
   enabled: false
+  ## TLS listeners next to the plaintext ports (docs/011-redis-tls.md). Meshed clients keep
+  ## 6379/26379; clients on the host network, which the mesh cannot encrypt, switch to TLS
+  ## per client below, with a client certificate (tls-auth-clients yes). The chart mints the CA
+  ## (Secret `<secretName>-ca`), the server certificate (`secretName`) and the sbc-sip client
+  ## certificate (`<secretName>-client-sbc-sip`, used by sbc-sip-sidecar and drachtio) once and
+  ## reuses them on every upgrade. Off by default: the FedRAMP profile turns it on
+  ## (global.fedramp.redisTls), and elsewhere the sidecar and drachtio images must support it
+  ## first (drachtio: drachtioMinVersion, enforced by the chart).
+  vgTls:
+    enabled: false
+    port: 6380
+    sentinelPort: 26380
+    secretName: redis-ha-tls
+    certValidityDays: 3650
+    clients:
+      ## Needs an sbc-sip-sidecar image whose vg-redis presents a client certificate (Cognigy/vg-redis#52, CGY-45820).
+      sbcSipSidecar: true
+      ## drachtio in sbc-sip, for the ban lists (CGY-45825). Needs drachtio.image >= drachtioMinVersion.
+      drachtio: true
+    ## First vg-drachtio release with --blacklist-redis-tls; an older semver drachtio.image is refused
+    ## while the drachtio client is on (vg.redisTls.validateDrachtioImage).
+    drachtioMinVersion: "1.3.23"
   global:
     imagePullSecrets:
       - cognigy-registry-token
@@ -1022,7 +1207,9 @@ redisHa:
     ## give the `apiban` ACL user to a client that would ignore it. Only the tag is visible
     ## here, so a non-semver tag is left alone. Empty disables the check.
     apiBanMinVersion: "1.4.0"
-  ## The tpl lines follow the auth switch above; with it off they render exactly as before.
+  ## Rendered through tpl by the redis subchart. The auth and TLS lines follow their switches; with
+  ## both off they render exactly as before. Environments override replica.configuration
+  ## (maxmemory), not this, so the TLS listener lives here.
   commonConfiguration: |-
     appendonly no
     protected-mode {{ if include "vg.redisAuth.server" . }}yes{{ else }}no{{ end }}
@@ -1033,8 +1220,17 @@ redisHa:
     {{- if include "vg.redisAuth.server" . }}
     aclfile /opt/bitnami/redis/acl/users.acl
     {{- end }}
+    {{- if include "vg.redisTls.listener" . }}
+    {{ include "vg.redisTls.serverConfig" (dict "port" .Values.vgTls.port "dir" "/opt/bitnami/redis/certs-tls") }}
+    {{- end }}
   replica:
-    ## ACL file from the redis-ha-auth Secret, only while Redis auth is on.
+    ## Restarts Redis and Sentinel when the chart signs a new TLS certificate (vg.redisTls.serverChecksum);
+    ## empty while the TLS listeners are off. Rendered through tpl by the redis subchart. An environment
+    ## that sets its own podAnnotations has to keep this key.
+    podAnnotations:
+      checksum/redis-tls: '{{ include "vg.redisTls.serverChecksum" . }}'
+    ## ACL file from the redis-ha-auth Secret while Redis auth is on, and the certificate for the TLS
+    ## listener (vgTls). Strings, so the subchart's tpl can drop them when their switch is off.
     extraVolumes: |-
       {{- if include "vg.redisAuth.server" . }}
       - name: redis-acl
@@ -1044,10 +1240,21 @@ redisHa:
             - key: users.acl
               path: users.acl
       {{- end }}
+      {{- if include "vg.redisTls.listener" . }}
+      - name: redis-tls
+        secret:
+          secretName: {{ .Values.vgTls.secretName }}
+          defaultMode: 0440
+      {{- end }}
     extraVolumeMounts: |-
       {{- if include "vg.redisAuth.server" . }}
       - name: redis-acl
         mountPath: /opt/bitnami/redis/acl
+        readOnly: true
+      {{- end }}
+      {{- if include "vg.redisTls.listener" . }}
+      - name: redis-tls
+        mountPath: /opt/bitnami/redis/certs-tls
         readOnly: true
       {{- end }}
     replicaCount: 3
@@ -1085,6 +1292,17 @@ redisHa:
     automateClusterRecovery: true
     downAfterMilliseconds: 2000
     failoverTimeout: 10000
+    ## TLS listener for Sentinel (vgTls); the volume comes from replica.extraVolumes.
+    configuration: |-
+      {{- if include "vg.redisTls.listener" . }}
+      {{ include "vg.redisTls.serverConfig" (dict "port" .Values.vgTls.sentinelPort "dir" "/opt/bitnami/redis-sentinel/certs-tls") }}
+      {{- end }}
+    extraVolumeMounts: |-
+      {{- if include "vg.redisTls.listener" . }}
+      - name: redis-tls
+        mountPath: /opt/bitnami/redis-sentinel/certs-tls
+        readOnly: true
+      {{- end }}
     resources:
       requests:
         cpu: 25m
@@ -1142,10 +1360,10 @@ heplifyServer:
       cpu: "0.100"
       memory: 800Mi
   ## Default-deny ingress+egress (NEW-VHEPLIFY-SC7-001, SC-7/AC-4, stage 2). Forced on
-  ## under the FedRAMP profile. Ingress: the HEP-ingest port (udp) from sbc-rtp, plus
-  ## sbc-sip through ingressFromHostNetwork (hostNetwork, same limitation as
-  ## vg-resource-resolver's sbc-sip regbots); the stats port (tcp) from telegraf. Egress:
-  ## the bundled postgresql pod.
+  ## under the FedRAMP profile. Ingress: the HEP-ingest port (udp) from sbc-rtp and sbc-sip
+  ## (both hostNetwork: true, admitted from networkPolicy.hostNetworkPeers plus
+  ## ingressFromHostNetwork); the stats port (tcp) from telegraf. Egress: the bundled
+  ## postgresql pod.
   networkPolicy:
     enabled: false
     ingressFromHostNetwork: []
@@ -1335,9 +1553,9 @@ telegraf:
   ## Default-deny ingress+egress (NEW-VTELEGRAF-SC7-001, SC-7/AC-4, stage 2). Forced on
   ## under the FedRAMP profile. telegraf's StatefulSet renders unconditionally (only its
   ## Service is gated by vg.fedramp.statsEnabled), so this policy gates only on the
-  ## profile/opt-in switch. Ingress: sbc-inbound/outbound/sbc-rtp (STATS_HOST) plus
-  ## sbc-sip through ingressFromHostNetwork (hostNetwork, same limitation as
-  ## vg-resource-resolver's sbc-sip regbots). Egress: influxdb and heplify-server.
+  ## profile/opt-in switch. Ingress: sbc-inbound/outbound (STATS_HOST) by podSelector, plus
+  ## sbc-rtp and sbc-sip (both hostNetwork: true) from networkPolicy.hostNetworkPeers plus
+  ## ingressFromHostNetwork. Egress: influxdb and heplify-server.
   networkPolicy:
     enabled: false
     ingressFromHostNetwork: []
@@ -1386,7 +1604,7 @@ jobs:
   priorityClassName: low
   hookPriorityClassName: medium
 api:
-  image: cognigy.azurecr.io/vg-api-server:2026.23.0
+  image: cognigy.azurecr.io/vg-api-server:2026.24.0
   imagePullPolicy: Always
   replicaCount: 2
   ## Digest used to derive session-revocation Redis keys: sha256 | md5.
@@ -1404,6 +1622,16 @@ api:
   ## docs/fedramp-remediation-1-upgrade.md. A new environment starts with an empty Redis and
   ## has nothing to move.
   sessionKeyDigest:
+  ## Identity settings (ADR-001 §2.7, CSA-101834 IA-2(1)). Ignored while the FedRAMP profile is on
+  ## (global.fedramp.passwordLogin / adminApiKeys / bootstrapPrivilegedUsers apply, and cannot be
+  ## relaxed). null leaves the variable unset and vg-api-server keeps today's behaviour (true).
+  ## vg-api-server reads them from the X1 release (wave 3); older images ignore them.
+  ## VG_PASSWORD_LOGIN_ENABLED: /v1/login, /v1/auth, AuditLogs login and the public Organisations routes.
+  passwordLoginEnabled: null
+  ## VG_ADMIN_API_KEYS_ENABLED: admin-scope API keys (api_keys rows with both sids NULL).
+  adminApiKeysEnabled: null
+  ## VG_BOOTSTRAP_PRIVILEGED_USERS: the admin and cognigy-ai users and their Secrets at start.
+  bootstrapPrivilegedUsers: null
   ## valid choices are debug, info, error, warn
   logLevel:
   port: 3000
@@ -1508,13 +1736,13 @@ api:
   ## Default-deny ingress+egress (NEW-VAPISRV-SC7-001, SC-7/AC-4, stage 2). Forced on
   ## under the FedRAMP profile. Ingress: the health port (any source, kubelet probes), the
   ## metrics port (monitoring namespace) and the app port from this chart's own Traefik —
-  ## NOT a podSelector list of application callers. Almost every real caller (sbc-inbound,
-  ## webapp, test-call-manager, audit-cleanup, feature-server/nightly) reaches api-server
-  ## through its own public ingress hostname (ingress.api.host), which Traefik proxies;
-  ## from api-server's pod's own point of view Traefik is the only direct network peer,
-  ## same reasoning as every other chart-fronted-by-Traefik workload (see
-  ## vg.networkPolicy.fromTraefik). Only templates/test-harness/provision-job.yaml (CI-only)
-  ## calls the in-cluster Service directly. Egress: MySQL, Redis. api-server's own direct
+  ## NOT a podSelector list of application callers. Almost every real caller (webapp,
+  ## test-call-manager, audit-cleanup, feature-server/nightly) reaches api-server through its
+  ## own public ingress hostname (ingress.api.host), which Traefik proxies; from api-server's
+  ## pod's own point of view Traefik is the only direct network peer, same reasoning as every
+  ## other chart-fronted-by-Traefik workload (see vg.networkPolicy.fromTraefik). Two callers use
+  ## the in-cluster Service: sbc-inbound on api.port for its signed /svc/v1/dev-config read
+  ## (admitted by podSelector, CGY-43873), and templates/test-harness/provision-job.yaml (CI-only). Egress: MySQL, Redis. api-server's own direct
   ## Kubernetes API need (vg.networkPolicy.apiServerEgress, secrets management via its
   ## ServiceAccount RBAC) stays explicitly deferred — see docs/014-network-policy.md.
   networkPolicy:
@@ -1609,8 +1837,52 @@ tmpban:
     trackingWindowMinutes: 15
     ## Ban duration (hours) applied once banThreshold is reached.
     banDurationHours: 1
+## TLS on the drachtio control hop (CGY-46071, docs/017-drachtio-control-tls.md): sbc-sip's drachtio
+## dials sbc-inbound and sbc-outbound (sbcInbound.ports.tcp / sbcOutbound.ports.tcp) over mTLS. One
+## switch for sbc-sip, sbc-inbound, sbc-outbound and sbc-call-router: a mix fails every call (closed,
+## not plaintext). Stage the certificates with `prepare` first, then flip `enabled` in a maintenance
+## window, with vg-drachtio >= drachtioMinVersion and sbc-inbound, sbc-outbound and sbc-call-router
+## images that carry CGY-46071 (minImageVersions). While the FedRAMP profile is on, `enabled` is ignored
+## (global.fedramp.drachtioControlTls applies); the other keys still apply, and with the hop on the
+## profile requires drachtioMinVersion and all three minImageVersions.
+drachtioControlTls:
+  enabled: false
+  ## Cutover step 1: mint and mount the certificates (Secrets, mounts, fsGroup, checksums) without
+  ## any of the hop's variables, so the pods roll once and behave as before. Then set `enabled` (or
+  ## global.fedramp.drachtioControlTls) in one release. Switches nothing, so it applies under the
+  ## FedRAMP profile too.
+  prepare: false
+  ## Prefix of the Secrets: <secretName>-ca, -sbc-inbound, -sbc-outbound, -client-sbc-sip.
+  secretName: drachtio-control-tls
+  certValidityDays: 3650
+  ## Cluster DNS domain on the server certificates (<svc>.<ns>.svc.<clusterDomain>).
+  clusterDomain: cluster.local
+  ## First vg-drachtio release with DRACHTIO_OUTBOUND_TLS_CA_FILE (Cognigy/vg-drachtio#66, released in
+  ## 1.3.28; 1.3.24 to 1.3.27 do not carry it); an older semver drachtio.image is refused while the hop
+  ## is on. "" switches the check off, which the FedRAMP profile refuses while the hop is on.
+  drachtioMinVersion: "1.3.28"
+  ## First sbc-inbound, sbc-outbound and sbc-call-router releases that carry CGY-46071: YYYY.N.P,
+  ## YYYY.N.P-<number> or YYYY.N.P-rc<number> (anything else fails every render). An older image is refused
+  ## while the hop is on: an older SBC keeps a plaintext listener (every call fails), an older
+  ## call-router keeps routing without ;transport=tls (drachtio dials plain TCP: calls fail against TLS
+  ## listeners, or the hop silently stays plaintext). Ordering in docs/017: the release line of a train
+  ## (rc, release, patches) counts as newer than its numbered builds, so a numbered minimum must predate
+  ## its train's cut: one built after it lets the cut's rc1 pass without the change, and the chart cannot
+  ## tell. For a change merged after a cut, use the next train's first build that carries it. "" leaves the image unchecked, which the FedRAMP profile refuses while the hop is on.
+  ## 2026.24.0-95 is the first preview build of each with CGY-46071 (vg-sbc-inbound#182/#183,
+  ## vg-sbc-outbound#115/#116, vg-sbc-call-router#75), built before the 2026.24 cut; the cut's
+  ## 2026.24.0-rc1 images and every later tag pass it, so these never need to move.
+  minImageVersions:
+    sbcInbound: "2026.24.0-95"
+    sbcOutbound: "2026.24.0-95"
+    sbcCallRouter: "2026.24.0-95"
+  ## Under the FedRAMP profile with the hop on, an image whose tag cannot be checked (digest only, latest,
+  ## untagged, a branch build, another suffix such as -fips on an SBC tag) is refused. true lets it pass:
+  ## a deviation to record in the POA&M (docs/009-fedramp-profile.md). Outside the profile such tags are
+  ## never checked.
+  allowUncheckedImages: false
 drachtio:
-  image: cognigy.azurecr.io/vg-drachtio:1.3.22
+  image: cognigy.azurecr.io/vg-drachtio:1.3.29
   imagePullPolicy: IfNotPresent
   host: 127.0.0.1
   port: 9022
@@ -1628,8 +1900,8 @@ drachtio:
     timeoutSeconds: 5
     failureThreshold: 3
     ## Grace for the restart this probe triggers. Without it Kubernetes uses the pod's
-    ## terminationGracePeriodSeconds (300s for call draining): a frozen drachtio never
-    ## handles SIGTERM, so it would sit there for 5 minutes before the SIGKILL.
+    ## terminationGracePeriodSeconds (up to 1800s for call draining): a frozen drachtio never
+    ## handles SIGTERM, so it would sit there until the SIGKILL.
     terminationGracePeriodSeconds: 10
   homerId: 10
   ## TLS Configuration for SIP over TLS (SIPS) and WebSocket Secure (WSS)
@@ -1667,7 +1939,7 @@ featureServer:
   # Must be 2026.19.0 or newer: the pod gets no JAMBONES_MYSQL_* env and no MySQL
   # wait, and older images assert those vars at start (CGY-41894). Add them back
   # through extraEnvVars only to run an older image.
-  image: cognigy.azurecr.io/vg-feature-server:2026.23.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.24.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -1708,7 +1980,18 @@ featureServer:
   podSecurityContext: {}
   tolerations: []
   sigtermForceCloseTimeoutMs: ""
-  terminationGracePeriodSeconds: 300
+  ## Upper bound for draining calls on scale-in and restarts: freeswitch and feature-server
+  ## wait for their calls to end, and whatever is still up at the deadline is dropped.
+  ## Unset (default): 1800s for a Deployment, 300s for a StatefulSet. 1800s lets ~95% of
+  ## the calls in progress at SIGTERM finish (300s: ~75%); a pod held by a leaked session
+  ## stays up until the deadline, which keeps this below 1h. A StatefulSet (OrderedReady)
+  ## replaces one pod at a time and does not scale up past a terminating pod, so a long
+  ## drain there serializes rollouts beyond typical upgrade timeouts and holds scale-up.
+  terminationGracePeriodSeconds:
+  ## Grace for the restart the feature-server liveness probe triggers. Without it the
+  ## restart uses the pod's call-draining grace, and a hung process drains nothing.
+  livenessProbe:
+    terminationGracePeriodSeconds: 10
   ## Pod DNS resolver options (CGY-45509), merged by the kubelet into the ClusterFirst
   ## /etc/resolv.conf of all three containers (a PodDNSConfig: options, and optionally
   ## nameservers/searches). Set to null (or options: []) for the plain ClusterFirst
@@ -1752,7 +2035,7 @@ featureServer:
   anchorMediaAlways: false
   ## Disable the 'P-Asserted-Identity' header
   disableDialPaiHeader: false
-  ## list of comma-separated vendors that should not be pre-cached. Valid values are aws, deepgram, elevenlabs, google, ibm, microsoft, nuance, wellsaid, whisper, playh
+  ## list of comma-separated vendors that should not be pre-cached. Valid values are aws, deepgram, elevenlabs, google, ibm, microsoft, wellsaid, whisper
   preCacheIgnoreList: "deepgram"
   ## CGY-43437: HTTP webhooks (status callbacks, call_hook, actionHooks) fail a stalled connect
   ## fast and retry it. Empty = feature-server defaults: 3000 ms, 2 retries. Timeout 100-10000 ms;
@@ -1767,6 +2050,20 @@ featureServer:
   ## Vendors not listed fall back to global enableTtsStreaming behavior.
   ## Use ["*"] for all vendors.
   streamingTtsVendors: ["*"]
+  ## Per-vendor TTS synthesizer-options overrides, read live by vg-speech-utils's
+  ## parseVendorOptions from the cognigy-env-reloadable ConfigMap.
+  ## Top-level keys are vendor names ("custom" applies to every "custom:<name>" credential).
+  ## Within a vendor's "options" (request bucket) / "queryOptions" (query bucket): a field
+  ## set to `false` is deactivated even if vg-core's schema already accepts it; any other
+  ## value activates a field vg-core's schema does not recognize, passed through verbatim.
+  ## Example:
+  ##   allowedExtraSynthesizerFields:
+  ##     elevenlabs:
+  ##       options:
+  ##         extraField: true
+  ##         aRealSchemaFieldToDisable: false
+  ##       queryOptions: {}
+  allowedExtraSynthesizerFields: {}
   # Canary deployment configuration for A/B testing between main and nightly feature servers
   canary:
     # Enable canary deployment with traffic splitting
@@ -1790,18 +2087,24 @@ featureServer:
       cpu: "1"
       memory: 500Mi
   ## Both probed every second so the pod turns Ready as soon as the app is up
-  ## (it used to wait for the next 10s startup / 5s readiness tick). The thresholds
-  ## keep the old budgets: startup ~30s (was the k8s default 10s x 3), readiness
-  ## 30 failures in a row once startupProbe has passed (30-60s with the 2s timeout,
-  ## which leaves room for event-loop lag in the /health handler).
+  ## (it used to wait for the next 10s startup / 5s readiness tick). Startup keeps
+  ## the old ~30s budget (was the k8s default 10s x 3).
+  ## Readiness: /health answers 480 at once when FreeSWITCH is lost, hung or slow
+  ## (CGY-45512), and the SBC does not retry another pod on a failed INVITE, so
+  ## 3 fast 480s turn the pod unready within ~3s; the SBC stops routing to it once
+  ## the headless Service's endpoints and DNS catch up. Event-loop lag in the
+  ## /health handler is absorbed by the 5s timeout instead: it takes three probes
+  ## in a row hanging for 5s (~15-18s) to turn the pod unready. Liveness and
+  ## startup use their own routes on the health port, so a failing /health never
+  ## restarts the container (ci/render-tests/feature-server-probes.test.sh).
   startupProbe:
     periodSeconds: 1
     timeoutSeconds: 1
     failureThreshold: 30
   readinessProbe:
     periodSeconds: 1
-    timeoutSeconds: 2
-    failureThreshold: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
   ## Public /v2 API: outbound calls initiated by a linked Cognigy.AI cluster's
   ## vg-runtime-api. Design: vg-resources docs/tdd/06-vg-in-ai/006 §6-§7, and
   ## docs/010-feature-server-v2-api.md here.
@@ -1811,15 +2114,22 @@ featureServer:
   ## (aud = this cluster's name, body hash, single-use jti) verified against
   ## that AI cluster's JWKS. /v1 stays unexposed.
   ##
-  ## Off by default: POST /v2/createCall answers 501 until outbound runtime
-  ## resolution (006 G5) lands, so there is nothing to route yet.
+  ## On by default, but it renders nothing (no env, Ingress or Middleware)
+  ## until at least one AI cluster is linked (vgInAi.clusters or
+  ## resourceResolver.runtimeApiTargets), so an unlinked VG cluster is
+  ## unaffected. A linked cluster gets outbound calls with no extra values.
+  ## Set enabled: false to keep a linked cluster inbound-only.
   v2Api:
-    enabled: false
+    enabled: true
     ## Public Ingress for the /v2/ prefix ONLY, on ingress.api.host unless
     ## `host` is set. Traefik middlewares cap the body and rate-limit the
-    ## caller.
+    ## caller. Also needs the global ingress.enabled. With no host, or an
+    ## ingress class other than traefik, the Ingress is skipped and NOTES.txt
+    ## warns (the render does not fail), so outbound calls stay unreachable.
+    ## On a linked cluster it takes /v2/ on the API host from api-server's `/`
+    ## catch-all (api-server serves no /v2 route).
     ingress:
-      enabled: false
+      enabled: true
       host: ""
       ## The JWT carries the AI cluster's identity, but an ingress cannot read
       ## it, so the limit is per source IP. The AI side egresses from a handful
@@ -1831,8 +2141,10 @@ featureServer:
       ## first so an oversized body never reaches a pod.
       maxRequestBodyBytes: 16384
     ## Opt-in NetworkPolicy on the feature-server pods (forced on under the FedRAMP
-    ## profile — global.fedramp.networkPolicyEnabled, CSA-110265/CSA-110267). Ingress-only
-    ## (PR #1131 review): restricts ONLY the HTTP port (featureServer.ports.tcp) to the
+    ## profile — global.fedramp.networkPolicyEnabled, CSA-110265/CSA-110267). Since /v2
+    ## is on by default, a linked FedRAMP cluster gets it on upgrade: set
+    ## networkPolicy.ingressControllerPeers first, or /v2 is unreachable through the
+    ## ingress controller. Ingress-only (PR #1131 review): restricts ONLY the HTTP port (featureServer.ports.tcp) to the
     ## ingress controller and this namespace; every other TCP/UDP port stays open to
     ## everyone, exactly as without a policy, via explicit port ranges around the HTTP
     ## port. Egress is deliberately NOT restricted here — mainline feature-server's main
@@ -1852,7 +2164,7 @@ sileroVad:
   ## When enabled, feature server receives SILERO_VAD_SERVICE_URL env var
   ## pointing to this service for Plan B audio-fork VAD.
   enabled: false
-  image: cognigy.azurecr.io/vg-silero-vad:2026.23.0
+  image: cognigy.azurecr.io/vg-silero-vad:2026.24.0
   ## Default Always because the default tag is :latest (mutable) — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -1977,7 +2289,7 @@ sileroVad:
 ## jambones MySQL DB. Disabled by default — opt in per cluster.
 vadAutotuner:
   enabled: false
-  image: cognigy.azurecr.io/vg-vad-autotuner:2026.22.0-21
+  image: cognigy.azurecr.io/vg-vad-autotuner:2026.24.0-71
   ## Default Always because the default tag may be mutable — prevents
   ## cached/stale images after upgrades. Override to IfNotPresent when pinning
   ## an immutable tag.
@@ -2023,7 +2335,7 @@ vadAutotuner:
 featureServerNightly:
   enabled: false
   # Same minimum as featureServer.image: 2026.19.0 or newer (no MySQL env).
-  image: cognigy.azurecr.io/vg-feature-server:2026.23.0
+  image: cognigy.azurecr.io/vg-feature-server:2026.24.0
   imagePullPolicy: Always
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -2056,7 +2368,9 @@ featureServerNightly:
   podSecurityContext: {}
   tolerations: []
   sigtermForceCloseTimeoutMs: ""
-  terminationGracePeriodSeconds: 300
+  ## Call-draining bound, same rule as featureServer.terminationGracePeriodSeconds: unset
+  ## (default) is 1800s for a Deployment and 300s for a StatefulSet.
+  terminationGracePeriodSeconds:
   ## Pod DNS resolver options. Unset (default): inherits featureServer.dnsConfig.
   ## Set a PodDNSConfig to override it for the nightly workload, or null, {} or
   ## options: [] for the plain ClusterFirst resolv.conf. options: [] (or null) is the
@@ -2076,7 +2390,7 @@ featureServerNightly:
   anchorMediaAlways: false
   ## Disable the 'P-Asserted-Identity' header
   disableDialPaiHeader: false
-  ## list of comma-separated vendors that should not be pre-cached. Valid values are aws, deepgram, elevenlabs, google, ibm, microsoft, nuance, wellsaid, whisper, playh
+  ## list of comma-separated vendors that should not be pre-cached. Valid values are aws, deepgram, elevenlabs, google, ibm, microsoft, wellsaid, whisper
   preCacheIgnoreList: "deepgram"
   ## See featureServer.httpConnectTimeoutMs / httpConnectRetries (CGY-43437)
   httpConnectTimeoutMs: ""
@@ -2104,7 +2418,7 @@ featureServerNightly:
       cpu: "1"
       memory: 500Mi
 freeswitch:
-  image: cognigy.azurecr.io/vg-freeswitch:2026.23.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.24.0
   imagePullPolicy: IfNotPresent
   ## FreeSWITCH log level. Valid choices (case-insensitive) are the FreeSWITCH log
   ## levels, from least to most verbose:
@@ -2188,6 +2502,9 @@ freeswitch:
     periodSeconds: 10
     timeoutSeconds: 5
     failureThreshold: 3
+    ## Grace for the restart this probe triggers. Without it the restart uses the pod's
+    ## call-draining grace, and the preStop hook cannot reach a frozen FreeSWITCH anyway.
+    terminationGracePeriodSeconds: 10
   ## Startup probe gives FreeSWITCH time to boot before liveness kicks in.
   ## With defaults, allows up to periodSeconds * failureThreshold = 150s.
   ## Probed every second: FreeSWITCH is up in ~2s, and the pod cannot turn Ready
@@ -2203,9 +2520,14 @@ freeswitchNightly:
   ## You can specify a custom image for the FreeSWITCH in the nightly FeatureServer here
   ## To enable a "nightly FreeSWITCH", you have to enable a nightly FeatureServer.
   ## @see featureServerNightly
-  image: cognigy.azurecr.io/vg-freeswitch:2026.23.0
+  image: cognigy.azurecr.io/vg-freeswitch:2026.24.0
+## DTLS-SRTP on the rtpengine <-> FreeSWITCH media leg while global.fedramp.enabled is false
+## (templates/_fedramp.tpl, docs/009-fedramp-profile.md). Ignored while the profile is on; then
+## global.fedramp.internalDtls applies. Needs images that read INTERNAL_DTLS_ENABLED.
+internalDtls:
+  enabled: false
 rtpEngine:
-  image: cognigy.azurecr.io/vg-rtpengine:0.2.0
+  image: cognigy.azurecr.io/vg-rtpengine:mr13.1.1.5-1
   imagePullPolicy: IfNotPresent
   # During runtime, the log level can be decreased by sending the signal SIGURS1 to the daemon and can be increased with the signal SIGUSR2
   logLevel: 3
@@ -2220,6 +2542,10 @@ rtpEngine:
   # per environment.
   measureRtp: true
   mos: CQ
+  ## OpenSSL cipher list for rtpengine's DTLS handshakes (--dtls-ciphers) while global.fedramp.enabled is
+  ## false. Empty keeps rtpengine's default. Ignored while the profile is on; then
+  ## global.fedramp.internalDtlsCiphers applies.
+  dtlsCiphers: ""
   ## Core dumps from the rtpengine daemon. Needs an image built with debug
   ## symbols (Cognigy/vg-rtpengine ships those unstripped, plus gdb).
   coreDumps:
@@ -2250,7 +2576,7 @@ rtpEngine:
 mediaProcessor:
   ## Enable Media Processor for decoupled STT/TTS processing
   enabled: false
-  image: cognigy.azurecr.io/vg-media-processor:2026.23.0
+  image: cognigy.azurecr.io/vg-media-processor:2026.24.0
   imagePullPolicy: Always
   replicaCount: 2
   serviceName: media-processor
@@ -2313,7 +2639,7 @@ mediaProcessor:
     extraIngress: []
     egressTo: []
 rtpEngineSidecar:
-  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.23.0
+  image: cognigy.azurecr.io/vg-sbc-rtpengine-sidecar:2026.24.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -2332,7 +2658,7 @@ rtpEngineSidecar:
       cpu: "0.100"
       memory: 200Mi
 sbcCallRouter:
-  image: cognigy.azurecr.io/vg-sbc-call-router:2026.23.0
+  image: cognigy.azurecr.io/vg-sbc-call-router:2026.24.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## valid choices are debug, info, error, warn
@@ -2355,6 +2681,22 @@ sbcCallRouter:
   tolerations: []
   extraEnvVars: []
   port: 3000
+  ## HTTPS on `port` with a chart-minted certificate (docs/016-call-router-tls.md). sbc-sip's drachtio,
+  ## on the host network outside the mesh, then posts every INVITE over TLS and trusts only the chart's
+  ## CA. The port serves HTTPS only, so turning this on or off fails inbound calls until both
+  ## sbc-call-router and sbc-sip have restarted. The chart mints the CA and certificate once (Secret
+  ## `secretName`) and reuses them on every upgrade. Off by default: the FedRAMP profile turns it on
+  ## (global.fedramp.callRouterTls).
+  tls:
+    enabled: false
+    secretName: sbc-call-router-tls
+    certValidityDays: 3650
+    ## Oldest images that carry the hop's TLS; older release tags fail the render while TLS is on, branch
+    ## builds are not checked. "" switches a check off.
+    ## drachtio.image: the request-handler ca-file attribute (vg-drachtio#65).
+    drachtioMinVersion: "1.3.25"
+    ## sbcCallRouter.image: HTTPS on the routing port (vg-sbc-call-router#74). A preview build, so keep the suffix.
+    minVersion: "2026.24.0-91"
   resources:
     requests:
       cpu: "0.100"
@@ -2363,20 +2705,15 @@ sbcCallRouter:
       cpu: "0.100"
       memory: 150Mi
   ## Default-deny ingress+egress (NEW-VSBCROUTER-SC7-001, SC-7/AC-4, stage 3). Forced on
-  ## under the FedRAMP profile. Ingress: the health port (any source, kubelet probes) and
-  ## the metrics port (monitoring namespace).
-  ##
-  ## KNOWN GAP: the app port (sbcCallRouter.port) has no default ingress rule. Nothing in
-  ## this chart's templates wires a caller to it (no other workload's env vars reference
-  ## sbcCallRouter), and it has no ingress.yaml of its own — unlike every other workload in
-  ## this file, its real caller could not be confirmed from the chart alone. It egresses to
-  ## both sbc-inbound and sbc-outbound (K8S_SBC_INBOUND_SERVICE_NAME /
-  ## K8S_SBC_OUTBOUND_SERVICE_NAME), which suggests it sits in front of them in the call
-  ## path and is itself reached the same way they are (sbc-sip's drachtio dispatch, or
-  ## direct carrier SIP) — but that is inference, not confirmed. Add the real caller to
-  ## extraIngress before relying on this policy to admit production call traffic.
+  ## under the FedRAMP profile. Ingress: the health port (any source, kubelet probes), the
+  ## metrics port (monitoring namespace), and the app port (sbcCallRouter.port) from sbc-sip,
+  ## whose drachtio POSTs every inbound INVITE to it (templates/sbc-sip/drachtio-config-secret.yaml).
   networkPolicy:
     enabled: false
+    ## sbc-sip runs hostNetwork: true, so it is admitted by node address: this list plus
+    ## networkPolicy.hostNetworkPeers. The render fails while both are empty, since every
+    ## inbound call would be refused.
+    ingressFromHostNetwork: []
     allowMonitoringScrape: true
     monitoringNamespaceSelector: {}
     extraIngress: []
@@ -2389,7 +2726,33 @@ sbcCallRouter:
 ## Background: vg-resources/docs/tdd/06-vg-in-ai/002-runtime-gateway-migration-plan.md.
 resourceResolver:
   enabled: true
-  image: cognigy.azurecr.io/vg-resource-resolver:2026.23.0
+  ## Wrapped credentials (CGY-41537, vg-resources docs/work/CGY-41537-ai-owned-encryption-key).
+  ## On, the resolver asks every linked AI cluster to send credentials wrapped
+  ## for this VG cluster (JWE to the key in this cluster's JWKS) and encrypts
+  ## them again with the key below, so the AI cluster no longer needs a copy of
+  ## it. An AI cluster that does not wrap yet is passed through as before, so
+  ## this is safe to turn on before or after the AI side is upgraded.
+  ## Needs a vg-resource-resolver image with CGY-41537 (vg-resource-resolver#125; verify
+  ## the pinned image includes it, or set resourceResolver.image to a compatible build) and a linked AI
+  ## cluster (vgInAi.clusters) or reloadable links (global.reloadableConfig.enabled);
+  ## without either it renders nothing. Do not also set ENCRYPTION_SECRET in
+  ## extraEnvVars: the render fails on the duplicate.
+  ## With global.reloadableConfig.enabled (the default) turning this on or off, and rotating the key,
+  ## rolls NO pod: the switch is read live from cognigy-env-reloadable and the key from a mounted
+  ## Secret file (the kubelet refreshes it in about a minute). Needs the image of vg-resource-resolver#125
+  ## with that reader; an older image ignores the switch. The first upgrade that adds the key mount and
+  ## CREDENTIAL_ENCRYPTION_SECRET_PATH rolls the resolver once, like any image or template change.
+  ## Without reloadable config the key is an env var read once at start and the roll trigger needs
+  ## `lookup`, which is empty under `helm template`/ArgoCD: after rotating the key,
+  ## `kubectl rollout restart deploy/vg-resource-resolver`.
+  credentialRewrap:
+    enabled: false
+    ## Must be the key feature-server, sbc-outbound, sbc-sip-sidecar and
+    ## vg-audio-manager decrypt with (their ENCRYPTION_SECRET, else JWT_SECRET).
+    ## Unset, it follows vgAudioManager.encryptionSecret (default voicegateway-jwt/jwt),
+    ## so overriding that one moves both. Set it only if the consumers differ from it.
+    encryptionSecret: {}
+  image: cognigy.azurecr.io/vg-resource-resolver:2026.24.0
   imagePullPolicy: IfNotPresent
   ## Two replicas for availability, matching sbcInbound/sbcOutbound. Capacity is
   ## not the reason: a single replica served 600 concurrent calls at 21% of a 250m
@@ -2401,6 +2764,27 @@ resourceResolver:
   ## critical-path dependency, and an idle 100m/128Mi pod is cheap next to
   ## rejected INVITEs.
   replicaCount: 2
+  ## Seconds to sleep in a preStop hook before SIGTERM reaches the app, so the pod
+  ## is out of the Service endpoints before it stops accepting connections. 0
+  ## disables. Must be a whole number, and sleep + 10s (the app's forced-exit
+  ## timer) must stay under terminationGracePeriodSeconds below; the render fails
+  ## otherwise.
+  preStopSleepSeconds: 5
+  ## Pod terminationGracePeriodSeconds. Unset keeps the Kubernetes default (30s),
+  ## so the default render does not change. Raise it together with
+  ## preStopSleepSeconds if you need a sleep of 20s or more.
+  terminationGracePeriodSeconds:
+  ## PodDisruptionBudget: keeps node drains from evicting every replica at once.
+  ## maxUnavailable (not minAvailable) so a single-replica cluster can still drain.
+  ## Upgrading over a hand-made PDB that selects app: vg-resource-resolver fails (same name) or
+  ## blocks evictions ("more than one PodDisruptionBudget"). Check `kubectl get pdb -n <ns> -o wide`,
+  ## delete the old one or set pdb.enabled: false.
+  pdb:
+    enabled: true
+    maxUnavailable: 1 # use one of minAvailable or maxUnavailable
+    # minAvailable: 1
+    ## If both are set, minAvailable wins. To switch to minAvailable, also
+    ## null out the default maxUnavailable (or just rely on this precedence).
   ## Anti-affinity, matching sbcInbound. Without it both replicas can land on the
   ## same node, re-introducing exactly the single point of failure the replica
   ## count above exists to remove. Preferred rather than required, so a
@@ -2518,8 +2902,9 @@ resourceResolver:
     ## CGY-44772) call the resolver from the SIP (VoIP) nodes. List the nodes' CIDR, e.g.
     ##   - ipBlock:
     ##       cidr: 10.20.0.0/24
-    ## Empty (default) renders no rule for them, so with the regbots on those calls are denied
-    ## until this is set. The FedRAMP profile turns the regbots off
+    ## networkPolicy.hostNetworkPeers is appended to this list. With both empty (default) no
+    ## rule renders for them, so with the regbots on those calls are denied until one is
+    ## set. The FedRAMP profile turns the regbots off
     ## (global.fedramp.sbcSipRuntimeRegbots). Merged into the API port rule together with
     ## ingressFrom.
     ingressFromHostNetwork: []
@@ -2562,7 +2947,9 @@ vgEventsApi:
   enabled: false
   ## Overwritten by vg-events-api's preview-release workflow
   ## (helm_values_key: vgEventsApi), which requires this key to exist.
-  image: cognigy.azurecr.io/vg-events-api:2026.23.0
+  ## Placeholder: 0.1.0 has not been built yet, so enabling the component before
+  ## vg-events-api's first release ends in ImagePullBackOff unless this is overridden.
+  image: cognigy.azurecr.io/vg-events-api:2026.24.0
   imagePullPolicy: IfNotPresent
   ## Not on the call path: a read API for the AI side's call history and pcap
   ## download. Two replicas for availability during a roll, not capacity.
@@ -2681,6 +3068,87 @@ vgInAi:
 ## picking up this version needs no manual key handling. What stays inert until
 ## configured is the LINKING: `resourceResolver.runtimeApiTargets` above is empty
 ## by default, so nothing is called and no credential is presented.
+## Signed service-to-service auth (vg-resources docs/work/CGY-46075-signed-service-to-service-auth/concept.md,
+## epic CGY-40538). Calls into api-server /svc/v1, feature-server /v1 and resource-resolver carry an
+## ES256 JWS signed per request with the caller's own key. Wiring: templates/_service-auth.tpl.
+serviceAuth:
+  keys:
+    ## A pre-install,pre-upgrade hook Job creates one Secret per key, vg-service-key-<name>, and never
+    ## overwrites one (templates/common-secrets/vg-service-keys-job.yaml). Independent of
+    ## vgCluster.signingKey. false: provide the six Secrets yourself (files key-<slot>.pem PKCS #8,
+    ## key-<slot>.pub.pem SPKI, P-256).
+    autoGenerate: true
+    ## Image with bash, openssl and kubectl. Empty: vgCluster.signingKey.generatorImage. For FedRAMP,
+    ## set an image whose openssl runs with the FIPS provider; the Job logs `openssl list -providers`.
+    generatorImage: ""
+    ## Per key: `slots` the Job makes sure exist (a, b; it adds a missing one and never touches an
+    ## existing one), and the `active` slot the caller signs with. Rotation (vg-resources
+    ## docs/operations/sops/rotate-vg-service-signing-key.md): slots [a, b] -> wait until receivers trust b ->
+    ## active b -> remove the key-a files -> slots [b].
+    internal:
+      active: a
+      slots: [a]
+    sbc-inbound:
+      active: a
+      slots: [a]
+    sbc-outbound:
+      active: a
+      slots: [a]
+    feature-server:
+      active: a
+      slots: [a]
+    sbc-sip-sidecar:
+      active: a
+      slots: [a]
+    ops:
+      active: a
+      slots: [a]
+  ## Receiver modes outside FedRAMP: off | report | enforce. null: the default from the readiness
+  ## marker (ConfigMap vg-service-auth-state, read with lookup), which is report in this release.
+  ## An offline render (helm template, no cluster) always gets report. Ignored while the FedRAMP
+  ## profile is on (global.fedramp.serviceAuthFeatureServerV1Mode / serviceAuthResolverMode apply).
+  featureServerV1:
+    mode: null
+  resolver:
+    mode: null
+  ## sbc-call-router: drachtio cannot sign, so it sends a basic-auth credential (ADR-001 §2.8). A hook Job
+  ## creates Secret vg-call-router-credentials once (templates/common-secrets/vg-call-router-credentials-job.yaml,
+  ## same image as the key Job). off | report | enforce; null is report in this release, because sbc-sip
+  ## and sbc-call-router roll out at different times. Set enforce only after a release with the credential
+  ## has fully rolled out (marker vg-service-auth-state has callRouterCredentials). Ignored while the
+  ## FedRAMP profile is on (global.fedramp.serviceAuthCallRouterMode applies).
+  callRouter:
+    mode: null
+    ## The hook Job that creates Secret vg-call-router-credentials. false: provide the Secret yourself
+    ## (key `credentials` = user:password, letters, digits and ._~- only, because it goes into a URL).
+    ## Without it drachtio sends no credential: report counts every INVITE, enforce refuses them.
+    autoGenerate: true
+## Ops minter (CGY-43874, ADR-001 §2.3). A pod that holds only the `ops` private key. A person in
+## execGroup mints a vg-ops token (valid up to 15 minutes, names the person in `sub`) for the
+## read-only ops routes of api-server /svc/v1, e.g. for vg-support-tool:
+##   kubectl exec vg-ops-minter-0 -- node build/lib/ops-mint.js --sub <user> --ttl 15m
+## Runs api-server's image (api.image), which must contain the command (vg-api-server CGY-43874).
+opsMinter:
+  ## Cannot be enabled together with vgTrafficSniffer.enabled (the render fails): the sniffer's Role
+  ## may exec into every pod in the namespace, including vg-ops-minter-0.
+  enabled: false
+  ## Kubernetes group allowed to exec into vg-ops-minter-0. Required when enabled. Per cloud:
+  ## AKS (Entra ID) the group's object ID, EKS the group from the access entry / aws-auth mapping,
+  ## GKE the Google group e-mail (with Google Groups for RBAC).
+  execGroup: ""
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+  nodeSelector: {}
+  tolerations: []
+  ## Default-deny ingress and egress (the minter needs no network). Under the FedRAMP profile it follows
+  ## global.fedramp.networkPolicyEnabled (on by default) and this value is ignored, as for every workload.
+  networkPolicy:
+    enabled: false
 vgCluster:
   ## Stable identifier for this VG cluster. Becomes the JWT's `iss`, and is the
   ## key each linked AI cluster files this cluster under in its trust list.
@@ -2740,7 +3208,16 @@ sbcInbound:
   ## library default ("warn") applies. Ignored while global.fedramp.enabled is true; then
   ## global.fedramp.dtmfSourceValidation applies.
   dtmfSourceValidation: null
-  image: cognigy.azurecr.io/vg-sbc-inbound:2026.23.0
+  ## true: a device INVITE whose account has a registration hook with Basic-Auth credentials on a
+  ## non-HTTPS URL fails with 500, and the credentials are not sent (CSA-102450). false or null: they
+  ## are sent, with a warning per call. null renders nothing (vg-digest-utils default: not refused).
+  ## Ignored while global.fedramp.enabled is true; then global.fedramp.registrationHookBasicAuthHttpsOnly applies.
+  registrationHookBasicAuthHttpsOnly: null
+  ## Refuse SIPREC recordings to a non-TLS SRS URL (VG_SIPREC_REQUIRE_TLS of vg-siprec-client-utils):
+  ## true | false. null: not rendered, so the library default (off: warn and record) applies.
+  ## Ignored while global.fedramp.enabled is true; then global.fedramp.siprecRequireTls applies.
+  siprecRequireTls: null
+  image: cognigy.azurecr.io/vg-sbc-inbound:2026.24.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -2783,12 +3260,11 @@ sbcInbound:
   ## under the FedRAMP profile. Ingress: the health port (any source, kubelet probes),
   ## the metrics port (monitoring namespace), the dtmf port (udp) from sbc-rtp (the DTMF
   ## datagram source vg.fedramp.dtmfSourceValidation validates against), and the
-  ## drachtio/tcp port from sbc-sip. sbc-sip runs hostNetwork: true, so it is admitted
-  ## through ingressFromHostNetwork instead of a podSelector, same limitation as
-  ## vg-resource-resolver's sbc-sip regbots — ingressFromHostNetwork also covers sbc-rtp's
-  ## dtmf UDP traffic when sbc.rtp.useStatefulSet is false (a hostNetwork DaemonSet then,
-  ## instead of the recommended StatefulSet). egressToHostNetwork is the mirror for sbc-rtp
-  ## on the egress side (its NG control port, sbc.rtp.port, UDP), same shape.
+  ## drachtio/tcp port from sbc-sip. sbc-sip and sbc-rtp both run hostNetwork: true (sbc-rtp
+  ## in every shape), so both are admitted through ingressFromHostNetwork plus
+  ## networkPolicy.hostNetworkPeers instead of a podSelector. egressToHostNetwork is the
+  ## mirror for sbc-rtp on the egress side (its NG control port, sbc.rtp.port, UDP), same
+  ## shape. The render fails while either resulting list is empty: every call would fail.
   networkPolicy:
     enabled: false
     ingressFromHostNetwork: []
@@ -2802,7 +3278,11 @@ sbcOutbound:
   ## library default ("warn") applies. Ignored while global.fedramp.enabled is true; then
   ## global.fedramp.dtmfSourceValidation applies.
   dtmfSourceValidation: null
-  image: cognigy.azurecr.io/vg-sbc-outbound:2026.23.0
+  ## Refuse SIPREC recordings to a non-TLS SRS URL (VG_SIPREC_REQUIRE_TLS of vg-siprec-client-utils):
+  ## true | false. null: not rendered, so the library default (off: warn and record) applies.
+  ## Ignored while global.fedramp.enabled is true; then global.fedramp.siprecRequireTls applies.
+  siprecRequireTls: null
+  image: cognigy.azurecr.io/vg-sbc-outbound:2026.24.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -2843,12 +3323,12 @@ sbcOutbound:
   ## under the FedRAMP profile. Ingress: the health port (any source, kubelet probes),
   ## the metrics port (monitoring namespace), the dtmf port (udp) from sbc-rtp, and the
   ## drachtio/tcp port from sbc-sip — same drachtio app-dispatch mechanism as
-  ## sbc-inbound, which also runs through sbc-sip's drachtio-server. sbc-sip runs
-  ## hostNetwork: true, so it is admitted through ingressFromHostNetwork instead of a
-  ## podSelector — ingressFromHostNetwork also covers sbc-rtp's dtmf UDP traffic when
-  ## sbc.rtp.useStatefulSet is false (a hostNetwork DaemonSet then). egressToHostNetwork
-  ## is the mirror for sbc-rtp on the egress side (its NG control port, sbc.rtp.port,
-  ## UDP), same shape. Unlike sbc-inbound, nothing in this chart calls sbc-outbound on
+  ## sbc-inbound, which also runs through sbc-sip's drachtio-server. sbc-sip and sbc-rtp
+  ## both run hostNetwork: true (sbc-rtp in every shape), so both are admitted through
+  ## ingressFromHostNetwork plus networkPolicy.hostNetworkPeers instead of a podSelector.
+  ## egressToHostNetwork is the mirror for sbc-rtp on the egress side (its NG control port,
+  ## sbc.rtp.port, UDP), same shape. The render fails while either resulting list is
+  ## empty: every call would fail. Unlike sbc-inbound, nothing in this chart calls sbc-outbound on
   ## behalf of feature-server or api-server.
   networkPolicy:
     enabled: false
@@ -2859,7 +3339,7 @@ sbcOutbound:
     extraIngress: []
     egressTo: []
 sbcSipSidecar:
-  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.23.0
+  image: cognigy.azurecr.io/vg-sbc-sip-sidecar:2026.24.0
   imagePullPolicy: IfNotPresent
   ## valid choices are debug, info, error, warn
   logLevel:
@@ -2882,17 +3362,26 @@ sbcSipSidecar:
   ## Needs a vg-sbc-sip-sidecar image with runtime regbot support (sidecar#74);
   ## with an older image the flag rolls the pods and nothing else happens.
   ## If extraEnvVars already sets REGBOT_RUNTIME_TARGETS_ENABLED,
-  ## RESOURCE_RESOLVER_URL or VG_CLUSTER_NAME, remove those entries before
-  ## upgrading: the chart renders them too, so the name would appear twice.
+  ## RESOURCE_RESOLVER_URL, VG_CLUSTER_NAME, SERVICE_AUTH_SIGNING_KEY_PATH or
+  ## SERVICE_AUTH_REQUIRE_SIGNING_KEY, remove those entries before upgrading:
+  ## the chart renders them too, so the name would appear twice.
+  ## The sidecar signs its resolver poll with vg-service-key-sbc-sip-sidecar
+  ## (CSA-109611); that needs a vg-sbc-sip-sidecar image with sidecar#90.
   ## Set enabled: false to opt out. Ignored while the FedRAMP profile is on:
   ## global.fedramp.sbcSipRuntimeRegbots (false) applies.
   ##
   ## The signing key is mounted 0400, readable by root only. IF YOU SET
   ## podSecurityContext.runAsUser (or the image runs non-root), SET
   ## podSecurityContext.fsGroup too, or the sidecar cannot read the key and
-  ## reporting fails at runtime. sbc.sip.podSecurityContext defaults to {}.
+  ## reporting fails at runtime. sbc.sip.podSecurityContext defaults to {}; with
+  ## drachtio on Redis TLS the chart adds fsGroup: 1000 (docs/011-redis-tls.md).
   runtimeRegbots:
     enabled: true
+  ## true: a REGISTER whose account has a registration hook with Basic-Auth credentials on a
+  ## non-HTTPS URL fails with 500, and the credentials are not sent (CSA-102450). false or null: they
+  ## are sent, with a warning per attempt. null renders nothing (vg-digest-utils default: not refused).
+  ## Ignored while global.fedramp.enabled is true; then global.fedramp.registrationHookBasicAuthHttpsOnly applies.
+  registrationHookBasicAuthHttpsOnly: null
   extraEnvVars: []
   resources:
     requests:
@@ -2903,7 +3392,7 @@ sbcSipSidecar:
       memory: 150Mi
 testCallManager:
   enabled: false
-  image: cognigy.azurecr.io/vg-tcm:2026.23.0
+  image: cognigy.azurecr.io/vg-tcm:2026.24.0
   imagePullPolicy: IfNotPresent
   replicaCount: 1
   affinity: {}
@@ -2963,20 +3452,9 @@ testCallManager:
     egressTo: []
 vgConnector:
   enabled: true
-  image: cognigy.azurecr.io/vg-connector:2026.23.0
+  image: cognigy.azurecr.io/vg-connector:2026.24.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
-  ## Amazon Connect A2A vendor adapter master switch for vg-connector. Unlike
-  ## global.enableGenesysAudioHook/enableMsTeams, this is scoped to
-  ## vgConnector rather than global: vg-feature-server's involvement is
-  ## gated by a SIP capability header, not this flag, and this flag alone
-  ## does not expose api-server's vendor_integrations CRUD or webapp's UI —
-  ## that's global.enableAmazonConnect above, added once Config Plane gave
-  ## api-server/webapp Amazon Connect awareness (this comment previously said
-  ## they had none; that's no longer true). The two flags are independently
-  ## togglable by design — set both for the common case of wanting the whole
-  ## vendor on. Default false.
-  enableAmazonConnect: false
   affinity:
     podAntiAffinity:
       preferredDuringSchedulingIgnoredDuringExecution:
@@ -3002,14 +3480,39 @@ vgConnector:
   port: 8000
   sigtermForceCloseTimeoutMs: "270000"
   terminationGracePeriodSeconds: 300
+  ## Amazon Connect audio tuning, read by the connector when global.enableAmazonConnect is true.
+  ## The defaults match the connector's own, so leaving them changes nothing.
+  amazonConnect:
+    ## Audio, in ms, that each prompt holds back before its first send so that Connect always has this
+    ## much queued ahead of real time (Connect fails a turn that falls behind). 0 turns it off. It adds
+    ## this much delay to a prompt's first audio. Integer, 0 to 1000. A lead below silenceFill.floorMs + 100
+    ## switches the silence fill off (the connector logs a warning at startup), and so does 0.
+    ## An environment that already sets AMAZON_CONNECT_* through vgConnector.extraEnvVars should move
+    ## those values here: the chart would otherwise render the variable twice, and the later entry wins.
+    audioLeadMs: 200
+    ## While a turn is open and Connect's headroom (audio sent minus time elapsed) is below floorMs, the
+    ## connector sends one 20 ms silence frame at a time instead of letting the stream run dry, for at
+    ## most maxMs in one stall, then closes the turn. The floor must be at least 100 ms below audioLeadMs
+    ## or the fill is switched off, because turns that are on time dip about one RTP batch below the lead.
+    silenceFill:
+      enabled: true
+      ## Integer, 20 to 500.
+      floorMs: 55
+      ## Integer, 20 to 3000.
+      maxMs: 1000
   extraEnvVars: []
+  ## Amazon Connect fails a turn as soon as its audio falls 100 ms behind real time. At the old
+  ## 0.1-core / 150Mi, CPU throttling stalled the event loop for 100-300 ms ("Audio delivered below
+  ## realtime" on 3.6% of turns) and the pod was OOM-killed mid-call; at these values neither
+  ## happened (vg-dev, 2026-11-11, CGY-48839). CPU can burst to 1 core. Memory requests equal
+  ## limits, so under node memory pressure this container never counts as using more than it asked for.
   resources:
     requests:
-      cpu: "0.100"
-      memory: 150Mi
+      cpu: "0.250"
+      memory: 512Mi
     limits:
-      cpu: "0.100"
-      memory: 150Mi
+      cpu: "1"
+      memory: 512Mi
   ## Default-deny ingress+egress (NEW-VCONN-SC7-001, SC-7/AC-4, stage 2). Forced on under
   ## the FedRAMP profile. Ingress: the health port (kubelet probes) and this chart's own
   ## Traefik (vg-connector has no podSelector-based in-cluster caller — its real traffic is
@@ -3019,11 +3522,12 @@ vgConnector:
     extraIngress: []
     ## sbc-sip (SBC_BASE_URL, SIP signaling) and sbc-rtp (RTP_MIN_PORT/MAX_PORT, media,
     ## through the drachtio sidecar) both run hostNetwork: true, so a podSelector cannot
-    ## reach either — same limitation as vg-resource-resolver's sbc-sip regbots. List this
-    ## environment's SIP/RTP node CIDR here, e.g.
+    ## reach either — same limitation as vg-resource-resolver's sbc-sip regbots. Appended to
+    ## networkPolicy.hostNetworkPeers (the shared SIP/RTP node list; set that instead unless
+    ## vg-connector needs extra peers), e.g.
     ##   - ipBlock:
     ##       cidr: 10.20.0.0/24
-    ## Empty (default) renders no rule for them, so calls are denied until this is set.
+    ## The render fails while both are empty, since no call could be set up.
     egressToHostNetwork: []
     egressTo: []
 vgTrafficSniffer:
@@ -3031,6 +3535,7 @@ vgTrafficSniffer:
   ## Dormant by default: nothing (deployment, service, PVC, RBAC) is created
   ## unless enabled, and even then it idles at 0 replicas until scaled up for a
   ## capture session (via vg-console / flux edit). Scale back to 0 after use.
+  ## Cannot be enabled together with opsMinter.enabled, even at 0 replicas (the render fails).
   enabled: false
   image: cognigy.azurecr.io/vg-traffic-sniffer:2.0.0
   imagePullPolicy: IfNotPresent
@@ -3098,11 +3603,12 @@ vgAudioManager:
   ## with (its ENCRYPTION_SECRET, else JWT_SECRET). Default unchanged: voicegateway-jwt/jwt.
   ## Point it elsewhere only where feature-server also gets a different ENCRYPTION_SECRET, e.g. a dev
   ## namespace paired with an AI cluster whose vg-encryption-secret is not this cluster's JWT secret.
+  ## resourceResolver.credentialRewrap.encryptionSecret follows this value unless set itself.
   encryptionSecret:
     name: voicegateway-jwt
     key: jwt
   serviceName: vg-audio-manager
-  image: cognigy.azurecr.io/vg-audio-manager:2026.23.0
+  image: cognigy.azurecr.io/vg-audio-manager:2026.24.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   affinity:
@@ -3183,7 +3689,7 @@ vgAudioManager:
     extraIngress: []
     egressTo: []
 webapp:
-  image: cognigy.azurecr.io/vg-webapp:2026.23.0
+  image: cognigy.azurecr.io/vg-webapp:2026.24.0
   imagePullPolicy: IfNotPresent
   replicaCount: 2
   ## hot-reload property
@@ -3223,7 +3729,6 @@ webapp:
   enableDeepgram: true
   enableOnPremisesAzureSpeech: true
   enableOnPremisesDeepgram: true
-  enableOnPremisesNuance: true
   enableOpenai: false
   enableDeepgramflux: true
   enableNice: false
@@ -3565,11 +4070,12 @@ hpa:
             target:
               type: AverageValue
               averageValue: "75"
-      ## Fast scale-up (spikes need capacity now); slow, rate-limited scale-down so a
-      ## call-bearing pod drains one at a time (pairs with the graceful pre-stop hooks)
-      ## and node churn stays low (~1 feature-server pod ≈ 1 node). The long window keeps
-      ## a short dip in calls from removing a pod and pushing the remaining ones back
-      ## into the throttling range.
+      ## Fast scale-up (spikes need capacity now); slow, rate-limited scale-down: at most one
+      ## call-bearing pod starts draining every 120s (pairs with the graceful pre-stop hooks)
+      ## and node churn stays low (~1 feature-server pod ≈ 1 node). A drain can last up to
+      ## featureServer.terminationGracePeriodSeconds, so several pods may drain at once.
+      ## The long window keeps a short dip in calls from removing a pod and pushing the
+      ## remaining ones back into the throttling range.
       behavior:
         scaleUp: {}
         scaleDown:
@@ -3943,7 +4449,7 @@ hpa:
 ## Secret exists and the pod restarts (needs a bridge image that boots without the key).
 realtimeBridge:
   enabled: true
-  image: cognigy.azurecr.io/vg-realtime-bridge:2026.23.0
+  image: cognigy.azurecr.io/vg-realtime-bridge:2026.24.0
   imagePullPolicy: IfNotPresent
   ## Keep at 1 (see the warning above)
   replicaCount: 1
@@ -4877,6 +5383,28 @@ vgTestHarness:
     # unknown flag.
     ttsFailoverSameVendorTest:
       enabled: false
+    # CGY-47508: when enabled, the provision Job passes
+    # --digest-client-test-enabled, provisioning a registered SIP client for
+    # vg-test-harness's TestDigestChallengeReleasesDrachtioConnection (the
+    # `digestauth` suite, which guards the sbc-inbound connection leak
+    # CGY-47507). The `digestauth` suite needs this: without it the realm has
+    # no account and the suite's calls fail. It creates a second account,
+    # test-account-digest-client, owning sip_realm digest.vg-test-harness.test
+    # with NO carrier (so sbc-inbound classifies a call to that realm as
+    # originator "user" and digest-challenges it), its device-calling
+    # application, the speech credential the fixture's say needs, and the
+    # client vg-test-harness-client. Realm, username and password are the
+    # provisioner's defaults, which the shipped fixtures expect.
+    #
+    # Like mipTest it needs no infrastructure counterpart and mutates nothing
+    # namespace-wide: it only adds rows. Existing rows are reconciled (account
+    # sip_realm, device-calling application, client password), not just skipped.
+    #
+    # REQUIRES a mock-cognigy image (it runs the provisioner) that knows the
+    # flag (vg-test-harness#226 or later); an older image fails the Job on an
+    # unknown flag.
+    digestClientTest:
+      enabled: false
     recording:
       # When enabled, the provision Job also creates the MinIO bucket, sets
       # record_all_calls + record_format on the account, and adds an
@@ -4923,3 +5451,15 @@ vgTestHarness:
       limits:
         cpu: "0.200"
         memory: 256Mi
+  serviceAuth:
+    # TEST-ONLY (CGY-43687, epic CGY-40538). Name of the Secret holding the
+    # private key the vg-test-harness runner signs its service-auth test requests
+    # with: the `internal` key, vg-service-key-internal, issuer vg-api-server.
+    # When set (and vgTestHarness.enabled), the chart renders the
+    # vg-test-harness-service-auth ConfigMap naming that Secret and its active key
+    # file, so the kindserviceauth suite reads the key the chart actually uses
+    # instead of guessing the slot. Empty (the default) renders nothing.
+    #
+    # Never set this outside a test overlay (ci/kind/values-kind-serviceauth.yaml):
+    # anyone who can read the named Secret can sign as api-server.
+    signingKeySecret: ""

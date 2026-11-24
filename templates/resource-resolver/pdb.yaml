@@ -1,0 +1,21 @@
+{{- if and .Values.resourceResolver.enabled .Values.resourceResolver.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: vg-resource-resolver
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-resource-resolver
+    owner-team: echo
+spec:
+  selector:
+    matchLabels:
+      app: vg-resource-resolver
+  {{- if hasKey .Values.resourceResolver.pdb "minAvailable" }}
+  minAvailable: {{ .Values.resourceResolver.pdb.minAvailable }}
+  {{- else if hasKey .Values.resourceResolver.pdb "maxUnavailable" }}
+  maxUnavailable: {{ .Values.resourceResolver.pdb.maxUnavailable }}
+  {{- else }}
+  {{- fail "resourceResolver.pdb.enabled is true but neither resourceResolver.pdb.minAvailable nor resourceResolver.pdb.maxUnavailable is set" }}
+  {{- end }}
+{{- end }}

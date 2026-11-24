@@ -1,7 +1,11 @@
 {{- include "vg.fedramp.refuseInsecureTraefikEntrypoints" $ }}
 {{- include "vg.networkPolicy.sbcSipResolverWarning" $ }}
 {{- include "vg.realtimeBridge.notesWarnings" $ }}
+{{- include "vg.featureServer.v2Api.notesWarnings" $ }}
 You have deployed the following release: {{ .Release.Name }}.
 To get further information, you can run the commands:
   $ helm status -n {{ .Release.Namespace }} {{ .Release.Name }}
   $ helm get all -n {{ .Release.Namespace }} {{ .Release.Name }}
+
+{{ include "vg.serviceAuth.notes" . }}
+{{- include "vg.opsMinter.notes" . }}

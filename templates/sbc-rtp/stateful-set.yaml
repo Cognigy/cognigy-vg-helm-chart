@@ -107,8 +107,13 @@ spec:
                 --homer {{ .Values.heplifyServer.serviceName }}:{{ .Values.heplifyServer.ports.udp }} \
                 --homer-protocol udp \
                 --homer-id {{ .Values.rtpEngine.homerId | quote }} \
+                {{- /* Each optional line ends in a continuation, and the trim markers leave no blank line:
+                       a blank line would end the exec and drop every argument after it. */}}
                 {{- if .Values.rtpEngine.measureRtp }}
                 --measure-rtp --mos={{ .Values.rtpEngine.mos | default "CQ" }} \
+                {{- end }}
+                {{- with include "vg.fedramp.dtlsCiphers" $ }}
+                --dtls-ciphers={{ . | quote }} \
                 {{- end }}
                 --log-level {{ if .Values.rtpEngine.logLevel }}{{ .Values.rtpEngine.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}
           {{- else }}
@@ -128,6 +133,9 @@ spec:
             {{- if .Values.rtpEngine.measureRtp }}
             - --measure-rtp
             - --mos={{ .Values.rtpEngine.mos | default "CQ" }}
+            {{- end }}
+            {{- with include "vg.fedramp.dtlsCiphers" $ }}
+            - {{ printf "--dtls-ciphers=%s" . | quote }}
             {{- end }}
             - --log-level
             - {{ if .Values.rtpEngine.logLevel }}{{ .Values.rtpEngine.logLevel | quote }}{{ else }}{{ .Values.global.logLevel | quote }}{{ end }}

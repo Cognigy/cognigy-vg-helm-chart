@@ -29,6 +29,15 @@ spec:
       port: 5071
       targetPort: 5071
       protocol: TCP
+    # mock-agent plain UDP listener (--mock-agent-port, default 5070). Required
+    # by the mock-agent-udp outbound carrier, which createCall and the dial
+    # command use in kindsmoke: that suite runs without drachtio TLS, so the
+    # tls/srtp avaya-srtp-mock trunk is not available there. The provisioner's
+    # mockAgentUDPPort must match.
+    - name: sip-agent-udp
+      port: 5070
+      targetPort: 5070
+      protocol: UDP
     - name: sip-srs
       port: 5072
       targetPort: 5072
