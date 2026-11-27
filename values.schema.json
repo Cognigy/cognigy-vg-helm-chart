@@ -55,10 +55,6 @@
               "description": "DTMF source validation of sbc-inbound and sbc-outbound while the FedRAMP profile is on. Overrides the per-service keys.",
               "enum": ["enforce", "warn", "off"]
             },
-            "siprecRequireTls": {
-              "description": "Refuse SIPREC recordings to a non-TLS SRS URL on sbc-inbound and sbc-outbound while the FedRAMP profile is on (VG_SIPREC_REQUIRE_TLS). Overrides the per-service keys.",
-              "type": "boolean"
-            },
             "statsEnabled": {
               "description": "StatsD (vg-stats-collector, telegraf :8125) while the FedRAMP profile is on. Overrides stats.enabled.",
               "type": "boolean"
@@ -78,16 +74,6 @@
               "type": "integer",
               "minimum": 1000,
               "maximum": 600000
-            },
-            "internalDtls": {
-              "description": "DTLS-SRTP on the rtpengine <-> FreeSWITCH media leg while the FedRAMP profile is on. Overrides internalDtls.enabled.",
-              "type": "boolean"
-            },
-            "internalDtlsCiphers": {
-              "description": "OpenSSL cipher list of rtpengine's DTLS handshakes while the FedRAMP profile is on. Overrides rtpEngine.dtlsCiphers.",
-              "type": "string",
-              "minLength": 1,
-              "pattern": "^[A-Za-z0-9:,+!@=._ -]+$"
             },
             "apiBanMaxBatches": {
               "description": "Feed batches (250 addresses each) vg-api-ban reads while the FedRAMP profile is on. Overrides apiBan.maxBatches.",
@@ -112,10 +98,6 @@
               "description": "Strict SSRF validation of registration_hook / queue_event_hook in vg-api-server (SSIP-AC4-001, AC-4) while the FedRAMP profile is on. Overrides api.strictRegistrationHookValidationEnabled.",
               "type": "boolean"
             },
-            "registrationHookBasicAuthHttpsOnly": {
-              "description": "Refuse to send a registration hook's Basic-Auth credentials to a non-HTTPS URL on sbc-inbound and sbc-sip-sidecar (vg-digest-utils, CSA-102450 / DGUT-SC8-001, SC-8) while the FedRAMP profile is on. Overrides sbcInbound.registrationHookBasicAuthHttpsOnly and sbcSipSidecar.registrationHookBasicAuthHttpsOnly.",
-              "type": "boolean"
-            },
             "redisAuth": {
               "description": "Password on redis-ha and a dedicated ACL user for update-api-ban-list while the FedRAMP profile is on. Overrides redisHa.vgAuth.enabled.",
               "type": "boolean"
@@ -125,34 +107,6 @@
               "type": "integer",
               "minimum": 90,
               "maximum": 99999
-            },
-            "serviceAuthFeatureServerV1Mode": {
-              "description": "SERVICE_AUTH_MODE of feature-server /v1 while the FedRAMP profile is on. Overrides serviceAuth.featureServerV1.mode. \"off\" fails the render; \"report\" is the incident deviation.",
-              "enum": ["enforce", "report", "off"]
-            },
-            "serviceAuthResolverMode": {
-              "description": "SERVICE_AUTH_MODE of resource-resolver while the FedRAMP profile is on. Overrides serviceAuth.resolver.mode. \"off\" fails the render; \"report\" is the incident deviation.",
-              "enum": ["enforce", "report", "off"]
-            },
-            "serviceAuthCallRouterMode": {
-              "description": "SERVICE_AUTH_MODE of sbc-call-router (drachtio's basic-auth credential, ADR-001 §2.8) while the FedRAMP profile is on. Overrides serviceAuth.callRouter.mode. \"off\" fails the render; \"report\" is the incident deviation.",
-              "enum": ["enforce", "report", "off"]
-            },
-            "passwordLogin": {
-              "description": "Password login on vg-api-server (VG_PASSWORD_LOGIN_ENABLED) while the FedRAMP profile is on (IA-2(1)). Overrides api.passwordLoginEnabled. Must be false: any other value fails the render.",
-              "type": "boolean"
-            },
-            "adminApiKeys": {
-              "description": "Admin-scope API keys on vg-api-server (VG_ADMIN_API_KEYS_ENABLED) while the FedRAMP profile is on (IA-2(1)). Overrides api.adminApiKeysEnabled. Must be false: any other value fails the render.",
-              "type": "boolean"
-            },
-            "bootstrapPrivilegedUsers": {
-              "description": "Bootstrap of the admin and cognigy-ai users (VG_BOOTSTRAP_PRIVILEGED_USERS) while the FedRAMP profile is on (IA-2(1)). Overrides api.bootstrapPrivilegedUsers. Must be false: any other value fails the render.",
-              "type": "boolean"
-            },
-            "migratorFedrampMode": {
-              "description": "api-migrator FedRAMP mode (VG_MIGRATOR_FEDRAMP_MODE) while the FedRAMP profile is on (IA-2(1)). Overrides apiMigrator.fedrampMode. Must be true: any other value fails the render.",
-              "type": "boolean"
             },
             "networkPolicyEnabled": {
               "description": "Default-deny ingress+egress NetworkPolicy, per workload, while the FedRAMP profile is on (SC-7, AC-4; see docs/014-network-policy.md). Overrides each workload's own networkPolicy.enabled.",
@@ -173,22 +127,6 @@
             "sbcSipRuntimeRegbots": {
               "description": "sbc-sip-sidecar regbots for carriers configured in Cognigy.AI (read from vg-resource-resolver) while the FedRAMP profile is on. Overrides sbcSipSidecar.runtimeRegbots.enabled.",
               "type": "boolean"
-            },
-            "redisTls": {
-              "description": "TLS listeners on redis-ha, which require a client certificate, and TLS with a chart-signed client certificate from the host-network clients (sbc-sip-sidecar and drachtio in the sbc-sip pod) while the FedRAMP profile is on. Overrides redisHa.vgTls.enabled and redisHa.vgTls.clients.*. Needs redisHa, Sentinel mode, an sbc-sip-sidecar image with vg-redis 2.0.34 or later and vg-drachtio 1.3.23 or later.",
-              "type": "boolean"
-            },
-            "mysqlTls": {
-              "description": "MySQL serves the chart-minted certificate and the host-network clients (sbc-sip-sidecar, the sbc-sip init container) require TLS to it while the FedRAMP profile is on. Overrides mysql.vgTls.enabled and mysql.vgTls.clients.*. Needs the in-cluster MySQL.",
-              "type": "boolean"
-            },
-            "callRouterTls": {
-              "description": "sbc-call-router serves HTTPS with the chart-minted certificate and sbc-sip's drachtio verifies it while the FedRAMP profile is on. Overrides sbcCallRouter.tls.enabled.",
-              "type": "boolean"
-            },
-            "drachtioControlTls": {
-              "description": "mTLS with chart-minted certificates on the drachtio control hop (sbc-sip's drachtio to sbc-inbound and sbc-outbound), on sbc-sip, sbc-inbound, sbc-outbound and sbc-call-router at once, while the FedRAMP profile is on. Overrides drachtioControlTls.enabled. Needs drachtio, SBC and call-router images at or above drachtioControlTls.drachtioMinVersion and drachtioControlTls.minImageVersions.",
-              "type": "boolean"
             }
           }
         }
@@ -200,42 +138,6 @@
         "dtmfSourceValidation": {
           "description": "DTMF source validation of vg-rtpengine-utils. null renders nothing (library default). Ignored while global.fedramp.enabled is true.",
           "enum": ["enforce", "warn", "off", null]
-        },
-        "registrationHookBasicAuthHttpsOnly": {
-          "description": "CSA-102450: renders FEATURE_REGISTRATION_HOOK_BASIC_AUTH_HTTPS_ONLY_ENABLED on sbc-inbound. true refuses a registration hook's Basic-Auth credentials on a non-HTTPS URL (device INVITE fails with 500). null renders nothing (vg-digest-utils default: not refused). Ignored while global.fedramp.enabled is true.",
-          "type": ["boolean", "null"]
-        },
-        "siprecRequireTls": {
-          "description": "Refuse SIPREC recordings to a non-TLS SRS URL (VG_SIPREC_REQUIRE_TLS of vg-siprec-client-utils). null renders nothing (library default: off). Ignored while global.fedramp.enabled is true.",
-          "type": ["boolean", "null"]
-        }
-      }
-    },
-    "sbcSipSidecar": {
-      "type": "object",
-      "properties": {
-        "registrationHookBasicAuthHttpsOnly": {
-          "description": "CSA-102450: renders FEATURE_REGISTRATION_HOOK_BASIC_AUTH_HTTPS_ONLY_ENABLED on sbc-sip-sidecar. true refuses a registration hook's Basic-Auth credentials on a non-HTTPS URL (REGISTER fails with 500). null renders nothing (vg-digest-utils default: not refused). Ignored while global.fedramp.enabled is true.",
-          "type": ["boolean", "null"]
-        }
-      }
-    },
-    "internalDtls": {
-      "type": "object",
-      "properties": {
-        "enabled": {
-          "description": "DTLS-SRTP on the rtpengine <-> FreeSWITCH media leg. Ignored while global.fedramp.enabled is true.",
-          "type": "boolean"
-        }
-      }
-    },
-    "rtpEngine": {
-      "type": "object",
-      "properties": {
-        "dtlsCiphers": {
-          "description": "OpenSSL cipher list of rtpengine's DTLS handshakes (--dtls-ciphers) while global.fedramp.enabled is false. Empty keeps rtpengine's default. Only cipher-string characters: the STACKIT shell script renders it in double quotes, where $ and backticks would expand.",
-          "type": "string",
-          "pattern": "^[A-Za-z0-9:,+!@=._ -]*$"
         }
       }
     },
@@ -245,10 +147,6 @@
         "dtmfSourceValidation": {
           "description": "DTMF source validation of vg-rtpengine-utils. null renders nothing (library default). Ignored while global.fedramp.enabled is true.",
           "enum": ["enforce", "warn", "off", null]
-        },
-        "siprecRequireTls": {
-          "description": "Refuse SIPREC recordings to a non-TLS SRS URL (VG_SIPREC_REQUIRE_TLS of vg-siprec-client-utils). null renders nothing (library default: off). Ignored while global.fedramp.enabled is true.",
-          "type": ["boolean", "null"]
         }
       }
     },
@@ -332,18 +230,6 @@
           "description": "Digest used to derive session-revocation Redis keys. Ignored while the FedRAMP profile is on. null leaves the variable unset and vg-api-server keeps its default, md5. Changing this on a populated cluster relocates every stored session and needs a scale-to-zero cutover through api.replicaCount - see Cognigy/vg-api-server docs/fedramp-remediation-1-upgrade.md.",
           "type": ["string", "null"],
           "enum": ["sha256", "md5", null]
-        },
-        "passwordLoginEnabled": {
-          "description": "VG_PASSWORD_LOGIN_ENABLED. Ignored while the FedRAMP profile is on. null leaves it unset (password login stays on).",
-          "type": ["boolean", "null"]
-        },
-        "adminApiKeysEnabled": {
-          "description": "VG_ADMIN_API_KEYS_ENABLED. Ignored while the FedRAMP profile is on. null leaves it unset (admin-scope keys stay accepted).",
-          "type": ["boolean", "null"]
-        },
-        "bootstrapPrivilegedUsers": {
-          "description": "VG_BOOTSTRAP_PRIVILEGED_USERS. Ignored while the FedRAMP profile is on. null leaves it unset (the admin and cognigy-ai users are bootstrapped).",
-          "type": ["boolean", "null"]
         }
       }
     },
@@ -554,12 +440,6 @@
                 "enabled": { "type": "boolean" }
               }
             },
-            "digestClientTest": {
-              "type": "object",
-              "properties": {
-                "enabled": { "type": "boolean" }
-              }
-            },
             "recording": {
               "type": "object",
               "properties": {
@@ -573,16 +453,7 @@
             }
           }
         },
-        "deepgramBridge": { "type": "object" },
-        "serviceAuth": {
-          "type": "object",
-          "properties": {
-            "signingKeySecret": {
-              "type": "string",
-              "description": "Test-only: Secret whose active private key the vg-test-harness runner signs service-auth test requests with (the internal key). Empty renders nothing."
-            }
-          }
-        }
+        "deepgramBridge": { "type": "object" }
       }
     },
     "freeswitch": {
@@ -781,187 +652,6 @@
         }
       }
     },
-    "apiMigrator": {
-      "type": "object",
-      "properties": {
-        "fedrampMode": {
-          "description": "VG_MIGRATOR_FEDRAMP_MODE. Ignored while the FedRAMP profile is on. null leaves it unset (today's seed and admin user).",
-          "type": ["boolean", "null"]
-        }
-      }
-    },
-    "serviceAuth": {
-      "description": "Signed service-to-service auth (vg-resources ADR-001). Wiring: templates/_service-auth.tpl.",
-      "type": "object",
-      "properties": {
-        "keys": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "autoGenerate": {
-              "description": "Render the hook Job that creates the vg-service-key-* Secrets. Independent of vgCluster.signingKey.",
-              "type": "boolean"
-            },
-            "generatorImage": {
-              "description": "Image of the key Job (bash, openssl, kubectl). Empty: vgCluster.signingKey.generatorImage. Use a FIPS-capable image for FedRAMP.",
-              "type": "string"
-            },
-            "internal": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "active": { "description": "Slot the caller signs with. Must be listed in slots.", "enum": ["a", "b"] },
-                "slots": {
-                  "description": "Slots the key Job makes sure exist; it adds a missing one and never touches an existing one.",
-                  "type": "array",
-                  "items": { "enum": ["a", "b"] },
-                  "minItems": 1,
-                  "maxItems": 2,
-                  "uniqueItems": true
-                }
-              }
-            },
-            "sbc-inbound": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "active": { "description": "Slot the caller signs with. Must be listed in slots.", "enum": ["a", "b"] },
-                "slots": {
-                  "description": "Slots the key Job makes sure exist; it adds a missing one and never touches an existing one.",
-                  "type": "array",
-                  "items": { "enum": ["a", "b"] },
-                  "minItems": 1,
-                  "maxItems": 2,
-                  "uniqueItems": true
-                }
-              }
-            },
-            "sbc-outbound": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "active": { "description": "Slot the caller signs with. Must be listed in slots.", "enum": ["a", "b"] },
-                "slots": {
-                  "description": "Slots the key Job makes sure exist; it adds a missing one and never touches an existing one.",
-                  "type": "array",
-                  "items": { "enum": ["a", "b"] },
-                  "minItems": 1,
-                  "maxItems": 2,
-                  "uniqueItems": true
-                }
-              }
-            },
-            "feature-server": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "active": { "description": "Slot the caller signs with. Must be listed in slots.", "enum": ["a", "b"] },
-                "slots": {
-                  "description": "Slots the key Job makes sure exist; it adds a missing one and never touches an existing one.",
-                  "type": "array",
-                  "items": { "enum": ["a", "b"] },
-                  "minItems": 1,
-                  "maxItems": 2,
-                  "uniqueItems": true
-                }
-              }
-            },
-            "sbc-sip-sidecar": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "active": { "description": "Slot the caller signs with. Must be listed in slots.", "enum": ["a", "b"] },
-                "slots": {
-                  "description": "Slots the key Job makes sure exist; it adds a missing one and never touches an existing one.",
-                  "type": "array",
-                  "items": { "enum": ["a", "b"] },
-                  "minItems": 1,
-                  "maxItems": 2,
-                  "uniqueItems": true
-                }
-              }
-            },
-            "ops": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "active": { "description": "Slot the caller signs with. Must be listed in slots.", "enum": ["a", "b"] },
-                "slots": {
-                  "description": "Slots the key Job makes sure exist; it adds a missing one and never touches an existing one.",
-                  "type": "array",
-                  "items": { "enum": ["a", "b"] },
-                  "minItems": 1,
-                  "maxItems": 2,
-                  "uniqueItems": true
-                }
-              }
-            }
-          }
-        },
-        "featureServerV1": {
-          "type": "object",
-          "properties": {
-            "mode": {
-              "description": "SERVICE_AUTH_MODE outside FedRAMP. null: the default from the readiness marker (report in this release). Ignored while the FedRAMP profile is on.",
-              "enum": ["off", "report", "enforce", null]
-            }
-          }
-        },
-        "resolver": {
-          "type": "object",
-          "properties": {
-            "mode": {
-              "description": "SERVICE_AUTH_MODE outside FedRAMP. null: the default from the readiness marker (report in this release). Ignored while the FedRAMP profile is on.",
-              "enum": ["off", "report", "enforce", null]
-            }
-          }
-        },
-        "callRouter": {
-          "type": "object",
-          "properties": {
-            "mode": {
-              "description": "SERVICE_AUTH_MODE of sbc-call-router (drachtio's basic-auth credential) outside FedRAMP. null: report in this release. Ignored while the FedRAMP profile is on.",
-              "enum": ["off", "report", "enforce", null]
-            },
-            "autoGenerate": {
-              "description": "Create Secret vg-call-router-credentials with a hook Job. false: provide it yourself.",
-              "type": "boolean"
-            }
-          }
-        }
-      }
-    },
-    "opsMinter": {
-      "description": "Ops minter (CGY-43874, ADR-001 §2.3): a pod holding only the ops private key; members of execGroup exec into it to mint vg-ops tokens. Templates: templates/ops-minter/.",
-      "type": "object",
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "execGroup": {
-          "description": "Kubernetes group allowed to exec into vg-ops-minter-0. Required when enabled.",
-          "type": "string"
-        },
-        "resources": {
-          "type": "object"
-        },
-        "nodeSelector": {
-          "type": "object"
-        },
-        "tolerations": {
-          "type": "array"
-        },
-        "networkPolicy": {
-          "type": "object",
-          "properties": {
-            "enabled": {
-              "description": "Default-deny ingress and egress for vg-ops-minter. Under the FedRAMP profile it follows global.fedramp.networkPolicyEnabled and this value is ignored.",
-              "type": "boolean"
-            }
-          }
-        }
-      }
-    },
     "redisHa": {
       "type": "object",
       "properties": {
@@ -971,163 +661,6 @@
             "enabled": {
               "description": "Password on redis-ha and a dedicated ACL user for update-api-ban-list. Ignored while the FedRAMP profile is on (global.fedramp.redisAuth applies).",
               "type": "boolean"
-            }
-          }
-        },
-        "vgTls": {
-          "type": "object",
-          "description": "TLS listeners on redis-ha for the host-network clients (docs/011-redis-tls.md). Ignored while the FedRAMP profile is on (global.fedramp.redisTls applies).",
-          "properties": {
-            "enabled": {
-              "description": "TLS listeners on redis-ha that require a client certificate, and the three certificate Secrets (CA, server, sbc-sip client).",
-              "type": "boolean"
-            },
-            "port": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 65535
-            },
-            "sentinelPort": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 65535
-            },
-            "secretName": {
-              "type": "string",
-              "minLength": 1
-            },
-            "certValidityDays": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "clients": {
-              "type": "object",
-              "properties": {
-                "sbcSipSidecar": {
-                  "description": "sbc-sip-sidecar connects over TLS with its client certificate (needs an image whose vg-redis has REDIS_TLS_CERT_FILE, Cognigy/vg-redis#52).",
-                  "type": "boolean"
-                },
-                "drachtio": {
-                  "description": "drachtio in sbc-sip reads its ban lists over TLS (CGY-45825).",
-                  "type": "boolean"
-                }
-              }
-            },
-            "drachtioMinVersion": {
-              "description": "First vg-drachtio release with --blacklist-redis-tls; an older semver drachtio.image is refused while the drachtio client is on.",
-              "type": "string"
-            }
-          }
-        }
-      }
-    },
-    "sbcCallRouter": {
-      "type": "object",
-      "properties": {
-        "port": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 65535
-        },
-        "tls": {
-          "type": "object",
-          "description": "HTTPS on sbcCallRouter.port with a chart-minted certificate, verified by sbc-sip's drachtio (docs/016-call-router-tls.md). Ignored while the FedRAMP profile is on (global.fedramp.callRouterTls applies).",
-          "properties": {
-            "enabled": {
-              "description": "sbc-call-router serves HTTPS only, and drachtio posts INVITEs over TLS.",
-              "type": "boolean"
-            },
-            "secretName": {
-              "type": "string",
-              "minLength": 1
-            },
-            "certValidityDays": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "drachtioMinVersion": {
-              "type": "string",
-              "description": "Oldest vg-drachtio release that carries the request-handler ca-file attribute; an older release tag in drachtio.image fails the render while TLS is on. Empty switches the check off."
-            },
-            "minVersion": {
-              "type": "string",
-              "description": "Oldest vg-sbc-call-router release (preview suffix included) that serves HTTPS; an older release tag in sbcCallRouter.image fails the render while TLS is on. Empty switches the check off."
-            }
-          }
-        }
-      }
-    },
-    "drachtioControlTls": {
-      "type": "object",
-      "description": "TLS on the drachtio control hop (docs/017-drachtio-control-tls.md). While the FedRAMP profile is on, enabled is ignored (global.fedramp.drachtioControlTls applies); the other keys still apply, and with the hop on the profile requires drachtioMinVersion and all three minImageVersions.",
-      "properties": {
-        "enabled": {
-          "description": "sbc-sip's drachtio dials sbc-inbound and sbc-outbound over mTLS, and sbc-call-router routes to them with ;transport=tls.",
-          "type": "boolean"
-        },
-        "prepare": {
-          "description": "Mint and mount the certificates without switching the hop (cutover step 1). Applies under the FedRAMP profile too.",
-          "type": "boolean"
-        },
-        "secretName": {
-          "type": "string",
-          "minLength": 1
-        },
-        "certValidityDays": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "clusterDomain": {
-          "type": "string",
-          "minLength": 1
-        },
-        "drachtioMinVersion": {
-          "description": "First vg-drachtio release with DRACHTIO_OUTBOUND_TLS_CA_FILE (X.Y.Z, checked on every render); an older drachtio.image is refused while the hop is on. Empty disables the check, except under the FedRAMP profile with the hop on, where it is refused.",
-          "type": "string"
-        },
-        "minImageVersions": {
-          "type": "object",
-          "description": "First sbc-inbound, sbc-outbound and sbc-call-router releases with CGY-46071 (YYYY.N.P, YYYY.N.P-<number> or YYYY.N.P-rc<number>); an older image is refused while the hop is on. Empty leaves the image unchecked, which the FedRAMP profile refuses while the hop is on.",
-          "additionalProperties": false,
-          "properties": {
-            "sbcInbound": { "type": "string" },
-            "sbcOutbound": { "type": "string" },
-            "sbcCallRouter": { "type": "string" }
-          }
-        },
-        "allowUncheckedImages": {
-          "description": "Under the FedRAMP profile with the hop on, let images whose tag cannot be checked pass (a POA&M deviation). No effect outside the profile.",
-          "type": "boolean"
-        }
-      }
-    },
-    "mysql": {
-      "type": "object",
-      "properties": {
-        "vgTls": {
-          "type": "object",
-          "description": "Chart-minted certificate on MySQL for the host-network clients (docs/012-mysql-tls.md). Ignored while the FedRAMP profile is on (global.fedramp.mysqlTls applies).",
-          "properties": {
-            "enabled": {
-              "description": "MySQL serves the chart's certificate, and the certificate Secret.",
-              "type": "boolean"
-            },
-            "secretName": {
-              "type": "string",
-              "minLength": 1
-            },
-            "certValidityDays": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "clients": {
-              "type": "object",
-              "properties": {
-                "sbcSipSidecar": {
-                  "description": "The sbc-sip pod (sbc-sip-sidecar and the db-create-wait init container) requires TLS to MySQL.",
-                  "type": "boolean"
-                }
-              }
             }
           }
         }

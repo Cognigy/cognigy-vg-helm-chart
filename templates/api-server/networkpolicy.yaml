@@ -1,14 +1,13 @@
 {{- /*
 Default-deny ingress+egress for api-server (CSA-110265/CSA-110267, stage 2/3; see
 docs/014-network-policy.md). Ingress: the health port (any source, kubelet probes), the
-metrics port (monitoring namespace), and the app port from this chart's own Traefik plus one
-in-cluster caller. Almost every real caller (webapp, test-call-manager, audit-cleanup,
-feature-server/nightly) reaches api-server through its own public ingress hostname, which
-Traefik proxies to the Service; from api-server's own pod's point of view, Traefik is the
-only direct network peer that traffic has, same reasoning as every other
-chart-fronted-by-Traefik workload (see vg.networkPolicy.fromTraefik). The exception is
-sbc-inbound: it reads Dev Config on the signed GET /svc/v1/dev-config, which the Ingress does
-not publish (ADR-001 §2.2), so it calls http://api-server:<api.port> directly (CGY-43873).
+metrics port (monitoring namespace), and the app port from this chart's own Traefik only —
+NOT a podSelector list of application services. Almost every real caller (sbc-inbound,
+webapp, test-call-manager, audit-cleanup, feature-server/nightly) reaches api-server
+through its own public ingress hostname, which Traefik proxies to the Service; from
+api-server's own pod's point of view, Traefik is the only direct network peer that
+traffic ever has, same reasoning as every other chart-fronted-by-Traefik workload (see
+vg.networkPolicy.fromTraefik).
 
 Egress: MySQL, Redis, homer (HOMER_BASE_URL), jaeger (JAEGER_BASE_URL), InfluxDB
 (JAMBONES_TIME_SERIES_HOST), tracing (tracing.baseUrl), vgTeam's SMTP relay
@@ -77,14 +76,7 @@ spec:
         - protocol: TCP
           port: {{ .Values.metrics.port }}
     {{- end }}
-{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.api.port "ingress" .Values.ingress.enabled "root" $) | indent 4 }}
-    - from:
-        - podSelector:
-            matchLabels:
-              app: sbc-inbound
-      ports:
-        - protocol: TCP
-          port: {{ .Values.api.port }}
+{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.api.port "root" $) | indent 4 }}
     {{- with .Values.api.networkPolicy.extraIngress }}
 {{ toYaml . | indent 4 }}
     {{- end }}

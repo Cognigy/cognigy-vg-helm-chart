@@ -9,25 +9,6 @@
 {{- $reloadable := $.Values.global.reloadableConfig.enabled }}
 {{- $legacyLink := and $runtimeApiTargets (not $reloadable) }}
 {{- $mountKey := and $vgClusterSigningKeySecret (or $runtimeApiTargets $reloadable) }}
-{{- /* Wrapped credentials (CGY-41537) need the key pair to open them, so only with $mountKey. */}}
-{{- $rewrap := and $mountKey ((.Values.resourceResolver.credentialRewrap).enabled) }}
-{{- /* Restart-free (CGY-41537): with global.reloadableConfig.enabled the switch is the key
-       CREDENTIAL_REWRAP_ENABLED in cognigy-env-reloadable and the key is a mounted Secret FILE, both
-       read live. Nothing in the pod template depends on credentialRewrap.enabled, the key value or a
-       checksum, so turning it on, off or rotating the key rolls nothing. Without reloadable config
-       the old way applies: ENCRYPTION_SECRET as env var plus a roll trigger. */}}
-{{- $rewrapLive := and $reloadable $mountKey }}
-{{- $rewrapEnv := and $rewrap (not $reloadable) }}
-{{- /* Unset, follow vgAudioManager.encryptionSecret (the consumers' key), then voicegateway-jwt/jwt. */}}
-{{- $rewrapSecretName := ((.Values.resourceResolver.credentialRewrap).encryptionSecret).name | default (.Values.vgAudioManager.encryptionSecret).name | default "voicegateway-jwt" }}
-{{- $rewrapSecretKey := ((.Values.resourceResolver.credentialRewrap).encryptionSecret).key | default (.Values.vgAudioManager.encryptionSecret).key | default "jwt" }}
-{{- if $rewrap }}
-{{- range (.Values.resourceResolver.extraEnvVars | default list) }}
-{{- if and (kindIs "map" .) (eq (.name | default "") "ENCRYPTION_SECRET") }}
-{{- fail "resourceResolver.extraEnvVars sets ENCRYPTION_SECRET while resourceResolver.credentialRewrap.enabled is true -- the chart already renders it from credentialRewrap.encryptionSecret, so the pod would get a duplicate key. Remove the extraEnvVars entry (point credentialRewrap.encryptionSecret at the Secret instead)." }}
-{{- end }}
-{{- end }}
-{{- end }}
 ## The three guards below sit OUTSIDE the `resourceResolver.enabled` gate on
 ## purpose. Gated on it, a config with the resolver switched off and
 ## runtimeApiTargets still populated -- a plausible mid-migration state, and the
@@ -103,18 +84,8 @@ spec:
         ## the public half whenever there is one.
         checksum/vg-cluster-signing-key: {{ if not (lookup "v1" "Secret" $.Release.Namespace $vgClusterSigningKeySecret) }}{{ $vgClusterSigningKeySecret | sha256sum }}{{ else }}{{ toYaml (lookup "v1" "Secret" $.Release.Namespace $vgClusterSigningKeySecret).data | sha256sum }}{{ end }}
         {{- end }}
-        {{- if $rewrapEnv }}
-        ## Legacy path only (no reloadable config). ENCRYPTION_SECRET is an env var, read once at
-        ## start, and the bundle cache holds ciphertext made with it: roll the pod when the key changes.
-        ## With reloadable config the key is a mounted file read live and there is no trigger here.
-        {{- $rewrapSecret := lookup "v1" "Secret" $.Release.Namespace $rewrapSecretName }}
-        checksum/credential-encryption-secret: {{ if $rewrapSecret }}{{ index ($rewrapSecret.data | default dict) $rewrapSecretKey | default "" | sha256sum }}{{ else }}{{ printf "%s/%s" $rewrapSecretName $rewrapSecretKey | sha256sum }}{{ end }}
-        {{- end }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
-      {{- if .Values.resourceResolver.terminationGracePeriodSeconds }}
-      terminationGracePeriodSeconds: {{ .Values.resourceResolver.terminationGracePeriodSeconds }}
-      {{- end }}
       {{- if .Values.resourceResolver.affinity }}
       affinity: {{- include "vg.common.tplvalues.render" (dict "value" .Values.resourceResolver.affinity "context" $) | nindent 8 }}
       {{- end }}
@@ -148,26 +119,6 @@ spec:
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.resourceResolver.image) }}
           imagePullPolicy: {{ .Values.resourceResolver.imagePullPolicy | default "IfNotPresent" }}
           resources: {{- toYaml .Values.resourceResolver.resources | nindent 12 }}
-          {{- if .Values.resourceResolver.preStopSleepSeconds }}
-          {{- /* sleep + the app's 10s forced-exit timer must fit in the grace period, or the kubelet SIGKILLs the pod mid-shutdown. A non-integer value would make `sleep` fail at runtime with only a FailedPreStopHook event. */}}
-          {{- $preStop := printf "%v" .Values.resourceResolver.preStopSleepSeconds }}
-          {{- if not (regexMatch "^[0-9]+$" $preStop) }}
-          {{- fail (printf "resourceResolver.preStopSleepSeconds must be a whole number of seconds, got %q" $preStop) }}
-          {{- end }}
-          {{- $grace := .Values.resourceResolver.terminationGracePeriodSeconds | default 30 | int }}
-          {{- if ge (add ($preStop | int) 10) $grace }}
-          {{- fail (printf "resourceResolver.preStopSleepSeconds (%s) + the app's 10s forced-exit timer must be less than terminationGracePeriodSeconds (%d). Raise resourceResolver.terminationGracePeriodSeconds or lower the sleep." $preStop $grace) }}
-          {{- end }}
-          # The app stops accepting connections the moment it gets SIGTERM, but
-          # endpoint removal takes a few seconds to reach kube-proxy/clients. Without
-          # this sleep, new /resolveCallAdmission requests can hit a closed port during
-          # a rollout, which fails call admission for that INVITE. Must stay well under
-          # terminationGracePeriodSeconds (sleep + the app's 10s forced-exit timer).
-          lifecycle:
-            preStop:
-              exec:
-                command: ["sleep", {{ .Values.resourceResolver.preStopSleepSeconds | quote }}]
-          {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.resourceResolver.port | default 4000 }}
@@ -285,29 +236,12 @@ spec:
             - name: VG_CLUSTER_SIGNING_KEY_PATH
               value: "/var/run/secrets/vg-cluster/{{ $.Values.vgCluster.signingKey.privateKeyFile }}"
             {{- end }}
-            {{- if $rewrapLive }}
-            ## The key the VG consumers decrypt credentials with, as a mounted file the resolver reads
-            ## live. Always set when the key pair is mounted, so the switch (CREDENTIAL_REWRAP_ENABLED in
-            ## cognigy-env-reloadable) is the only thing that turns re-encryption on: no restart.
-            - name: CREDENTIAL_ENCRYPTION_SECRET_PATH
-              value: "/var/run/secrets/vg-credential-key/{{ $rewrapSecretKey }}"
-            {{- end }}
-            {{- if $rewrapEnv }}
-            ## The key the VG consumers decrypt credentials with. With it the
-            ## resolver asks AI clusters for wrapped credentials and re-encrypts
-            ## them for feature-server, the SBCs and vg-audio-manager (CGY-41537).
-            - name: ENCRYPTION_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $rewrapSecretName | quote }}
-                  key: {{ $rewrapSecretKey | quote }}
-            {{- end }}
-            {{- include "vg.serviceAuth.receiverEnv" (dict "receiver" "resolver" "extraEnvVars" .Values.resourceResolver.extraEnvVars "root" $) | nindent 12 }}
             {{- if .Values.resourceResolver.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.resourceResolver.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
+          {{- if or $legacyLink $mountKey $reloadable }}
           volumeMounts:
-            {{- include "vg.serviceAuth.receiverVolumeMounts" (dict "receiver" "resolver") | nindent 12 }}
+          {{- end }}
           {{- if $legacyLink }}
             - name: vg-runtime-api-targets
               mountPath: /config/vg-runtime-api
@@ -323,16 +257,12 @@ spec:
               mountPath: /config/env
               readOnly: true
           {{- end }}
-          {{- if $rewrapLive }}
-            - name: vg-credential-key
-              mountPath: /var/run/secrets/vg-credential-key
-              readOnly: true
-          {{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env
+      {{- if or $legacyLink $mountKey $reloadable }}
       volumes:
-        {{- include "vg.serviceAuth.receiverVolumes" (dict "receiver" "resolver") | nindent 8 }}
+      {{- end }}
       {{- if $legacyLink }}
         - name: vg-runtime-api-targets
           configMap:
@@ -372,21 +302,6 @@ spec:
             ## resourceResolver.podSecurityContext, KEEP fsGroup -- without it a
             ## non-root process cannot read this file at any mode tighter than
             ## 0644, and the resolver fails at boot once runtimeApiTargets is set.
-            defaultMode: 256
-      {{- end }}
-      {{- if $rewrapLive }}
-        ## The Secret the VG consumers decrypt with, mounted whether or not re-encryption is on, so that
-        ## turning it on is a ConfigMap change only. Whole-directory mount, no subPath: the kubelet then
-        ## refreshes the file in place and the resolver follows a rotated key. `optional` keeps the pod
-        ## starting on a namespace without that Secret. The cost: this pod can read the key while the
-        ## feature is off (reloadable config only).
-        - name: vg-credential-key
-          secret:
-            secretName: {{ $rewrapSecretName | quote }}
-            optional: true
-            items:
-              - key: {{ $rewrapSecretKey | quote }}
-                path: {{ $rewrapSecretKey | quote }}
             defaultMode: 256
       {{- end }}
 {{- end }}

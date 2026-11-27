@@ -9,8 +9,7 @@ apiBan.networkPolicy.enabled (default false) otherwise.
 Ingress: none (every inbound connection is denied; the job serves nothing and has no probes).
 Egress
   - DNS: vg.networkPolicy.dnsEgress (CoreDNS in kube-system), or dnsNamespaceSelector when set.
-  - Redis, matched by pod labels in the release namespace (vg.networkPolicy.redisEgress, shared
-    with every other policy):
+  - Redis, matched by pod labels in the release namespace:
       * redisHa.enabled: the redis-ha pods (Bitnami labels app.kubernetes.io/name=redisHa, or
         redisHa.nameOverride, and app.kubernetes.io/instance=<release>) on the Redis port and the
         Sentinel port. vg-api-ban asks Sentinel (REDIS_SENTINEL_HOST/PORT from cognigy-env) for
@@ -58,7 +57,26 @@ spec:
     {{- else }}
 {{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
     {{- end }}
-{{ include "vg.networkPolicy.redisEgress" $ | indent 4 }}
+    {{- if .Values.redisHa.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .Values.redisHa.nameOverride | default "redisHa" | quote }}
+              app.kubernetes.io/instance: {{ $.Release.Name | quote }}
+      ports:
+        - protocol: TCP
+          port: {{ dig "replica" "containerPorts" "redis" 6379 .Values.redisHa | int }}
+        - protocol: TCP
+          port: {{ dig "sentinel" "containerPorts" "sentinel" 26379 .Values.redisHa | int }}
+    {{- else }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: {{ .Values.redis.port | int }}
+    {{- end }}
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

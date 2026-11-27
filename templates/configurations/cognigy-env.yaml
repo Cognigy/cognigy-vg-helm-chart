@@ -1,8 +1,3 @@
-{{- /* Always rendered, so this guard fires for every install (the connector template is skipped when vgConnector.enabled is false). */ -}}
-{{- /* hasKey, not truthiness: a leftover `false` next to global.enableAmazonConnect=true would silently switch the adapter ON. */ -}}
-{{- if hasKey (.Values.vgConnector | default dict) "enableAmazonConnect" }}
-{{- fail "vgConnector.enableAmazonConnect was removed; set global.enableAmazonConnect instead (it now enables the connector adapter, the api-server vendor_integrations route and the webapp UI)" }}
-{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

@@ -8,8 +8,7 @@ this chart's own Traefik (homer has its own ingress.yaml, CSA-110266 IP-allow-li
 Traefik is the real direct peer for traffic that arrives that way, see
 vg.networkPolicy.fromTraefik. No health probe exists on this workload today, so there is no
 unconditional health-port rule. Egress: the bundled postgresql pod
-(DB_HOST/additionalDbParameters.postgresql) and InfluxDB (influxdb_config in
-templates/homer/config-map.yaml, the source of homer's stats views).
+(DB_HOST/additionalDbParameters.postgresql), homer's only dependency.
 */ -}}
 {{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.homer.networkPolicy.enabled "root" $) }}
 {{- if and .Values.homer.enabled $npEnabled }}
@@ -44,14 +43,13 @@ spec:
       ports:
         - protocol: TCP
           port: {{ .Values.homer.port }}
-{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.homer.port "ingress" (and .Values.ingress.enabled .Values.ingress.homer.enabled .Values.homer.enabled) "root" $) | indent 4 }}
+{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.homer.port "root" $) | indent 4 }}
     {{- with .Values.homer.networkPolicy.extraIngress }}
 {{ toYaml . | indent 4 }}
     {{- end }}
   egress:
 {{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
 {{ include "vg.networkPolicy.postgresqlEgress" $ | indent 4 }}
-{{ include "vg.networkPolicy.influxdbEgress" $ | indent 4 }}
     {{- with .Values.homer.networkPolicy.egressTo }}
 {{ toYaml . | indent 4 }}
     {{- end }}

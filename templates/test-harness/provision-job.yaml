@@ -21,12 +21,6 @@ metadata:
 spec:
   ttlSecondsAfterFinished: 300
   template:
-    metadata:
-      labels:
-        # Selected by the kind FedRAMP overlay (ci/kind/values-kind-fedramp.yaml),
-        # which admits this pod to api-server through its default-deny NetworkPolicy.
-        app: vg-test-harness-provision
-        owner-team: echo
     spec:
       restartPolicy: OnFailure
       priorityClassName: {{ include "vg.priorityClassName" (dict "name" .Values.jobs.hookPriorityClassName "context" $) }}
@@ -174,14 +168,6 @@ spec:
             # /cognitiveservices/v1. Like mipTest, the redirection lives on the
             # credential, so this needs no infrastructure flag.
             - --tts-failover-same-vendor-test-enabled=true
-            {{- end }}
-            {{- if .Values.vgTestHarness.autoProvision.digestClientTest.enabled }}
-            # CGY-47508: registered SIP client for the digestauth suite. A
-            # second account owns sip_realm digest.vg-test-harness.test with no
-            # carrier, so sbc-inbound digest-challenges calls to it (the path
-            # that leaked connections in CGY-47507). Like mipTest, it only adds
-            # rows, so this needs no infrastructure flag.
-            - --digest-client-test-enabled=true
             {{- end }}
             {{/*
               Provisions the UNLABELLED plain "deepgram" credential a scenario

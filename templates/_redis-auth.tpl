@@ -119,14 +119,14 @@ not `default`. Renders nothing while auth is off. Takes the root context.
 Refuses a render that would hand the `apiban` ACL user to a client that predates REDIS_USERNAME
 support: it ignores the variable, logs in as `default` with the apiban password, and fails
 WRONGPASS on every hourly run. The tag is all the chart can see, so this catches the releases
-known to predate the support (vg.common.imageVersion) and leaves a non-semver tag alone - choosing
-an image that carries it stays the operator's responsibility. Takes the root context.
+known to predate the support and leaves a non-semver tag alone - choosing an image that carries
+it stays the operator's responsibility. Takes the root context.
 */}}
 {{- define "vg.redisAuth.validateApiBanImage" -}}
 {{- $min := .Values.redisHa.vgAuth.apiBanMinVersion -}}
-{{- $version := include "vg.common.imageVersion" .Values.apiBan.image -}}
-{{- if and $min $version (semverCompare (printf "<%s" $min) $version) -}}
-{{- fail (printf "Redis auth logs update-api-ban-list in as the ACL user `apiban`, which needs vg-api-ban %s or newer (REDIS_USERNAME support). apiBan.image is %s, which ignores it, logs in as `default` with the apiban password and fails WRONGPASS on every run. Set apiBan.image to a build that carries it or, for a build you know carries it, redisHa.vgAuth.apiBanMinVersion: \"\" (docs/013-redis-auth.md)." $min .Values.apiBan.image) -}}
+{{- $tag := last (splitList ":" .Values.apiBan.image) -}}
+{{- if and $min (regexMatch "^v?[0-9]+\\.[0-9]+\\.[0-9]+$" $tag) (semverCompare (printf "<%s" $min) $tag) -}}
+{{- fail (printf "Redis auth logs update-api-ban-list in as the ACL user `apiban`, which needs vg-api-ban %s or newer (REDIS_USERNAME support). apiBan.image is %s, which ignores it, logs in as `default` with the apiban password and fails WRONGPASS on every run. Set apiBan.image to a build that carries it (docs/013-redis-auth.md)." $min .Values.apiBan.image) -}}
 {{- end -}}
 {{- end -}}
 

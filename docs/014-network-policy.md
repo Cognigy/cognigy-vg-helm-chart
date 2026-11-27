@@ -45,17 +45,6 @@ to a later stage" below.
   see below). Requires `global.fedramp.networkPolicyKubernetesApiCidr` and fails the render
   if it's missing: the control-plane endpoint differs by cloud (AKS/EKS/STACKIT) and can't be
   discovered at render time, so there's no safe default.
-- `vg.networkPolicy.hostNetworkPeers` / `vg.networkPolicy.requiredHostNetworkPeers` and
-  `vg.networkPolicy.fromTraefik` — peers the chart cannot discover at render time either,
-  set once per environment in the top-level `networkPolicy` block of values.yaml:
-
-```yaml
-networkPolicy:
-  hostNetworkPeers: []       # ipBlock peers for the sbc-sip/sbc-rtp nodes; required by
-                             # sbc-inbound, sbc-outbound, sbc-call-router, vg-connector
-  ingressControllerPeers: [] # the ingress controller in front of the chart; required
-                             # when traefik.enabled is false
-```
 
 Every workload's `networkPolicy` values block carries the same shape now:
 
@@ -144,14 +133,13 @@ The same mechanical pattern, applied to the chart's remaining "lower-risk" workl
 ones stage 1 already flagged as such — see the old "Deferred to a later stage" entry this
 section replaces). `vg-console`, `vad-autotuner` and `test-harness` were explicitly excluded
 — not used in production deployments (confirmed with the reviewer who requested stage 2).
-`ci/render-tests/fedramp-network-policy-stage2.test.sh` covers all of it, except the `vg-ops-minter` row, which
-`ci/render-tests/ops-minter.test.sh` covers.
+`ci/render-tests/fedramp-network-policy-stage2.test.sh` covers all of it.
 
 | Workload | Ingress | Egress |
 |---|---|---|
-| `homer` | api-server; this chart's own Traefik (own `ingress.yaml`, CSA-110266) | the bundled `postgresql` pod; InfluxDB (`influxdb_config`) |
+| `homer` | api-server; this chart's own Traefik (own `ingress.yaml`, CSA-110266) | the bundled `postgresql` pod |
 | `jaeger` | feature-server/nightly (compact/UDP); otel-collector (otlp-grpc); api-server (UI/query API); Traefik | DNS only (all-in-one) |
-| `vg-connector` | health port (any source); Traefik — no in-cluster podSelector caller, its real traffic is external Genesys AudioHook/MS Teams via its own `ingressroute.yaml` | MySQL, Redis, sbc-sip/sbc-rtp via host-network peers (required — see below) |
+| `vg-connector` | health port (any source); Traefik — no in-cluster podSelector caller, its real traffic is external Genesys AudioHook/MS Teams via its own `ingressroute.yaml` | MySQL, Redis, sbc-sip/sbc-rtp via `egressToHostNetwork` (both `hostNetwork`, empty by default — see below) |
 | `media-processor` | feature-server/nightly (grpc); the metrics port, any source — it also serves `/health`, so it can't be restricted to the monitoring namespace without risking readiness | Redis, only when `mediaProcessor.cache.type` is `"redis"` |
 | `vg-audio-manager` | the http port, any source — same shared-port/readiness trade-off as media-processor's metrics port; the metrics port from the monitoring namespace | MySQL; `resourcesApiTargets` (auto-derived port, same mechanism as `runtimeApiTargets`) |
 | `test-call-manager` | health port; metrics (monitoring namespace); Traefik — no in-cluster caller, same shape as `vg-connector`. Its clean-up CronJob gets its own egress-only policy | Redis; api-server via `ingress.api.host` (`VG_ENDPOINT`, auto-derived port, see below). The CronJob: its *own* ingress hostname (`cleanUpEndpoint`/`ingress.testCallManager.host`) — not api-server |
@@ -159,44 +147,36 @@ section replaces). `vg-console`, `vad-autotuner` and `test-harness` were explici
 | `api-ban` | none (egress-only) | Redis (honours `redisHa.nameOverride` and container ports); `apiBan.endpoint` on TCP 443 only, to public addresses (private, link-local and `100.64.0.0/10` excluded, APBN-SC7-001) — stricter than `vg.networkPolicy.externalUrlEgress` |
 | `api-migrator` (2 Jobs: `api-migrator`, `billing-grants`) | none (egress-only) | MySQL; `api-migrator` also egresses to InfluxDB (`JAMBONES_TIME_SERIES_HOST`) |
 | `audit-cleanup` | none (egress-only) | api-server via `ingress.api.host` (auto-derived port) |
-| `vg-ops-minter` (while `opsMinter.enabled`, CGY-43874) | none: people reach it through `kubectl exec`, which goes through the kubelet, not the pod network | none, DNS included: `ops-mint` reads the mounted ops key and prints the token |
-| `telegraf` | sbc-inbound/outbound (`STATS_HOST`); sbc-rtp and sbc-sip via host-network peers | influxdb; heplify-server's stats port |
+| `telegraf` | sbc-inbound/outbound/sbc-rtp (`STATS_HOST`); sbc-sip via `ingressFromHostNetwork` | influxdb; heplify-server's stats port |
 | `influxdb-ai-retention` (hook Job, while `influxdb.aiRetention.enabled`) | none (egress-only) | InfluxDB (`influxdb.host`/`port`); an external InfluxDB needs `influxdb.aiRetention.networkPolicy.egressTo` |
 | `influxdb` | the app port, any source — same shared-port/readiness trade-off as media-processor; sbc-sip via `ingressFromHostNetwork` | DNS only (pure ingress target) |
-| `heplify-server` | the HEP-ingest port (udp) from sbc-rtp and sbc-sip via host-network peers; the stats port (tcp) from telegraf | the bundled `postgresql` pod |
+| `heplify-server` | the HEP-ingest port (udp) from sbc-rtp, plus sbc-sip via `ingressFromHostNetwork`; the stats port (tcp) from telegraf | the bundled `postgresql` pod |
 | `otel-collector` | feature-server/nightly (OTLP gRPC+HTTP) | this chart's own jaeger (`jaegerEndpoint`, a `host:port` string — pointing it elsewhere needs `egressTo`, same expectation as `mysql.host`) |
-| `sbc-inbound` | health port; metrics (monitoring namespace); the dtmf port from sbc-rtp and the drachtio/tcp port from sbc-sip, both via host-network peers (required) | feature-server (SIP/TLS), sbc-rtp via host-network peers (required), MySQL, Redis, InfluxDB, telegraf (when `stats.telegraf`), tracing (`tracing.baseUrl`, auto-derived port, when set), resource-resolver (when enabled), api-server in-cluster on `api.port` (`VG_API_BASE_URL`, the signed Dev Config read on `/svc/v1`, CGY-43873) |
+| `sbc-inbound` | health port; metrics (monitoring namespace); the dtmf port from sbc-rtp; the drachtio/tcp port from sbc-sip via `ingressFromHostNetwork` | feature-server (SIP/TLS), sbc-rtp, MySQL, Redis, InfluxDB, telegraf (when `stats.telegraf`), tracing (`tracing.baseUrl`, auto-derived port, when set), resource-resolver (when enabled), api-server via `ingress.api.host` (`VG_API_BASE_URL`, auto-derived port) |
 | `sbc-outbound` | same as sbc-inbound, minus the feature-server dependency | same as sbc-inbound, minus feature-server and api-server — nothing in this chart calls sbc-outbound on their behalf |
-| `api-server` | health port; metrics (monitoring namespace); **Traefik, plus sbc-inbound on `api.port`** (its signed `/svc/v1/dev-config` read, which the Ingress does not publish; CGY-43873). No other podSelector list of application callers (see below) | MySQL, Redis |
+| `api-server` | health port; metrics (monitoring namespace); **Traefik only — not a podSelector list of application callers** (see below) | MySQL, Redis |
 
 ### `api-server`'s ingress is "from Traefik", not a caller list
 
 Every other workload in this table admits ingress from its real *in-cluster* callers by
 podSelector. `api-server` is the one exception on purpose: almost every real caller
-(`webapp`, `test-call-manager`, `audit-cleanup`, `feature-server`/nightly) reaches it
-through its own public ingress hostname (`ingress.api.host`), which Traefik proxies to the
-Service. The one in-cluster application caller is `sbc-inbound`, on `api.port`, for its signed
-`/svc/v1/dev-config` read, which the Ingress does not publish (CGY-43873); it is admitted by
-podSelector. From `api-server`'s own pod's point of view, Traefik is the only
+(`sbc-inbound`, `webapp`, `test-call-manager`, `audit-cleanup`, `feature-server`/nightly)
+reaches it through its own public ingress hostname (`ingress.api.host`), which Traefik
+proxies to the Service. From `api-server`'s own pod's point of view, Traefik is the only
 direct network peer that traffic ever has — a podSelector naming the *application* services
 would be both wrong (they're not the actual source Kubernetes sees) and a false sense of
-coverage. `vg.networkPolicy.fromTraefik` (`templates/_network-policy.tpl`) captures this.
-When `traefik.enabled` is false the chart cannot know where the external controller runs
-(same reasoning as `vg.fedramp.refuseInsecureTraefikEntrypoints`'s external-Traefik deviation
-path), so the rule admits `networkPolicy.ingressControllerPeers` instead, and the render
-fails while that list is empty and the workload's own ingress/ingressroute renders —
-otherwise its public port would be denied silently. With no ingress rendered (e.g.
-`ingress.enabled: false`) there is no public path, so nothing is required.
-`feature-server`'s v2-api policy admits the same list on its HTTP port, without failing:
-it predates this list and has its own `ingressControllerNamespace`. `homer`, `jaeger`, `vg-connector`, `test-call-manager`, `webapp` and
-`vg-pagerduty-agent` also use this helper for the same
+coverage. `vg.networkPolicy.fromTraefik` (`templates/_network-policy.tpl`) captures this:
+it renders nothing when `traefik.enabled` is false (an external Traefik has no in-cluster
+pod this policy could select — same reasoning as
+`vg.fedramp.refuseInsecureTraefikEntrypoints`'s external-Traefik deviation path).
+`homer`, `jaeger`, `vg-connector` and `test-call-manager` also use this helper for the same
 reason: each has its own public `ingress.yaml`/`ingressroute.yaml`, and Traefik is the real
 peer for that path regardless of whether the workload also has in-cluster callers.
 
 ### Calls to a workload's own public ingress hostname (not just `api-server`)
 
 Several stage-2 workloads call api-server by its own public hostname rather than
-cluster-local Service DNS: `test-call-manager`
+cluster-local Service DNS: `sbc-inbound` (`VG_API_BASE_URL`), `test-call-manager`
 (`VG_ENDPOINT`), `audit-cleanup` (`API_BASE_URL`/`LOGIN_URL`/`CLEANUP_URL`). Whether that
 hairpins back into the cluster (reaching Traefik) or genuinely leaves and re-enters depends
 on the environment's DNS/LB setup, not anything this chart can determine at render time — the
@@ -207,40 +187,18 @@ established a precedent for. Each of these egress rules therefore uses the same
 destination address — the alternative (guessing a podSelector or requiring a mandatory
 `egressTo` from every environment on day one) would either not work or block real traffic.
 
-### sbc-sip and sbc-rtp as peers: host-network peers
+### sbc-sip as a caller, beyond `vg-resource-resolver`
 
-`sbc-sip` and `sbc-rtp` both run `hostNetwork: true` — `sbc-rtp` in its StatefulSet shape
-(`sbc.rtp.useStatefulSet: true`, the default) as well as its DaemonSet shape. Their traffic
-carries node addresses, so no `podSelector` matches it; only an `ipBlock` does. Stage 1 solved
-this for `vg-resource-resolver` (`ingressFromHostNetwork`, ported from main's #1200/CGY-44772).
-Stages 2 and 3 have the same need in `telegraf` (`STATS_HOST`), `influxdb` (direct write),
-`heplify-server` (HEP ingest, udp), `sbc-inbound`/`sbc-outbound` (the drachtio app-dispatch
-port, sbc-rtp's DTMF datagrams, and their own egress to sbc-rtp's NG control port),
-`sbc-call-router` (drachtio's INVITE request-handler POST, `templates/sbc-sip/drachtio-config-secret.yaml`)
-and `vg-connector` (egress to sbc-sip/sbc-rtp).
-
-Each of these has its own `ingressFromHostNetwork`/`egressToHostNetwork` list, and they also
-take the shared `networkPolicy.hostNetworkPeers` (top-level in values.yaml), so an
-environment normally sets its SIP/RTP node CIDR once there. Two exceptions: `influxdb` reads
-only its own list (its port is open to any source anyway), and `vg-resource-resolver` takes
-the shared list only while sbc-sip's runtime regbots, its one host-network caller, are on —
-the FedRAMP profile turns them off, and admitting the SBC nodes to that unauthenticated port
-without a caller would only widen it. `vg.networkPolicy.hostNetworkPeers` merges the two.
-`vg.networkPolicy.requiredHostNetworkPeers` does the same, but fails the render when the
-result is empty. It is used where an empty list would block every call: `sbc-inbound`,
-`sbc-outbound`, `sbc-call-router` and `vg-connector`. The rest (`telegraf`, `heplify-server`,
-`vg-resource-resolver`) only lose stats, HEP capture or runtime regbots without it, so they
-render without the rule instead. A failed render keeps a GitOps-managed release on its
-previous revision, whereas a policy that silently blocks calls only shows up once calls fail
-— and `templates/NOTES.txt` warnings are not shown by Flux at all.
-
-The render can only check that a peer is listed, not that it matches. Whether an `ipBlock`
-matches node-sourced traffic depends on the CNI: Cilium matches node addresses by CIDR only
-with `policy-cidr-match-mode=nodes`, and Calico with IPIP or VXLAN sources host traffic from
-the node's tunnel address, so its tunnel range has to be listed as well. A wrong or
-incomplete CIDR renders fine and still drops INVITEs (sbc-call-router), DTMF and rtpengine
-control traffic, with nothing logged by the workloads, so verify inbound and outbound test
-calls with DTMF right after the first rollout on a new cluster.
+Stage 1 only solved sbc-sip's `hostNetwork: true` ingress problem for `vg-resource-resolver`
+(`ingressFromHostNetwork`, ported from main's #1200/CGY-44772). Stage 2 found four more
+workloads sbc-sip calls the same way: `telegraf` (`STATS_HOST`), `influxdb` (direct write),
+`heplify-server` (HEP ingest, udp), and `sbc-inbound`/`sbc-outbound` (the drachtio app-dispatch
+port). Each gets its own `networkPolicy.ingressFromHostNetwork` field, same shape as
+`vg-resource-resolver`'s — a CIDR peer list, empty by default, so an environment still has to
+supply its node CIDR before these calls pass once the policy is enforced. `vg-connector`'s
+egress to sbc-sip/sbc-rtp has the same limitation on the egress side instead
+(`networkPolicy.egressToHostNetwork`), since it is the one workload in this batch that calls
+*out* to a `hostNetwork` peer rather than being called by one.
 
 ## Stage 3
 
@@ -255,8 +213,8 @@ confirmed with the reviewer as not used in production).
 |---|---|---|
 | `webapp` | This chart's own Traefik only (own `ingress.yaml`, CSA-110266) — no in-cluster caller, no probes of its own | api-server, tracing, `webapp.cognigyUrl` (all auto-derived ports) |
 | `vg-pagerduty-agent` | The app port, any source (shares it with kubelet's probes, no separate health port); Traefik (own `ingress.yaml`) | vg-console (in-cluster and via its own public hostname); its two helper Jobs are egress-only, the CronJob to vg-pagerduty-agent itself, the activate-remote Job to `centralConsoleUrl`/`centralAgentUrl` |
-| `sbc-call-router` | The health and metrics ports; the app port from sbc-sip via host-network peers (required) — drachtio POSTs every inbound INVITE to it | sbc-inbound, sbc-outbound, tracing |
-| `vg-traffic-sniffer` | The http port, any source (shares it with `/healthz`) — **KNOWN GAP**: its real caller ("scaled up on demand (vg-console / flux edit)," per its own values.yaml comment) is an out-of-band operational action, not a wired chart-level call | Degrades gracefully like api-server below: Kubernetes API access only, so without `global.fedramp.networkPolicyKubernetesApiCidr` it stays ingress-only |
+| `sbc-call-router` | The health and metrics ports only — **KNOWN GAP**: the app port's real caller could not be confirmed from the chart (see the values.yaml comment); add it to `extraIngress` before relying on this policy for production call routing | sbc-inbound, sbc-outbound, tracing |
+| `vg-traffic-sniffer` | The http port, any source (shares it with `/healthz`) — **KNOWN GAP**: same as sbc-call-router, its real caller ("scaled up on demand (vg-console / flux edit)," per its own values.yaml comment) is an out-of-band operational action, not a wired chart-level call | Degrades gracefully like api-server below: Kubernetes API access only, so without `global.fedramp.networkPolicyKubernetesApiCidr` it stays ingress-only |
 
 `vg-pagerduty-agent`'s Elasticsearch/PagerDuty/Anthropic/Grafana/Azure-DevOps egress
 (`ELASTICSEARCH_API_KEY_*`, `PAGERDUTY_API_KEY`, `ANTHROPIC_API_KEY`,
@@ -284,12 +242,17 @@ no-chart-known-CIDR class as `vg-console`'s `changelogEnrichment`, see below.
   pod network namespace entirely. Writing a policy *for sbc-sip/sbc-rtp themselves* would be
   either inert or a false sense of security, and still needs its own design (likely
   host-level firewalling instead of `NetworkPolicy`), not a bolt-on to this stage. Being
-  *called by*, or calling, sbc-sip/sbc-rtp is solved everywhere it happens through
-  host-network peers (see "sbc-sip and sbc-rtp as peers" above): an environment sets
-  `networkPolicy.hostNetworkPeers` once, and the call-path workloads fail the render until
-  it does. `templates/NOTES.txt` additionally warns for the `vg-resource-resolver` case
-  (`sbcSipSidecar.runtimeRegbots.enabled` true and no host-network peer), which does not
-  fail the render.
+  *called by* sbc-sip, though, is now solved everywhere it happens:
+  `vg-resource-resolver` (stage 1, CGY-44772 #1156/#1200), and `telegraf`, `influxdb`,
+  `heplify-server`, `sbc-inbound`, `sbc-outbound` (stage 2) all gained a
+  `networkPolicy.ingressFromHostNetwork` field (a CIDR peer list, merged into the relevant
+  port's rule) instead of trying to fold a host-network caller into a `podSelector` list;
+  `vg-connector` calls *out* to sbc-sip/sbc-rtp instead, so it has the same mechanism on its
+  egress side (`networkPolicy.egressToHostNetwork`). Every one of these is empty by default,
+  so an environment still has to supply its node CIDR before the relevant calls pass once the
+  policy is enforced; `templates/NOTES.txt` warns at render time for the
+  `vg-resource-resolver` case specifically (`sbcSipSidecar.runtimeRegbots.enabled` true and
+  `ingressFromHostNetwork` still empty), so that one doesn't surface only as a runtime 403.
 - **`vg-pagerduty-agent` and `vg-console`** (when `changelogEnrichment.enabled`) have real
   external SaaS/LLM-vendor egress (Anthropic, PagerDuty, Elasticsearch, Grafana, GitHub,
   Azure OpenAI, AWS Bedrock) — `vg-console` also has an always-on `ADO_FLUX_FLEET_*`

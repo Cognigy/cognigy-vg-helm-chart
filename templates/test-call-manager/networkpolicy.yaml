@@ -41,7 +41,7 @@ spec:
         - protocol: TCP
           port: {{ .Values.metrics.port }}
     {{- end }}
-{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.testCallManager.port "ingress" (and .Values.ingress.enabled .Values.testCallManager.enabled) "root" $) | indent 4 }}
+{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.testCallManager.port "root" $) | indent 4 }}
     {{- with .Values.testCallManager.networkPolicy.extraIngress }}
 {{ toYaml . | indent 4 }}
     {{- end }}

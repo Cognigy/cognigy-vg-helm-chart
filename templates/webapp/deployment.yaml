@@ -115,6 +115,8 @@ spec:
               value: {{ .Values.webapp.enableDeepgram | quote }}            
             - name: ENABLE_ON_PREMISES_DEEPGRAM
               value: {{ .Values.webapp.enableOnPremisesDeepgram | quote }}
+            - name: ENABLE_ON_PREMISES_NUANCE
+              value: {{ .Values.webapp.enableOnPremisesNuance | quote }}
             - name: ENABLE_ON_PREM_AZURE_SPEECH
               value: {{ .Values.webapp.enableOnPremisesAzureSpeech | quote }}
             - name: ENABLE_OPENAI

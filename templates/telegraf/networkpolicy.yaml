@@ -2,10 +2,9 @@
 Default-deny ingress+egress for telegraf (CSA-110265/CSA-110267, stage 2; see
 docs/014-network-policy.md). telegraf's StatefulSet renders unconditionally (only its
 Service is gated by vg.fedramp.statsEnabled), so this policy gates only on the
-profile/opt-in switch. Ingress: sbc-inbound/sbc-outbound (STATS_HOST) by podSelector, plus
-sbc-rtp and sbc-sip, both hostNetwork: true, from networkPolicy.hostNetworkPeers plus
-ingressFromHostNetwork (left empty, their stats are dropped but calls are unaffected, so the
-render does not fail). Egress: influxdb and heplify-server's stats port.
+profile/opt-in switch. Ingress: sbc-inbound/sbc-outbound/sbc-rtp (STATS_HOST), plus
+sbc-sip through ingressFromHostNetwork (hostNetwork, same limitation as
+vg-resource-resolver's sbc-sip regbots). Egress: influxdb and heplify-server's stats port.
 */ -}}
 {{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.telegraf.networkPolicy.enabled "root" $) }}
 {{- if $npEnabled }}
@@ -32,12 +31,15 @@ spec:
         - podSelector:
             matchLabels:
               app: sbc-outbound
+        - podSelector:
+            matchLabels:
+              app: sbc-rtp
       ports:
         - protocol: TCP
           port: {{ .Values.telegraf.port }}
-    {{- with include "vg.networkPolicy.hostNetworkPeers" (dict "peers" .Values.telegraf.networkPolicy.ingressFromHostNetwork "root" $) }}
+    {{- with .Values.telegraf.networkPolicy.ingressFromHostNetwork }}
     - from:
-{{ . | indent 8 }}
+{{ toYaml . | indent 8 }}
       ports:
         - protocol: TCP
           port: {{ $.Values.telegraf.port }}

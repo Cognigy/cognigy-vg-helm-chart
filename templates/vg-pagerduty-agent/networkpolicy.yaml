@@ -30,7 +30,7 @@ spec:
     - ports:
         - protocol: TCP
           port: {{ .Values.vgPagerdutyAgent.port | default 3000 }}
-{{ include "vg.networkPolicy.fromTraefik" (dict "port" (.Values.vgPagerdutyAgent.port | default 3000) "ingress" (and .Values.vgPagerdutyAgent.enabled .Values.ingress.enabled) "root" $) | indent 4 }}
+{{ include "vg.networkPolicy.fromTraefik" (dict "port" (.Values.vgPagerdutyAgent.port | default 3000) "root" $) | indent 4 }}
     {{- with .Values.vgPagerdutyAgent.networkPolicy.extraIngress }}
 {{ toYaml . | indent 4 }}
     {{- end }}

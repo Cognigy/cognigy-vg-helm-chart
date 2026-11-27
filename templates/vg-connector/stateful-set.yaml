@@ -143,21 +143,16 @@ spec:
             ## connector reads ENABLE_MICROSOFT_TEAMS to mount the Teams module.
             - name: ENABLE_MICROSOFT_TEAMS
               value: {{ .Values.global.enableMsTeams | quote }}
-            ## Amazon Connect master switch -- mirrors enableGenesysAudioHook /
-            ## enableMsTeams: one global flag flipped per environment, read by
-            ## the connector (adapter), api-server (vendor_integrations route)
-            ## and webapp (Audio Connectors UI). vg-feature-server is not gated
-            ## by it; it follows a SIP capability header.
+            ## Amazon Connect master switch -- intentionally vgConnector-scoped,
+            ## unlike ENABLE_GENESYS_AUDIOHOOK/ENABLE_MICROSOFT_TEAMS above
+            ## which fan a single global.* flag out to three services. Amazon
+            ## Connect involvement is limited to this connector service
+            ## (vg-feature-server's involvement is via a SIP capability
+            ## header, not this flag), and api-server/webapp have no Amazon
+            ## Connect awareness at all. See vgConnector.enableAmazonConnect
+            ## in values.yaml.
             - name: ENABLE_AMAZON_CONNECT
-              value: {{ .Values.global.enableAmazonConnect | quote }}
-            - name: AMAZON_CONNECT_AUDIO_LEAD_MS
-              value: {{ .Values.vgConnector.amazonConnect.audioLeadMs | quote }}
-            - name: AMAZON_CONNECT_SILENCE_FILL_ENABLED
-              value: {{ .Values.vgConnector.amazonConnect.silenceFill.enabled | quote }}
-            - name: AMAZON_CONNECT_SILENCE_FILL_FLOOR_MS
-              value: {{ .Values.vgConnector.amazonConnect.silenceFill.floorMs | quote }}
-            - name: AMAZON_CONNECT_SILENCE_FILL_MAX_MS
-              value: {{ .Values.vgConnector.amazonConnect.silenceFill.maxMs | quote }}
+              value: {{ .Values.vgConnector.enableAmazonConnect | quote }}
             - name: POD_NAME
               valueFrom:
                 fieldRef:

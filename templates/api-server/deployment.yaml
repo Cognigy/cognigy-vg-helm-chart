@@ -332,20 +332,6 @@ spec:
             - name: AUDIT_LOG_TTL_DAYS
               value: {{ . | quote }}
             {{- end }}
-            {{- with include "vg.fedramp.passwordLogin" $ }}
-            - name: VG_PASSWORD_LOGIN_ENABLED
-              value: {{ . | quote }}
-            {{- end }}
-            {{- with include "vg.fedramp.adminApiKeys" $ }}
-            - name: VG_ADMIN_API_KEYS_ENABLED
-              value: {{ . | quote }}
-            {{- end }}
-            {{- with include "vg.fedramp.bootstrapPrivilegedUsers" $ }}
-            - name: VG_BOOTSTRAP_PRIVILEGED_USERS
-              value: {{ . | quote }}
-            {{- end }}
-            {{- include "vg.serviceAuth.callerEnv" (dict "name" "internal" "extraEnvVars" .Values.api.extraEnvVars "root" $) | nindent 12 }}
-            {{- include "vg.serviceAuth.receiverEnv" (dict "receiver" "apiServerSvc" "extraEnvVars" .Values.api.extraEnvVars "root" $) | nindent 12 }}
             {{- if include "vg.fedramp.tlsKeylogLocked" (dict "extraEnvVars" .Values.api.extraEnvVars "root" $) }}
             - name: VG_TLS_KEYLOG_FEDRAMP_LOCKED
               value: "true"
@@ -401,8 +387,6 @@ spec:
               mountPath: /var/run/secrets/vg-cluster
               readOnly: true
             {{- end }}
-            {{- include "vg.serviceAuth.callerVolumeMount" . | nindent 12 }}
-            {{- include "vg.serviceAuth.receiverVolumeMounts" (dict "receiver" "apiServerSvc") | nindent 12 }}
           envFrom:
             - configMapRef:
                 name: cognigy-env
@@ -435,5 +419,3 @@ spec:
             ## at /.well-known/jwks.json.
             defaultMode: 420
         {{- end }}
-        {{- include "vg.serviceAuth.callerVolume" (dict "name" "internal" "root" $) | nindent 8 }}
-        {{- include "vg.serviceAuth.receiverVolumes" (dict "receiver" "apiServerSvc") | nindent 8 }}

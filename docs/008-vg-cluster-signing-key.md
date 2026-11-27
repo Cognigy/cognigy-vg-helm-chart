@@ -35,7 +35,7 @@ One Secret holds both halves. Each pod mounts only the half it needs — the
 
 | Key | Mounted into | Mode | Purpose |
 |-----|--------------|------|---------|
-| `signing-key.pem` | `vg-resource-resolver`, `vg-audio-manager`, `sbc-sip` sidecar | `0400` | Private key. Signs the per-call JWT (and the recording-report JWT). On `vg-resource-resolver` with `resourceResolver.credentialRewrap.enabled`, it also opens the credentials AI clusters wrap for this cluster. |
+| `signing-key.pem` | `vg-resource-resolver`, `vg-audio-manager`, `sbc-sip` sidecar | `0400` | Private key. Signs the per-call JWT (and the recording-report JWT). |
 | `signing-key.pub.pem` | `api-server` | `0644` | Public key. Published as JWKS for AI clusters to verify against. |
 
 Both filenames come from `vgCluster.signingKey.privateKeyFile` /
@@ -174,15 +174,6 @@ Secret changes. `vg-resource-resolver` carries the same annotation **only when
 annotating it merely because the Secret exists would roll the resolver fleet-wide
 on the upgrade that first creates the keypair, for a feature nobody has enabled.
 
-With `resourceResolver.credentialRewrap.enabled` (CGY-41537) the resolver also
-holds the VG consumers' symmetric key as `ENCRYPTION_SECRET` (default
-`vgAudioManager.encryptionSecret`, i.e. `voicegateway-jwt/jwt`). It uses the
-private half to open credentials an AI cluster wrapped for this cluster, and the
-symmetric key to encrypt them again for feature-server, the SBCs and
-vg-audio-manager. It carries a `checksum/credential-encryption-secret`
-annotation, so a key change rolls it (needs `lookup`; under `helm template`
-restart it by hand). Only rendered together with the key mount.
-
 ### vg-audio-manager recording reports (CGY-43293)
 
 `vg-audio-manager` is the second holder of the private half. After uploading an
@@ -265,11 +256,9 @@ With the flag but no list, regbots register and results are only logged. The
 register password is decrypted with `voicegateway-jwt` (`JWT_SECRET`), which must
 equal the AI cluster's `vg-encryption-secret`; a mismatch only shows at runtime.
 
-Unlike `vg-audio-manager`, the chart adds no `fsGroup` for this key: the sidecar is
+Unlike `vg-audio-manager`, the chart adds **no** `fsGroup`: the sidecar is
 expected to run as root, which reads a `0400` file whatever its group. If you set
-`sbc.sip.podSecurityContext.runAsUser` to a non-root user, set `fsGroup` as well. (The
-chart does add `fsGroup: 1000` to the sbc-sip pod while drachtio reads Redis over TLS,
-docs/011-redis-tls.md; the key then becomes root:1000, still without group read.)
+`sbc.sip.podSecurityContext.runAsUser` to a non-root user, set `fsGroup` as well.
 Remove `REGBOT_RUNTIME_TARGETS_ENABLED`, `RESOURCE_RESOLVER_URL` and
 `VG_CLUSTER_NAME` from `sbcSipSidecar.extraEnvVars` before upgrading, or each
 appears twice. To opt out, set `sbcSipSidecar.runtimeRegbots.enabled: false`.

@@ -13,10 +13,15 @@ Backend is the headless feature-server Service: Traefik routes to the endpoint
 not behind this Service's selector unless they share its labels; /v2 traffic
 goes to whatever the stable Service selects.
 */ -}}
-{{- /* Skipped, with a NOTES.txt warning, when there is no host or the class is not traefik: publishing /v2 without the Middlewares is not supported, and failing the render would block upgrades of linked clusters now that the route is on by default. */ -}}
-{{- if and .Values.ingress.enabled .Values.featureServer.v2Api.ingress.enabled (include "vg.featureServer.v2Api.active" .) (not (include "vg.featureServer.v2Api.ingressSkipReason" .)) }}
+{{- if and .Values.ingress.enabled .Values.featureServer.v2Api.ingress.enabled (include "vg.featureServer.v2Api.active" .) }}
 {{- $cfg := .Values.featureServer.v2Api.ingress }}
 {{- $host := $cfg.host | default .Values.ingress.api.host }}
+{{- if not $host }}
+{{- fail "featureServer.v2Api.ingress.enabled is set but there is no host: set featureServer.v2Api.ingress.host, or ingress.api.host to share the API host." }}
+{{- end }}
+{{- if ne .Values.ingress.ingressClassName "traefik" }}
+{{- fail "featureServer.v2Api.ingress requires ingress.ingressClassName=traefik: its body-size and rate limits are Traefik Middlewares, and publishing /v2 without them is not supported." }}
+{{- end }}
 {{/*
 /v2 shares the api host (by default) but is its own Ingress, so api-server's own
 router.middlewares annotation never applies to it — CSA-110266's review caught this as a 9th

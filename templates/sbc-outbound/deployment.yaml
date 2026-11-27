@@ -23,9 +23,6 @@ spec:
         app: sbc-outbound
       annotations:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
-        {{- if include "vg.drachtioControlTls.mounted" $ }}
-        {{- include "vg.drachtioControlTls.checksum" (dict "root" $ "cert" "sbc-outbound") | nindent 8 }}
-        {{- end }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.sbcOutbound.terminationGracePeriodSeconds }}
@@ -46,8 +43,8 @@ spec:
       {{- if .Values.sbcOutbound.priorityClassName }}
       priorityClassName: {{ .Values.sbcOutbound.priorityClassName }}
       {{- end }}
-      {{- with include "vg.drachtioControlTls.podSecurityContext" (dict "root" $ "value" .Values.sbcOutbound.podSecurityContext) }}
-      securityContext: {{- . | nindent 8 }}
+      {{- if .Values.sbcOutbound.podSecurityContext }}
+      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcOutbound.podSecurityContext "context" $) | nindent 8 }}
       {{- end }}
       {{- if or (.Values.sbcOutbound.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
       tolerations: 
@@ -219,14 +216,6 @@ spec:
             - name: RTPENGINE_DTMF_SOURCE_VALIDATION
               value: {{ . | quote }}
             {{- end }}
-            {{- include "vg.serviceAuth.callerEnv" (dict "name" "sbc-outbound" "extraEnvVars" .Values.sbcOutbound.extraEnvVars "root" $) | nindent 12 }}
-            {{- with include "vg.fedramp.siprecRequireTls" (dict "override" .Values.sbcOutbound.siprecRequireTls "root" $) }}
-            - name: VG_SIPREC_REQUIRE_TLS
-              value: {{ . | quote }}
-            {{- end }}
-            {{- if include "vg.drachtioControlTls.enabled" $ }}
-            {{- include "vg.drachtioControlTls.serverEnv" $ | nindent 12 }}
-            {{- end }}
             {{- if .Values.sbcOutbound.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcOutbound.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
@@ -234,10 +223,6 @@ spec:
             - name: cognigy-env-reloadable
               mountPath: /config/env
               readOnly: true
-            {{- include "vg.serviceAuth.callerVolumeMount" . | nindent 12 }}
-            {{- if include "vg.drachtioControlTls.mounted" $ }}
-            {{- include "vg.drachtioControlTls.volumeMount" $ | nindent 12 }}
-            {{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env
@@ -248,7 +233,3 @@ spec:
             items:
               - key: cognigy.yaml
                 path: cognigy.yaml
-        {{- include "vg.serviceAuth.callerVolume" (dict "name" "sbc-outbound" "root" $) | nindent 8 }}
-        {{- if include "vg.drachtioControlTls.mounted" $ }}
-        {{- include "vg.drachtioControlTls.volume" (dict "root" $ "cert" "sbc-outbound") | nindent 8 }}
-        {{- end }}

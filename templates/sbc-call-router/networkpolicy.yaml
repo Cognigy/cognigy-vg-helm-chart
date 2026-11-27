@@ -1,10 +1,8 @@
 {{- /*
 Default-deny ingress+egress for sbc-call-router (CSA-110265/CSA-110267, stage 3; see
-docs/014-network-policy.md). Ingress: the health port (any source, kubelet probes), the
-metrics port (monitoring namespace), and the app port from sbc-sip, whose drachtio POSTs
-every inbound INVITE to it (the request-handler in templates/sbc-sip/drachtio-config-secret.yaml).
-sbc-sip runs hostNetwork: true, so it is admitted from networkPolicy.hostNetworkPeers plus
-ingressFromHostNetwork, and the render fails while those are empty. Egress:
+docs/014-network-policy.md). Ingress: the health port (any source, kubelet probes) and the
+metrics port (monitoring namespace) only — the app port's real caller could not be
+confirmed from the chart alone; see the KNOWN GAP comment in values.yaml. Egress:
 sbc-inbound, sbc-outbound (K8S_SBC_INBOUND_SERVICE_NAME / K8S_SBC_OUTBOUND_SERVICE_NAME)
 and tracing (tracing.baseUrl, auto-derived port, when set).
 */ -}}
@@ -42,11 +40,6 @@ spec:
         - protocol: TCP
           port: {{ .Values.metrics.port }}
     {{- end }}
-    - from:
-{{ include "vg.networkPolicy.requiredHostNetworkPeers" (dict "peers" .Values.sbcCallRouter.networkPolicy.ingressFromHostNetwork "field" "sbcCallRouter.networkPolicy.ingressFromHostNetwork" "root" $) | indent 8 }}
-      ports:
-        - protocol: TCP
-          port: {{ .Values.sbcCallRouter.port }}
     {{- with .Values.sbcCallRouter.networkPolicy.extraIngress }}
 {{ toYaml . | indent 4 }}
     {{- end }}
