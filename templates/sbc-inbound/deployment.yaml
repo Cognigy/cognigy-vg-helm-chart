@@ -23,6 +23,9 @@ spec:
         app: sbc-inbound
       annotations:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
+        {{- if include "vg.drachtioControlTls.mounted" $ }}
+        {{- include "vg.drachtioControlTls.checksum" (dict "root" $ "cert" "sbc-inbound") | nindent 8 }}
+        {{- end }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
       {{- if .Values.sbcInbound.terminationGracePeriodSeconds }}
@@ -43,8 +46,8 @@ spec:
       {{- if .Values.sbcInbound.priorityClassName }}
       priorityClassName: {{ .Values.sbcInbound.priorityClassName }}
       {{- end }}
-      {{- if .Values.sbcInbound.podSecurityContext }}
-      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcInbound.podSecurityContext "context" $) | nindent 8 }}
+      {{- with include "vg.drachtioControlTls.podSecurityContext" (dict "root" $ "value" .Values.sbcInbound.podSecurityContext) }}
+      securityContext: {{- . | nindent 8 }}
       {{- end }}
       {{- if or (.Values.sbcInbound.tolerations) (and ($.Values.hpa.enabled) ($.Values.hpa.useHpaTolerations))}}
       tolerations: 
@@ -216,8 +219,10 @@ spec:
             {{- end }}
             - name: PRIVATE_VOIP_NETWORK_CIDR
               value: {{ .Values.global.privateVoipNetworkCidr | quote }}
+            {{- /* Dev Config: signed GET /svc/v1/dev-config, in-cluster (/svc/v1 is not for the Ingress). Admin credentials only for the login fallback on a skip-release upgrade (CGY-43873). */}}
             - name: VG_API_BASE_URL
-              value: {{ .Values.api.protocol }}://{{ .Values.ingress.api.host }}/v1
+              value: "http://api-server:{{ .Values.api.port }}"
+            {{- if include "vg.serviceAuth.sbcInboundLoginFallback" $ }}
             - name: VG_API_ADMIN_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -228,6 +233,7 @@ spec:
                 secretKeyRef:
                   name: vg-api-admin-creds
                   key: password
+            {{- end }}
             - name: VG_REDIS_BAN_THRESHOLD
               value: {{ .Values.tmpban.invite.banThreshold | quote }}
             - name: VG_REDIS_TRACKING_WINDOW_MINUTES
@@ -242,6 +248,23 @@ spec:
             - name: RTPENGINE_DTMF_SOURCE_VALIDATION
               value: {{ . | quote }}
             {{- end }}
+            {{- include "vg.fedramp.refuseEnvOverride" (dict "extraEnvVars" .Values.sbcInbound.extraEnvVars "names" (list "INTERNAL_DTLS_ENABLED") "instead" "global.fedramp.internalDtls" "root" $) }}
+            {{- if include "vg.fedramp.internalDtls" $ }}
+            - name: INTERNAL_DTLS_ENABLED
+              value: "true"
+            {{- end }}
+            {{- include "vg.serviceAuth.callerEnv" (dict "name" "sbc-inbound" "extraEnvVars" .Values.sbcInbound.extraEnvVars "root" $) | nindent 12 }}
+            {{- with include "vg.fedramp.registrationHookBasicAuthHttpsOnly" (dict "override" .Values.sbcInbound.registrationHookBasicAuthHttpsOnly "service" "sbcInbound" "root" $) }}
+            - name: FEATURE_REGISTRATION_HOOK_BASIC_AUTH_HTTPS_ONLY_ENABLED
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with include "vg.fedramp.siprecRequireTls" (dict "override" .Values.sbcInbound.siprecRequireTls "root" $) }}
+            - name: VG_SIPREC_REQUIRE_TLS
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if include "vg.drachtioControlTls.enabled" $ }}
+            {{- include "vg.drachtioControlTls.serverEnv" $ | nindent 12 }}
+            {{- end }}
             {{- if .Values.sbcInbound.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcInbound.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
@@ -249,6 +272,10 @@ spec:
             - name: cognigy-env-reloadable
               mountPath: /config/env
               readOnly: true
+            {{- include "vg.serviceAuth.callerVolumeMount" . | nindent 12 }}
+            {{- if include "vg.drachtioControlTls.mounted" $ }}
+            {{- include "vg.drachtioControlTls.volumeMount" $ | nindent 12 }}
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env
@@ -259,3 +286,7 @@ spec:
             items:
               - key: cognigy.yaml
                 path: cognigy.yaml
+        {{- include "vg.serviceAuth.callerVolume" (dict "name" "sbc-inbound" "root" $) | nindent 8 }}
+        {{- if include "vg.drachtioControlTls.mounted" $ }}
+        {{- include "vg.drachtioControlTls.volume" (dict "root" $ "cert" "sbc-inbound") | nindent 8 }}
+        {{- end }}

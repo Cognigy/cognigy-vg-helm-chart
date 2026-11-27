@@ -1,0 +1,26 @@
+{{- /*
+Default-deny ingress and egress for the ops minter (CGY-43874; docs/014-network-policy.md). The pod
+holds the ops private key and needs no network: `ops-mint` reads the mounted key and prints the token
+to the exec session, which reaches the pod through the kubelet, not the pod network. So both lists are
+empty, DNS included. On under the FedRAMP profile, or with opsMinter.networkPolicy.enabled.
+*/ -}}
+{{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.opsMinter.networkPolicy.enabled "root" $) }}
+{{- if and .Values.opsMinter.enabled $npEnabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vg-ops-minter
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: vg-ops-minter
+    owner-team: echo
+spec:
+  podSelector:
+    matchLabels:
+      app: vg-ops-minter
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []
+{{- end }}

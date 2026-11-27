@@ -51,7 +51,7 @@ spec:
       ports:
         - protocol: TCP
           port: {{ .Values.jaeger.ports.tcp }}
-{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.jaeger.ports.tcp "root" $) | indent 4 }}
+{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.jaeger.ports.tcp "ingress" (and .Values.ingress.enabled .Values.ingress.jaeger.enabled) "root" $) | indent 4 }}
     {{- with .Values.jaeger.networkPolicy.extraIngress }}
 {{ toYaml . | indent 4 }}
     {{- end }}

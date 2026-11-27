@@ -2,12 +2,11 @@
 Default-deny ingress+egress for sbc-inbound (CSA-110265/CSA-110267, stage 2; see
 docs/014-network-policy.md). Ingress: the health port (any source, kubelet probes), the
 metrics port (monitoring namespace), the dtmf port (udp) from sbc-rtp (the DTMF datagram
-source vg.fedramp.dtmfSourceValidation validates against) — both by podSelector (the
-recommended sbc.rtp.useStatefulSet: true shape) and through ingressFromHostNetwork
-(sbc.rtp.useStatefulSet: false runs sbc-rtp as a hostNetwork DaemonSet instead, same
-limitation as sbc-sip below) — and the drachtio/tcp port from sbc-sip, which always runs
-hostNetwork: true, admitted through ingressFromHostNetwork instead of a podSelector, same
-limitation as vg-resource-resolver's sbc-sip regbots.
+source vg.fedramp.dtmfSourceValidation validates against) and the drachtio/tcp port from
+sbc-sip. Both run hostNetwork: true (sbc-rtp in its StatefulSet as well as its DaemonSet
+shape), so neither is reachable by podSelector: both are admitted from
+networkPolicy.hostNetworkPeers plus ingressFromHostNetwork, and the render fails while those
+are empty (vg.networkPolicy.requiredHostNetworkPeers).
 
 Egress: feature-server AND feature-server-nightly on port 5060 (hardcoded in both
 templates/feature-server/workload.yaml and workload-nightly.yaml's drachtio --contact
@@ -16,12 +15,11 @@ it, so this reads the literal port instead of a value an environment could chang
 effect; see the comment below), udp always and tcp additionally when
 sbcInbound.featureServerSignalingTransportTcp is set (K8S_FEATURE_SERVER_TRANSPORT=tcp) —
 NOT freeswitch.ports.sip/tls, which are a different, unrelated SIP listener entirely.
-sbc-rtp's NG control port (sbc.rtp.port) is UDP, not TCP — by podSelector for the
-recommended StatefulSet shape, and through egressToHostNetwork for the DaemonSet/hostNetwork
-one. MySQL, Redis, InfluxDB, telegraf (when stats.telegraf), tracing (tracing.baseUrl, when
-set), resource-resolver (when enabled), and api-server via its own public ingress hostname
-(VG_API_BASE_URL) — no chart-known in-cluster CIDR for that, same treatment as
-vg-resource-resolver's runtimeApiTargets.
+sbc-rtp's NG control port (sbc.rtp.port) is UDP, not TCP — to networkPolicy.hostNetworkPeers
+plus egressToHostNetwork, required for the same reason as on ingress. MySQL, Redis, InfluxDB, telegraf (when stats.telegraf), tracing (tracing.baseUrl, when
+set), resource-resolver (when enabled), and api-server in-cluster on api.port: VG_API_BASE_URL is
+http://api-server:<api.port> for the signed Dev Config read on /svc/v1, which is not published
+through the Ingress (CGY-43873, ADR-001 §2.2). api-server's own policy admits that peer.
 */ -}}
 {{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.sbcInbound.networkPolicy.enabled "root" $) }}
 {{- if $npEnabled }}
@@ -58,21 +56,12 @@ spec:
           port: {{ .Values.metrics.port }}
     {{- end }}
     - from:
-        - podSelector:
-            matchLabels:
-              app: sbc-rtp
-      ports:
-        - protocol: UDP
-          port: {{ .Values.sbcInbound.ports.dtmf }}
-    {{- with .Values.sbcInbound.networkPolicy.ingressFromHostNetwork }}
-    - from:
-{{ toYaml . | indent 8 }}
+{{ include "vg.networkPolicy.requiredHostNetworkPeers" (dict "peers" .Values.sbcInbound.networkPolicy.ingressFromHostNetwork "field" "sbcInbound.networkPolicy.ingressFromHostNetwork" "root" $) | indent 8 }}
       ports:
         - protocol: TCP
-          port: {{ $.Values.sbcInbound.ports.tcp }}
+          port: {{ .Values.sbcInbound.ports.tcp }}
         - protocol: UDP
-          port: {{ $.Values.sbcInbound.ports.dtmf }}
-    {{- end }}
+          port: {{ .Values.sbcInbound.ports.dtmf }}
     {{- with .Values.sbcInbound.networkPolicy.extraIngress }}
 {{ toYaml . | indent 4 }}
     {{- end }}
@@ -99,19 +88,10 @@ spec:
           port: 5060
         {{- end }}
     - to:
-        - podSelector:
-            matchLabels:
-              app: sbc-rtp
+{{ include "vg.networkPolicy.requiredHostNetworkPeers" (dict "peers" .Values.sbcInbound.networkPolicy.egressToHostNetwork "field" "sbcInbound.networkPolicy.egressToHostNetwork" "root" $) | indent 8 }}
       ports:
         - protocol: UDP
           port: {{ .Values.sbc.rtp.port }}
-    {{- with .Values.sbcInbound.networkPolicy.egressToHostNetwork }}
-    - to:
-{{ toYaml . | indent 8 }}
-      ports:
-        - protocol: UDP
-          port: {{ $.Values.sbc.rtp.port }}
-    {{- end }}
     {{- if .Values.stats.telegraf }}
     - to:
         - podSelector:
@@ -130,7 +110,14 @@ spec:
         - protocol: TCP
           port: {{ .Values.resourceResolver.port | default 4000 }}
     {{- end }}
-{{ include "vg.networkPolicy.externalUrlEgress" (dict "urls" (list .Values.tracing.baseUrl (printf "%s://%s" .Values.api.protocol .Values.ingress.api.host)) "root" $) | indent 4 }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: api-server
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.port }}
+{{ include "vg.networkPolicy.externalUrlEgress" (dict "urls" (list .Values.tracing.baseUrl) "root" $) | indent 4 }}
     {{- with .Values.sbcInbound.networkPolicy.egressTo }}
 {{ toYaml . | indent 4 }}
     {{- end }}

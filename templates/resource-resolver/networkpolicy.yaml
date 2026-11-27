@@ -22,7 +22,8 @@ scrape off: the health-port rule always renders (see above), so there's no `ingr
 special-case — same as main's original CSA-109614 implementation. ingressFromHostNetwork covers
 callers that run with hostNetwork (the sbc-sip sidecar's runtime regbots, CGY-44772): a pod
 selector never matches them, since their traffic arrives from the node address, so they are
-listed by CIDR instead and merged into the same rule as ingressFrom.
+listed by CIDR instead (together with the shared networkPolicy.hostNetworkPeers, but only
+while the regbots are enabled) and merged into the same rule as ingressFrom.
 */ -}}
 {{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.resourceResolver.networkPolicy.enabled "root" $) }}
 {{- if and .Values.resourceResolver.enabled $npEnabled }}
@@ -57,7 +58,14 @@ spec:
     - Ingress
     - Egress
   ingress:
-    {{- with concat (.Values.resourceResolver.networkPolicy.ingressFrom | default list) (.Values.resourceResolver.networkPolicy.ingressFromHostNetwork | default list) }}
+    {{- /* The shared list only while its one host-network caller (the runtime regbots) runs:
+    the FedRAMP profile turns them off, and admitting every host-network process on the SBC
+    nodes to this unauthenticated port without a caller would only widen it. */}}
+    {{- $hostPeers := .Values.resourceResolver.networkPolicy.ingressFromHostNetwork | default list }}
+    {{- if include "vg.sbcSip.runtimeRegbots.enabled" $ }}
+    {{- $hostPeers = include "vg.networkPolicy.hostNetworkPeers" (dict "peers" .Values.resourceResolver.networkPolicy.ingressFromHostNetwork "root" $) | fromYamlArray }}
+    {{- end }}
+    {{- with concat (.Values.resourceResolver.networkPolicy.ingressFrom | default list) $hostPeers }}
     - from:
 {{ toYaml . | indent 8 }}
       ports:

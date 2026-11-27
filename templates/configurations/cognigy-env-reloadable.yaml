@@ -4,8 +4,15 @@
 {{- $_ := set $config "COGNIGY_DISPLAY_VERSION" (.Values.webapp.displayVersionOverride | default (regexFind "^[0-9]+\\.[0-9]+\\.[0-9]+" .Chart.AppVersion)) }}
 {{- $_ := set $config "K8S_FEATURE_SERVER_CANARY_ENABLED" (.Values.featureServer.canary.enabled | toString) }}
 {{- $_ := set $config "K8S_FEATURE_SERVER_CANARY_PERCENTAGE" (.Values.featureServer.canary.trafficPercentageToNightly | toString) }}
+{{- /* JSON-encoded since reloadable-config always returns a plain string; toPrettyJson keeps it hand-editable as a "|" block in the rendered ConfigMap. */}}
+{{- if .Values.featureServer.allowedExtraSynthesizerFields }}
+{{- $_ := set $config "ALLOWED_EXTRA_SYNTHESIZER_FIELDS" (toPrettyJson .Values.featureServer.allowedExtraSynthesizerFields) }}
+{{- end }}
 {{- /* C26 link (CGY-48237): resource-resolver, vg-events-api and vg-audio-manager read it live from here instead of pod env. */}}
 {{- if .Values.global.reloadableConfig.enabled }}
+{{- /* CGY-41537: the re-encryption switch of vg-resource-resolver, read live. Only true when the
+       cluster key pair exists (nothing to open wrapped credentials with otherwise). */}}
+{{- $_ := set $config "CREDENTIAL_REWRAP_ENABLED" (and (.Values.resourceResolver.credentialRewrap.enabled | default false) (ne (include "vg.clusterSigningKey.secretName" .) "") | toString) }}
 {{- range $k, $v := (include "vg.c26Link.reloadable" . | fromYaml) }}
 {{- $_ := set $config $k $v }}
 {{- end }}

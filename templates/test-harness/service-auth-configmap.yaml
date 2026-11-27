@@ -1,0 +1,32 @@
+{{- $secret := ((.Values.vgTestHarness).serviceAuth).signingKeySecret }}
+{{- if and .Values.vgTestHarness.enabled $secret }}
+{{- /*
+  Test-only (CGY-43687, epic CGY-40538). Tells the vg-test-harness runner which
+  private key to sign its service-auth test requests with: the Secret named by
+  vgTestHarness.serviceAuth.signingKeySecret and the file of its ACTIVE slot.
+
+  The slot comes from serviceAuth.keys.<name>.active (C1/K1; default a), where
+  <name> is the Secret name without the vg-service-key- prefix. Rendering it here
+  keeps the runner on the key the chart actually signs with during a rotation,
+  instead of a key-a.pem the runner would have to assume.
+
+  Only the NAMES are rendered; the key stays in its Secret. The runner reads it
+  with its own kubectl credentials (kind: the cluster admin).
+*/}}
+{{- $keyName := trimPrefix "vg-service-key-" $secret }}
+{{- if or (not (hasPrefix "vg-service-key-" $secret)) (not (has $keyName (include "vg.serviceAuth.keyNames" . | fromYamlArray))) }}
+{{- fail (printf "vgTestHarness.serviceAuth.signingKeySecret must name a key Secret the chart creates (vg-service-key-<%s>), got %s" (include "vg.serviceAuth.keyNames" . | fromYamlArray | join "|") $secret) }}
+{{- end }}
+{{- $active := (include "vg.serviceAuth.keyConfig" (dict "name" $keyName "root" $) | fromYaml).active }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vg-test-harness-service-auth
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: vg-gate-runner
+    owner-team: echo
+data:
+  signingKeySecret: {{ $secret | quote }}
+  signingKeyFile: {{ printf "key-%s.pem" $active | quote }}
+{{- end }}

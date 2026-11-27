@@ -1,0 +1,53 @@
+{{- /*
+Only opsMinter.execGroup may exec into the ops minter, and this Role reaches that one pod only.
+`get` on pods/exec: API servers before 1.31 authorize a WebSocket exec (kubectl 1.30+) as get.
+`get` on the pod: kubectl exec reads the pod first. The minter's own ServiceAccount has no token
+and no permissions: it never calls the Kubernetes API.
+*/ -}}
+{{- if .Values.opsMinter.enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vg-ops-minter
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-ops-minter
+    owner-team: echo
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vg-ops-minter-exec
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-ops-minter
+    owner-team: echo
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    resourceNames: ["vg-ops-minter-0"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    resourceNames: ["vg-ops-minter-0"]
+    verbs: ["create", "get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vg-ops-minter-exec
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-ops-minter
+    owner-team: echo
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: {{ include "vg.opsMinter.execGroup" . | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vg-ops-minter-exec
+{{- end }}

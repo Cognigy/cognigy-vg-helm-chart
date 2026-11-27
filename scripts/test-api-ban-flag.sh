@@ -28,7 +28,9 @@ sbc:
 # requires the Secret the chart mints to be named.
 apiBan:
   image: cognigy.azurecr.io/api-ban:1.4.0
+# The profile also requires redis-ha with Sentinel for global.fedramp.redisTls (docs/011-redis-tls.md).
 redisHa:
+  enabled: true
   auth:
     existingSecret: redis-ha-auth
 # Unrelated to this flag: the profile also forces on the ingress IP allow-list
@@ -37,6 +39,14 @@ redisHa:
 # (docs/009-fedramp-profile.md).
 ingress:
   enabled: false
+# Unrelated to this flag: the profile also forces the NetworkPolicies on, and the call-path ones
+# fail the render without a host-network peer for sbc-sip/sbc-rtp (docs/014-network-policy.md).
+networkPolicy:
+  hostNetworkPeers:
+    - ipBlock:
+        cidr: 10.20.0.0/24
+cognigyEnv:
+  FEATURE_REDIS_SENTINEL_MODE_ENABLED: "true"
 YAML
 
 PASS=0

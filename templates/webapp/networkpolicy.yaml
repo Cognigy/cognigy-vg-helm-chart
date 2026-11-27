@@ -24,7 +24,7 @@ spec:
     - Ingress
     - Egress
   ingress:
-{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.webapp.port "root" $) | indent 4 }}
+{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.webapp.port "ingress" .Values.ingress.enabled "root" $) | indent 4 }}
     {{- with .Values.webapp.networkPolicy.extraIngress }}
 {{ toYaml . | indent 4 }}
     {{- end }}

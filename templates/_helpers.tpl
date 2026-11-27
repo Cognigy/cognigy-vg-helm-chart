@@ -517,6 +517,61 @@ sbc.sip.contact can pin one explicitly.
 {{- end -}}
 
 {{/*
+Pod securityContext of sbc-sip, from sbc.sip.podSecurityContext. drachtio runs as uid/gid 1000
+(vg-drachtio image, USER drachtio) and the Redis TLS client certificate is mounted 0440 and owned by
+root (vg.redisTls.clientVolume), as is its drachtio control TLS client certificate
+(vg.drachtioControlTls.volume), so with drachtio on either TLS the pod gets fsGroup 1000 unless
+podSecurityContext sets one: kubelet gives the Secret files that group, and every container gets it
+as a supplementary group. sbc-sip-sidecar still runs as root (CGY-47520 moves it to uid 1000). Every Secret in the pod then has group 1000,
+the 0400 cluster signing key too (root:1000; only sbc-sip-sidecar mounts it). Empty when there is
+nothing to set.
+Takes the root context.
+*/}}
+{{- define "vg.sbc.sip.podSecurityContext" -}}
+{{- /* podSecurityContext may be a templated string: render and parse it into a map before adding to it. */ -}}
+{{- $psc := fromYaml (include "vg.common.tplvalues.render" (dict "value" (.Values.sbc.sip.podSecurityContext | default dict) "context" .)) | default dict -}}
+{{- /* An explicit null counts as unset: it is how values unset a key. */ -}}
+{{- if and (or (include "vg.redisTls.drachtio.enabled" .) (include "vg.drachtioControlTls.mounted" .)) (or (not (hasKey $psc "fsGroup")) (kindIs "invalid" (index $psc "fsGroup"))) -}}
+{{- $_ := set $psc "fsGroup" 1000 -}}
+{{- end -}}
+{{- if $psc -}}{{ toYaml $psc }}{{- end -}}
+{{- end -}}
+
+{{/*
+drachtio's Redis options in sbc-sip: the API-ban list, the tmpbans that sbc-inbound and
+sbc-sip-sidecar write, and the REGISTER-spam counter. drachtio is the only component that
+enforces tmpbans, so this renders whether or not the APIBAN feed runs: apiBan.enabled switches
+the update-api-ban-list CronJob, and tying these options to it switched tmpban enforcement off
+too (CGY-45825). Over TLS with vg.redisTls.drachtio.enabled: Sentinel on its TLS port, plus the
+options of vg.redisTls.drachtioArgs. Shared by stateful-set.yaml and daemon-set.yaml.
+*/}}
+{{- define "vg.sbc.sip.drachtioRedisArgs" -}}
+{{- $tls := include "vg.redisTls.drachtio.enabled" . -}}
+{{- if eq (toString .Values.cognigyEnv.FEATURE_REDIS_SENTINEL_MODE_ENABLED) "true" }}
+- --blacklist-redis-sentinels
+- {{ printf "%s:%v" .Values.cognigyEnv.REDIS_SENTINEL_HOST (ternary .Values.redisHa.vgTls.sentinelPort .Values.cognigyEnv.REDIS_SENTINEL_PORT (eq $tls "true")) | quote }}
+- --blacklist-redis-master
+- {{ .Values.cognigyEnv.REDIS_SENTINEL_MASTER_NAME | quote }}
+{{- else }}
+- --blacklist-redis-address
+- {{ .Values.redis.host | quote }}
+- --blacklist-redis-port
+- {{ .Values.redis.port | quote }}
+{{- end }}
+- --blacklist-refresh-secs
+- {{ .Values.apiBan.refreshInterval | quote }}
+- --blacklist-redis-key
+- {{ .Values.apiBan.redisSetKey | quote }}
+{{- if include "vg.redisAuth.enabled" . }}
+- --blacklist-redis-password
+- "$(REDIS_PASSWORD)"
+{{- end }}
+{{- if $tls }}
+{{ include "vg.redisTls.drachtioArgs" . }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Whether the sbc-rtp RTP traffic gate is actually wired. Non-empty means yes.
 
 Shared by stateful-set.yaml, daemon-set.yaml and traffic-gate-configmap.yaml so
@@ -1131,6 +1186,31 @@ true
 {{- end -}}
 
 {{/*
+Why the public /v2 Ingress is wanted (v2Api active, ingress.enabled, v2Api.ingress.enabled)
+but cannot render; empty when it renders or is not wanted. Both are defaults now, so a
+linked cluster without an API host or on another ingress class must still upgrade: the
+route is skipped and NOTES.txt warns, instead of failing the render (PR 1531 review).
+*/}}
+{{- define "vg.featureServer.v2Api.ingressSkipReason" -}}
+{{- if and .Values.ingress.enabled .Values.featureServer.v2Api.ingress.enabled (include "vg.featureServer.v2Api.active" .) -}}
+{{- if not (.Values.featureServer.v2Api.ingress.host | default .Values.ingress.api.host) -}}
+there is no host (set featureServer.v2Api.ingress.host, or ingress.api.host to share the API host)
+{{- else if ne .Values.ingress.ingressClassName "traefik" -}}
+ingress.ingressClassName is {{ .Values.ingress.ingressClassName | quote }}, and its body-size and rate limits are Traefik Middlewares
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/* NOTES.txt warning when the default-on /v2 Ingress is skipped. Never fails the render. */}}
+{{- define "vg.featureServer.v2Api.notesWarnings" -}}
+{{- with include "vg.featureServer.v2Api.ingressSkipReason" . }}
+WARNING: the feature-server /v2 Ingress was not rendered: {{ . }}. Outbound calls from the
+linked AI cluster (POST /v2/createCall) fail until /v2 is reachable. Fix the above, or set
+featureServer.v2Api.ingress.enabled: false to silence this (and publish /v2 another way).
+{{- end }}
+{{- end -}}
+
+{{/*
 AI_CLUSTER_TRUST_LIST: {"<target name>": {"jwksUrl": …}}. One value for every
 VG-side verifier of AI-cluster JWTs -- feature-server /v2 and vg-events-api read
 the same env with the same parser, so a link is configured once.
@@ -1252,7 +1332,7 @@ Emits a YAML map (fromYaml-able) of key -> string.
        extraEnvVars would silently freeze the link at its boot value. Same guard as
        SBC_RTP_DRAIN_ADDRESSES (vg.sbcRtp.drainAddresses). */ -}}
 {{- $root := . -}}
-{{- range $k := list "VG_CLUSTER_NAME" "RUNTIME_API_TARGETS" "RESOURCES_API_TARGETS" "AI_CLUSTER_TRUST_LIST" -}}
+{{- range $k := list "VG_CLUSTER_NAME" "RUNTIME_API_TARGETS" "RESOURCES_API_TARGETS" "AI_CLUSTER_TRUST_LIST" "CREDENTIAL_REWRAP_ENABLED" -}}
 {{- if hasKey ($root.Values.cognigyEnv | default dict) $k -}}
 {{- fail (printf "%s must not be set in cognigyEnv while global.reloadableConfig.enabled is true. reloadable-config snapshots process.env at init and that snapshot beats the mounted cognigy-env-reloadable file, so an env copy would freeze the C26 link at its boot value and a ConfigMap change would be ignored. Use vgCluster.name and vgInAi.clusters instead." $k) -}}
 {{- end -}}

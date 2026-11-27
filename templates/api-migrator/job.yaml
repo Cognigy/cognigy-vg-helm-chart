@@ -175,7 +175,11 @@ spec:
             - name: JAMBONES_TIME_SERIES_HOST
               value: {{ .Values.influxdb.host }}
             - name: API_MIGRATION_TARGET
-              value: {{ .Values.apiMigrator.migrationTarget }}
+              {{- /* A string only: unquoted in a values file, 000049 is already the number 49 (2025.10 is 2025.1) before this runs, and would silently name another migration. */}}
+              {{- if not (kindIs "string" .Values.apiMigrator.migrationTarget) }}
+              {{- fail (printf "apiMigrator.migrationTarget must be a quoted string (e.g. \"000049\"), got %v (%s)" .Values.apiMigrator.migrationTarget (kindOf .Values.apiMigrator.migrationTarget)) }}
+              {{- end }}
+              value: {{ .Values.apiMigrator.migrationTarget | quote }}
             {{- if .Values.billing.seedTestData }}
             - name: VG_BILLING_SEED_TEST_DATA
               value: "true"
@@ -211,6 +215,10 @@ spec:
             ## upgrade it still holds the previous revision's values.
             - name: DEEPGRAM_IMPROVEMENT_PROGRAM_OPT_OUT
               value: {{ .Values.cognigyEnv.DEEPGRAM_IMPROVEMENT_PROGRAM_OPT_OUT | default "false" | quote }}
+            {{- with include "vg.fedramp.migratorFedrampMode" $ }}
+            - name: VG_MIGRATOR_FEDRAMP_MODE
+              value: {{ . | quote }}
+            {{- end }}
             {{- if .Values.apiMigrator.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.apiMigrator.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}

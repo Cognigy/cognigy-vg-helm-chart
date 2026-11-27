@@ -1,0 +1,21 @@
+{{- /*
+Readiness marker of signed service-to-service auth (ADR-001 §2.6, CGY-43682). A release resource, not a
+hook: the next upgrade reads it with `lookup` (vg.serviceAuth.defaultMode) before rendering its own,
+so it reports what the running release does. callersSign: this release's callers (api-server,
+feature-server, sbc-inbound, sbc-outbound, and sbc-sip-sidecar while runtime regbots run) sign their
+calls. That needs images with the signing change, for the sidecar vg-sbc-sip-sidecar#90 (CGY-43686).
+E2 adds callRouterCredentials (2026.24). svcV1DevConfig: this release's api-server serves the signed
+GET /svc/v1/dev-config (vg-api-server#377), so the next upgrade gives sbc-inbound no admin credentials
+for a login fallback (vg.serviceAuth.decideSbcInboundLoginFallback, CGY-43873).
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vg-service-auth-state
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    owner-team: echo
+data:
+  callersSign: "true"
+  svcV1DevConfig: "true"
+  callRouterCredentials: "true"

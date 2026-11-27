@@ -2,11 +2,11 @@
 Default-deny ingress+egress for sbc-outbound (CSA-110265/CSA-110267, stage 2; see
 docs/014-network-policy.md). Ingress: the health port (any source, kubelet probes), the
 metrics port (monitoring namespace), the dtmf port (udp) from sbc-rtp, and the drachtio/tcp
-port from sbc-sip — same drachtio app-dispatch mechanism as sbc-inbound, hostNetwork,
-admitted through ingressFromHostNetwork instead of a podSelector (which also covers
-sbc-rtp's dtmf UDP traffic when sbc.rtp.useStatefulSet is false, a hostNetwork DaemonSet
-then). Egress: sbc-rtp's NG control port (sbc.rtp.port, UDP, not TCP — by podSelector for
-the recommended StatefulSet shape, egressToHostNetwork for the DaemonSet one), MySQL,
+port from sbc-sip — same drachtio app-dispatch mechanism as sbc-inbound. Both run
+hostNetwork: true, so both are admitted from networkPolicy.hostNetworkPeers plus
+ingressFromHostNetwork, never by podSelector, and the render fails while those are empty.
+Egress: sbc-rtp's NG control port (sbc.rtp.port, UDP, not TCP — to
+networkPolicy.hostNetworkPeers plus egressToHostNetwork, required the same way), MySQL,
 Redis, InfluxDB, telegraf (when stats.telegraf), tracing (tracing.baseUrl, when set) and
 resource-resolver (when enabled). Unlike sbc-inbound, nothing in this chart calls
 sbc-outbound on behalf of feature-server or api-server.
@@ -46,21 +46,12 @@ spec:
           port: {{ .Values.metrics.port }}
     {{- end }}
     - from:
-        - podSelector:
-            matchLabels:
-              app: sbc-rtp
-      ports:
-        - protocol: UDP
-          port: {{ .Values.sbcOutbound.ports.dtmf }}
-    {{- with .Values.sbcOutbound.networkPolicy.ingressFromHostNetwork }}
-    - from:
-{{ toYaml . | indent 8 }}
+{{ include "vg.networkPolicy.requiredHostNetworkPeers" (dict "peers" .Values.sbcOutbound.networkPolicy.ingressFromHostNetwork "field" "sbcOutbound.networkPolicy.ingressFromHostNetwork" "root" $) | indent 8 }}
       ports:
         - protocol: TCP
-          port: {{ $.Values.sbcOutbound.ports.tcp }}
+          port: {{ .Values.sbcOutbound.ports.tcp }}
         - protocol: UDP
-          port: {{ $.Values.sbcOutbound.ports.dtmf }}
-    {{- end }}
+          port: {{ .Values.sbcOutbound.ports.dtmf }}
     {{- with .Values.sbcOutbound.networkPolicy.extraIngress }}
 {{ toYaml . | indent 4 }}
     {{- end }}
@@ -70,19 +61,10 @@ spec:
 {{ include "vg.networkPolicy.redisEgress" $ | indent 4 }}
 {{ include "vg.networkPolicy.influxdbEgress" $ | indent 4 }}
     - to:
-        - podSelector:
-            matchLabels:
-              app: sbc-rtp
+{{ include "vg.networkPolicy.requiredHostNetworkPeers" (dict "peers" .Values.sbcOutbound.networkPolicy.egressToHostNetwork "field" "sbcOutbound.networkPolicy.egressToHostNetwork" "root" $) | indent 8 }}
       ports:
         - protocol: UDP
           port: {{ .Values.sbc.rtp.port }}
-    {{- with .Values.sbcOutbound.networkPolicy.egressToHostNetwork }}
-    - to:
-{{ toYaml . | indent 8 }}
-      ports:
-        - protocol: UDP
-          port: {{ $.Values.sbc.rtp.port }}
-    {{- end }}
     {{- if .Values.stats.telegraf }}
     - to:
         - podSelector:

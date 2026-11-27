@@ -1,0 +1,95 @@
+{{- /*
+Ops minter (CGY-43874, ADR-001 §2.3). Holds the ops private key and nothing else. A person in
+opsMinter.execGroup mints a vg-ops token for api-server /svc/v1:
+
+  kubectl exec vg-ops-minter-0 -- node build/lib/ops-mint.js --sub <user> --ttl 15m
+
+A StatefulSet rather than a Deployment: its pod name is fixed, so the exec Role (rbac.yaml) can name
+that one pod. The image is api-server's, which ships the command and the signing library.
+`--standby` loads the key once, so a missing key shows as a failing pod, then waits.
+*/ -}}
+{{- if .Values.opsMinter.enabled }}
+{{- $_ := required "opsMinter.execGroup is required when opsMinter.enabled: the Kubernetes group allowed to exec into vg-ops-minter-0 (AKS: Entra ID group object ID; EKS: the access-entry group; GKE: the Google group e-mail)" (include "vg.opsMinter.execGroup" .) }}
+{{- if hasPrefix "system:" (include "vg.opsMinter.execGroup" .) }}
+{{- fail "opsMinter.execGroup must not be a system: group: Kubernetes puts every authenticated user or every cluster admin in those, so the ops key would be readable far beyond the group meant to mint" }}
+{{- end }}
+{{- /* The traffic sniffer's Role grants pods/exec and pods/ephemeralcontainers on every pod in the
+namespace (templates/vg-traffic-sniffer/rbac.yaml), so its ServiceAccount could read the ops key. RBAC
+has no deny rule: refuse the combination instead. */}}
+{{- if .Values.vgTrafficSniffer.enabled }}
+{{- fail "opsMinter.enabled and vgTrafficSniffer.enabled cannot both be true: the traffic sniffer's Role may exec into every pod in the namespace, including vg-ops-minter-0, which holds the ops signing key" }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vg-ops-minter
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    app: vg-ops-minter
+    owner-team: echo
+  annotations:
+    "cognigy.com/source-code": "git@github.com:Cognigy/vg-api-server.git"
+spec:
+  serviceName: vg-ops-minter
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vg-ops-minter
+  template:
+    metadata:
+      labels:
+        app: vg-ops-minter
+    spec:
+      {{- include "image.pullSecrets" $ | nindent 6 }}
+      serviceAccountName: vg-ops-minter
+      automountServiceAccountToken: false
+      {{- /* Placement as api-server's: the autoscaler pool when hpa.enabled (its nodeSelector and
+      tolerations merged in), but no HPA. A second replica would be vg-ops-minter-1, which the exec Role
+      does not name. */}}
+      {{- $hpaNodeSelector := and .Values.hpa.enabled .Values.hpa.useHpaNodeSelector }}
+      {{- $hpaTolerations := and .Values.hpa.enabled .Values.hpa.useHpaTolerations }}
+      {{- if or .Values.opsMinter.nodeSelector $hpaNodeSelector }}
+      nodeSelector:
+        {{- with .Values.opsMinter.nodeSelector }}{{- include "vg.common.tplvalues.render" (dict "value" . "context" $) | nindent 8 }}{{- end }}
+        {{- if $hpaNodeSelector }}{{- include "vg.common.tplvalues.render" (dict "value" .Values.hpa.hpaNodeSelector "context" $) | nindent 8 }}{{- end }}
+      {{- end }}
+      {{- if or .Values.opsMinter.tolerations $hpaTolerations }}
+      tolerations:
+        {{- with .Values.opsMinter.tolerations }}{{- include "vg.common.tplvalues.render" (dict "value" . "context" $) | nindent 8 }}{{- end }}
+        {{- if $hpaTolerations }}{{- include "vg.common.tplvalues.render" (dict "value" .Values.hpa.hpaTolerations "context" $) | nindent 8 }}{{- end }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        # The api-server image says `USER node` (a name); runAsNonRoot needs a number to verify it.
+        # node is uid/gid 1000 in the node base image.
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 5
+      containers:
+        - name: minter
+          image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.api.image) }}
+          imagePullPolicy: {{ .Values.api.imagePullPolicy }}
+          command: ["node", "build/lib/ops-mint.js", "--standby"]
+          # Ready only while the ops key is readable: outside FedRAMP the key volume is optional, so a
+          # missing or deleted key would otherwise stay invisible until the next mint fails.
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "test -r \"$SERVICE_AUTH_SIGNING_KEY_PATH\""]
+            periodSeconds: 30
+            failureThreshold: 1
+          resources: {{- toYaml .Values.opsMinter.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            {{- include "vg.serviceAuth.callerEnv" (dict "name" "ops" "root" $) | nindent 12 }}
+          volumeMounts:
+            {{- include "vg.serviceAuth.callerVolumeMount" . | nindent 12 }}
+      volumes:
+        {{- include "vg.serviceAuth.callerVolume" (dict "name" "ops" "root" $) | nindent 8 }}
+{{- end }}

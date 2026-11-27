@@ -8,12 +8,13 @@ so Traefik is the only direct network peer this policy can name — and the UDP 
 RTP is bidirectional, and sbc-rtp can open the media stream toward vg-connector's drachtio
 sidecar before a matching outbound flow exists on vg-connector's side, which a
 podSelector-based rule (or egress-only CIDR admission) would not cover.
-Egress: MySQL, Redis, and sbc-sip/sbc-rtp through egressToHostNetwork (both hostNetwork,
-same limitation as vg-resource-resolver's ingressFromHostNetwork — see values.yaml;
-sbc.rtp.port, the rtpengine NG control port, is UDP, not TCP).
+Egress: MySQL, Redis, and sbc-sip/sbc-rtp (both hostNetwork: true, so
+networkPolicy.hostNetworkPeers plus egressToHostNetwork rather than a podSelector; the render
+fails while those are empty, since no call could be set up — see values.yaml).
 */ -}}
 {{- $npEnabled := include "vg.fedramp.networkPolicyEnabled" (dict "enabled" .Values.vgConnector.networkPolicy.enabled "root" $) }}
 {{- if and .Values.vgConnector.enabled $npEnabled }}
+{{- $hostPeers := include "vg.networkPolicy.requiredHostNetworkPeers" (dict "peers" .Values.vgConnector.networkPolicy.egressToHostNetwork "field" "vgConnector.networkPolicy.egressToHostNetwork" "root" $) }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -33,15 +34,13 @@ spec:
     - ports:
         - protocol: TCP
           port: {{ .Values.health.port }}
-{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.vgConnector.port "root" $) | indent 4 }}
-    {{- with .Values.vgConnector.networkPolicy.egressToHostNetwork }}
+{{ include "vg.networkPolicy.fromTraefik" (dict "port" .Values.vgConnector.port "ingress" (and .Values.vgConnector.enabled .Values.ingress.enabled) "root" $) | indent 4 }}
     - from:
-{{ toYaml . | indent 8 }}
+{{ $hostPeers | indent 8 }}
       ports:
         - protocol: UDP
-          port: {{ $.Values.rtpEngine.startPort }}
-          endPort: {{ $.Values.rtpEngine.endPort }}
-    {{- end }}
+          port: {{ .Values.rtpEngine.startPort }}
+          endPort: {{ .Values.rtpEngine.endPort }}
     {{- with .Values.vgConnector.networkPolicy.extraIngress }}
 {{ toYaml . | indent 4 }}
     {{- end }}
@@ -49,18 +48,16 @@ spec:
 {{ include "vg.networkPolicy.dnsEgress" $ | indent 4 }}
 {{ include "vg.networkPolicy.mysqlEgress" $ | indent 4 }}
 {{ include "vg.networkPolicy.redisEgress" $ | indent 4 }}
-    {{- with .Values.vgConnector.networkPolicy.egressToHostNetwork }}
     - to:
-{{ toYaml . | indent 8 }}
+{{ $hostPeers | indent 8 }}
       ports:
         - protocol: UDP
-          port: {{ $.Values.sbc.sip.ports.udp }}
+          port: {{ .Values.sbc.sip.ports.udp }}
         - protocol: TCP
-          port: {{ $.Values.sbc.sip.ports.tcp }}
+          port: {{ .Values.sbc.sip.ports.tcp }}
         - protocol: UDP
-          port: {{ $.Values.rtpEngine.startPort }}
-          endPort: {{ $.Values.rtpEngine.endPort }}
-    {{- end }}
+          port: {{ .Values.rtpEngine.startPort }}
+          endPort: {{ .Values.rtpEngine.endPort }}
     {{- with .Values.vgConnector.networkPolicy.egressTo }}
 {{ toYaml . | indent 4 }}
     {{- end }}

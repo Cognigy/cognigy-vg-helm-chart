@@ -41,13 +41,22 @@ checksum/vg-cluster-signing-key: {{ if not (lookup "v1" "Secret" .Release.Namesp
 {{- end -}}
 {{- end -}}
 
-{{/* sbc-sip-sidecar env. Rendered before extraEnvVars, so an extraEnvVars entry still wins. */}}
+{{/*
+sbc-sip-sidecar env. Rendered before extraEnvVars, so an extraEnvVars entry still wins, except that
+under the FedRAMP profile an entry naming one of the SERVICE_AUTH_* variables fails the render
+(vg.fedramp.refuseEnvOverride).
+
+The resolver request is signed with the sidecar's own service key (vg-service-key-sbc-sip-sidecar,
+iss vg-sbc-sip-sidecar; CGY-43686, CSA-109611), never with the cluster key below: that key is this
+cluster's identity towards the AI clusters, and reusing it would let the sidecar sign as the cluster.
+*/}}
 {{- define "vg.sbcSip.runtimeRegbots.env" -}}
 {{- if include "vg.sbcSip.runtimeRegbots.enabled" . -}}
 - name: REGBOT_RUNTIME_TARGETS_ENABLED
   value: "true"
 - name: RESOURCE_RESOLVER_URL
   value: "http://vg-resource-resolver.{{ .Release.Namespace }}:{{ .Values.resourceResolver.port | default 4000 }}"
+{{ include "vg.serviceAuth.callerEnv" (dict "name" "sbc-sip-sidecar" "extraEnvVars" .Values.sbcSipSidecar.extraEnvVars "root" .) }}
 {{- if include "vg.sbcSip.runtimeRegbots.reporting" . }}
 ## Register events (031 §2.4). VG_CLUSTER_NAME is this cluster's JWT `iss`.
 - name: VG_CLUSTER_NAME
@@ -60,8 +69,16 @@ checksum/vg-cluster-signing-key: {{ if not (lookup "v1" "Secret" .Release.Namesp
 {{- end -}}
 {{- end -}}
 
+{{/* The two optional lists below are joined, so each list item is trimmed into one block. */}}
 {{- define "vg.sbcSip.runtimeRegbots.volumeMounts" -}}
-{{- if include "vg.sbcSip.runtimeRegbots.reporting" . -}}
+{{- include "vg.sbcSip.runtimeRegbots.volumeMounts.items" . | trim -}}
+{{- end -}}
+
+{{- define "vg.sbcSip.runtimeRegbots.volumeMounts.items" -}}
+{{- if include "vg.sbcSip.runtimeRegbots.enabled" . }}
+{{ include "vg.serviceAuth.callerVolumeMount" . }}
+{{- end }}
+{{- if include "vg.sbcSip.runtimeRegbots.reporting" . }}
 - name: sbc-sip-resources-api-targets
   mountPath: /config/vg-resources-api
   readOnly: true
@@ -72,7 +89,14 @@ checksum/vg-cluster-signing-key: {{ if not (lookup "v1" "Secret" .Release.Namesp
 {{- end -}}
 
 {{- define "vg.sbcSip.runtimeRegbots.volumes" -}}
-{{- if include "vg.sbcSip.runtimeRegbots.reporting" . -}}
+{{- include "vg.sbcSip.runtimeRegbots.volumes.items" . | trim -}}
+{{- end -}}
+
+{{- define "vg.sbcSip.runtimeRegbots.volumes.items" -}}
+{{- if include "vg.sbcSip.runtimeRegbots.enabled" . }}
+{{ include "vg.serviceAuth.callerVolume" (dict "name" "sbc-sip-sidecar" "root" .) }}
+{{- end }}
+{{- if include "vg.sbcSip.runtimeRegbots.reporting" . }}
 - name: sbc-sip-resources-api-targets
   configMap:
     name: sbc-sip-resources-api-targets
@@ -82,8 +106,9 @@ checksum/vg-cluster-signing-key: {{ if not (lookup "v1" "Secret" .Release.Namesp
 - name: vg-cluster-signing-key
   secret:
     secretName: {{ include "vg.clusterSigningKey.secretName" . | quote }}
-    ## Private half only, 0400. Readable by root only: a non-root sidecar needs podSecurityContext.fsGroup
-    ## (see sbcSipSidecar.runtimeRegbots in values.yaml).
+    ## Private half only, 0400: readable by root (owner) only. A non-root sidecar needs podSecurityContext.fsGroup
+    ## (see sbcSipSidecar.runtimeRegbots in values.yaml). With drachtio on Redis TLS the pod gets fsGroup 1000
+    ## (vg.sbc.sip.podSecurityContext), so the file is root:1000, still without group read.
     items:
       - key: {{ .Values.vgCluster.signingKey.privateKeyFile | quote }}
         path: {{ .Values.vgCluster.signingKey.privateKeyFile | quote }}

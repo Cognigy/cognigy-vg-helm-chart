@@ -24,9 +24,21 @@ spec:
         app: sbc-sip
       annotations:
         checksum/cognigy-env: {{ include (print $.Template.BasePath "/configurations/cognigy-env.yaml") $ | sha256sum }}
-        checksum/sbc-sip: {{ include (print $.Template.BasePath "/sbc-sip/config-map.yaml") $ | sha256sum }}
+        checksum/sbc-sip: {{ include (print $.Template.BasePath "/sbc-sip/drachtio-config-secret.yaml") $ | sha256sum }}
         {{- with include "vg.sbcSip.runtimeRegbots.annotations" $ }}
         {{- . | nindent 8 }}
+        {{- end }}
+        {{- if include "vg.redisTls.sbcSip.enabled" $ }}
+        {{- include "vg.redisTls.clientChecksum" $ | nindent 8 }}
+        {{- end }}
+        {{- if include "vg.mysqlTls.sbcSipSidecar.enabled" $ }}
+        {{- include "vg.mysqlTls.caChecksum" $ | nindent 8 }}
+        {{- end }}
+        {{- if include "vg.fedramp.callRouterTls" $ }}
+        {{- include "vg.callRouterTls.caChecksum" $ | nindent 8 }}
+        {{- end }}
+        {{- if include "vg.drachtioControlTls.mounted" $ }}
+        {{- include "vg.drachtioControlTls.checksum" (dict "root" $ "cert" "client") | nindent 8 }}
         {{- end }}
     spec:
       {{- include "image.pullSecrets" $ | nindent 6 }}
@@ -41,14 +53,16 @@ spec:
       {{- if .Values.sbc.sip.priorityClassName }}
       priorityClassName: {{ .Values.sbc.sip.priorityClassName }}
       {{- end }}
-      {{- if .Values.sbc.sip.podSecurityContext }}
-      securityContext: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbc.sip.podSecurityContext "context" $) | nindent 8 }}
+      {{- with include "vg.sbc.sip.podSecurityContext" $ }}
+      securityContext: {{- . | nindent 8 }}
       {{- end }}
       {{- if .Values.sbc.sip.tolerations }}
       tolerations: {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbc.sip.tolerations "context" $) | nindent 8 }}
       {{- end }}
       restartPolicy: Always
       initContainers:
+        {{- /* Writes drachtio.conf.xml with the sbc-call-router credential (ADR-001 §2.8). */}}
+        {{- include "vg.callRouterAuth.drachtioInitContainer" . | nindent 8 }}
         {{- if and (.Values.sbc.ec2EipAllocator.enabled) (eq .Values.cloud "aws") }}
         - name: ec2-eip-allocator
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.sbc.ec2EipAllocator.image) }}
@@ -118,10 +132,14 @@ spec:
             - sh 
             - -c 
             - |
-              until mysql -u {{ .Values.mysql.auth.username }} -D {{ .Values.mysql.database.name }} -h {{ .Values.mysql.host }} -p${PASSWORD} --protocol=tcp -e "select count(*) from accounts";
+              until mysql -u {{ .Values.mysql.auth.username }} -D {{ .Values.mysql.database.name }} -h {{ .Values.mysql.host }} -p${PASSWORD} --protocol=tcp{{ if include "vg.mysqlTls.sbcSipSidecar.enabled" $ }} {{ include "vg.mysqlTls.initArgs" $ }}{{ end }} -e "select count(*) from accounts";
               do 
                 sleep 5
               done
+          {{- if include "vg.mysqlTls.sbcSipSidecar.enabled" $ }}
+          volumeMounts:
+            {{- include "vg.mysqlTls.clientVolumeMount" $ | nindent 12 }}
+          {{- end }}
       containers:
         - name: drachtio
           image: {{ include "vg.common.image.render" (dict "global" $.Values.global "image" .Values.drachtio.image) }}
@@ -187,29 +205,9 @@ spec:
             - {{ .Values.drachtio.homerId | quote }}
             - --prometheus-scrape-port
             - {{ .Values.drachtio.metricsPort | quote }}
-          {{- if .Values.apiBan.enabled }}
-          {{- if eq .Values.cognigyEnv.FEATURE_REDIS_SENTINEL_MODE_ENABLED "true" }}
-            - --blacklist-redis-sentinels
-            - {{ printf "\"%s:%s\"" .Values.cognigyEnv.REDIS_SENTINEL_HOST .Values.cognigyEnv.REDIS_SENTINEL_PORT }}
-            - --blacklist-redis-master
-            - {{ .Values.cognigyEnv.REDIS_SENTINEL_MASTER_NAME | quote }}
-          {{- else }}
-            - --blacklist-redis-address
-            - {{ .Values.redis.host | quote }}
-            - --blacklist-redis-port
-            - {{ .Values.redis.port | quote }}
-          {{- end }}
-            - --blacklist-refresh-secs
-            - {{ .Values.apiBan.refreshInterval | quote }}
-            - --blacklist-redis-key
-            - {{ .Values.apiBan.redisSetKey | quote }}
-            {{- if include "vg.redisAuth.enabled" . }}
-            - --blacklist-redis-password
-            - "$(REDIS_PASSWORD)"
-            {{- end }}
+            {{- include "vg.sbc.sip.drachtioRedisArgs" . | trim | nindent 12 }}
             - --reject-register-with-no-realm
             - {{ if .Values.drachtio.rejectRegisterWithNoRealm }}{{ print 1 | quote }}{{ else }}{{ print 0 | quote }}{{ end }}
-          {{- end }}
           env:
             - name: NODE_ENV
               value: {{ .Values.global.nodeEnv | quote }}
@@ -263,6 +261,9 @@ spec:
               value: {{ .Values.drachtio.registerSpamWindowSecs | quote }}
             - name: DRACHTIO_REGISTER_SPAM_TTL_SECS
               value: {{ .Values.drachtio.registerSpamTtlSecs | quote }}
+            {{- if include "vg.drachtioControlTls.enabled" $ }}
+            {{- include "vg.drachtioControlTls.clientEnv" $ | nindent 12 }}
+            {{- end }}
             {{- if .Values.drachtio.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.drachtio.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
@@ -271,9 +272,16 @@ spec:
             - mountPath: /etc/letsencrypt/
               name: drachtio-certs
             {{- end }}
-            - mountPath: /etc/drachtio.conf.xml
-              name: sbc-sip-config
-              subPath: drachtio.conf.xml
+            {{- include "vg.callRouterAuth.drachtioVolumeMount" $ | nindent 12 }}
+            {{- if include "vg.redisTls.drachtio.enabled" $ }}
+            {{- include "vg.redisTls.clientVolumeMount" $ | nindent 12 }}
+            {{- end }}
+            {{- if include "vg.fedramp.callRouterTls" $ }}
+            {{- include "vg.callRouterTls.caVolumeMount" $ | nindent 12 }}
+            {{- end }}
+            {{- if include "vg.drachtioControlTls.mounted" $ }}
+            {{- include "vg.drachtioControlTls.volumeMount" $ | nindent 12 }}
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: cognigy-env
@@ -389,6 +397,16 @@ spec:
             {{- with include "vg.sbcSip.runtimeRegbots.env" $ }}
             {{- . | nindent 12 }}
             {{- end }}
+            {{- if include "vg.redisTls.sbcSipSidecar.enabled" $ }}
+            {{- include "vg.redisTls.clientEnv" $ | nindent 12 }}
+            {{- end }}
+            {{- with include "vg.fedramp.registrationHookBasicAuthHttpsOnly" (dict "override" .Values.sbcSipSidecar.registrationHookBasicAuthHttpsOnly "service" "sbcSipSidecar" "root" $) }}
+            - name: FEATURE_REGISTRATION_HOOK_BASIC_AUTH_HTTPS_ONLY_ENABLED
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if include "vg.mysqlTls.sbcSipSidecar.enabled" $ }}
+            {{- include "vg.mysqlTls.clientEnv" $ | nindent 12 }}
+            {{- end }}
             {{- if .Values.sbcSipSidecar.extraEnvVars }}
             {{- include "vg.common.tplvalues.render" (dict "value" .Values.sbcSipSidecar.extraEnvVars "context" $) | nindent 12 }}
             {{- end }}
@@ -398,6 +416,12 @@ spec:
               readOnly: true
             {{- with include "vg.sbcSip.runtimeRegbots.volumeMounts" $ }}
             {{- . | nindent 12 }}
+            {{- end }}
+            {{- if include "vg.redisTls.sbcSipSidecar.enabled" $ }}
+            {{- include "vg.redisTls.clientVolumeMount" $ | nindent 12 }}
+            {{- end }}
+            {{- if include "vg.mysqlTls.sbcSipSidecar.enabled" $ }}
+            {{- include "vg.mysqlTls.clientVolumeMount" $ | nindent 12 }}
             {{- end }}
           envFrom:
             - configMapRef:
@@ -420,12 +444,19 @@ spec:
               path: tls.key
           defaultMode: 420
       {{- end }}
-      - name: sbc-sip-config
-        configMap:
-          name: sbc-sip
-          items:
-          - key: drachtio.conf.xml
-            path: drachtio.conf.xml
+      {{- include "vg.callRouterAuth.drachtioVolumes" $ | nindent 6 }}
+      {{- if include "vg.redisTls.sbcSip.enabled" . }}
+      {{- include "vg.redisTls.clientVolume" . | nindent 6 }}
+      {{- end }}
+      {{- if include "vg.mysqlTls.sbcSipSidecar.enabled" . }}
+      {{- include "vg.mysqlTls.clientVolume" . | nindent 6 }}
+      {{- end }}
+      {{- if include "vg.fedramp.callRouterTls" . }}
+      {{- include "vg.callRouterTls.caVolume" . | nindent 6 }}
+      {{- end }}
+      {{- if include "vg.drachtioControlTls.mounted" . }}
+      {{- include "vg.drachtioControlTls.volume" (dict "root" . "cert" "client-sbc-sip") | nindent 6 }}
+      {{- end }}
       {{- with include "vg.sbcSip.runtimeRegbots.volumes" $ }}
       {{- . | nindent 6 }}
       {{- end }}
